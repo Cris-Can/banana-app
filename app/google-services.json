@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "725444282356",
+    "project_id": "bananaapp-aa46e",
+    "storage_bucket": "bananaapp-aa46e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:725444282356:android:340d9c2e2b29c8fdae1ba1",
+        "android_client_info": {
+          "package_name": "com.eventos.banana"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoCzzjj6ZIO6a-RH-9c-5JlYm2VlzRKCY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

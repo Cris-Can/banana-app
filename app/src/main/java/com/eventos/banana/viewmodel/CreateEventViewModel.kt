@@ -18,25 +18,20 @@ class CreateEventViewModel(
 
     fun createEvent(event: Event) {
         viewModelScope.launch {
-            println("DEBUG ▶️ createEvent llamado")
-            println("DEBUG ▶️ Event = $event")
 
             _uiState.value = CreateEventUiState(isLoading = true)
 
             val result = repository.createEvent(event)
 
-            if (result.isSuccess) {
-                println("DEBUG ✅ Evento creado correctamente")
-                _uiState.value = CreateEventUiState(success = true)
+            _uiState.value = if (result.isSuccess) {
+                CreateEventUiState(success = true)
             } else {
-                println("DEBUG ❌ Error creando evento: ${result.exceptionOrNull()}")
-                _uiState.value = CreateEventUiState(
+                CreateEventUiState(
                     errorMessage = "No se pudo crear el evento"
                 )
             }
         }
     }
-
 
     fun resetState() {
         _uiState.value = CreateEventUiState()

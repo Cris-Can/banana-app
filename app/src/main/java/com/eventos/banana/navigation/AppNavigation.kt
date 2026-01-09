@@ -17,6 +17,12 @@ import com.eventos.banana.viewmodel.CreateEventViewModel
 import com.eventos.banana.viewmodel.EventDetailViewModel
 import com.eventos.banana.viewmodel.SessionViewModel
 import kotlinx.coroutines.flow.collectLatest
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.eventos.banana.domain.model.EventDetailUiState
+import com.eventos.banana.ui.event.QuestionnaireScreen
+
 
 @Composable
 fun AppNavigation() {
@@ -78,6 +84,8 @@ fun AppNavigation() {
             )
         }
 
+
+
         // ---------- EVENT DETAIL ----------
         composable(
             route = "event_detail/{eventId}",
@@ -105,9 +113,8 @@ fun AppNavigation() {
                 uiState = uiState,
                 currentUserId = sessionViewModel.currentUserId(),
                 onJoinClick = {
-                    eventDetailViewModel.requestJoinEvent(
-                        sessionViewModel.currentUserId()
-                    )
+                    navController.navigate("questionnaire/${eventId}")
+
                 },
                 onApproveClick = { userId ->
                     eventDetailViewModel.approveParticipant(userId)
@@ -118,6 +125,48 @@ fun AppNavigation() {
             )
 
         }
+
+        composable(
+            route = "questionnaire/{eventId}",
+            arguments = listOf(
+                navArgument("eventId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+
+            val eventId = backStackEntry.arguments?.getString("eventId")
+                ?: return@composable
+
+            val viewModel: EventDetailViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return EventDetailViewModel(eventId) as T
+                    }
+                }
+            )
+
+            val uiState by viewModel.uiState.collectAsState()
+
+            if (uiState is EventDetailUiState.Success) {
+                val event = (uiState as EventDetailUiState.Success).event
+
+                QuestionnaireScreen(
+                    event = event,
+                    onSubmit = { answers ->
+                        viewModel.requestJoinEventWithAnswers(
+                            userId = sessionViewModel.currentUserId(),
+                            answers = answers
+                        )
+                        navController.popBackStack()
+                    },
+                    onCancel = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+        }
+
+
     }
 
     // ---------- SESSION REDIRECTION ----------

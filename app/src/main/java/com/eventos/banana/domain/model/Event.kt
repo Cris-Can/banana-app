@@ -1,37 +1,35 @@
 package com.eventos.banana.domain.model
 
 data class Event(
-
-    // ---------------- IDENTIDAD ----------------
     val id: String = "",
     val creatorId: String = "",
 
-    // ---------------- INFO BÁSICA ----------------
+    // Información básica
     val title: String = "",
     val description: String = "",
     val category: String = "",
 
-    // ---------------- UBICACIÓN ----------------
+    // Ubicación
     val country: String = "Chile",
     val region: String = "",
     val commune: String = "",
 
-    // ---------------- TIEMPO ----------------
+    // Tiempo
     val eventTimestamp: Long = 0L,
     val createdAt: Long = 0L,
 
-    // ---------------- CAPACIDAD ----------------
+    // Capacidad
     val maxParticipants: Int = 0,
 
-    // ---------------- REGLAS ----------------
-    val minScoreRequired: Int = 0,
+    // Configuración de acceso
     val approvalRequired: Boolean = true,
+    val joinQuestions: List<JoinQuestion> = emptyList(),
 
-    // ---------------- ESTADO GENERAL ----------------
+    // Estado
     val status: EventStatus = EventStatus.OPEN,
 
-    // ---------------- PARTICIPACIÓN (ÚNICA FUENTE DE VERDAD) ----------------
+    // Participación (ÚNICA FUENTE DE VERDAD)
     val approvedParticipants: List<String> = emptyList(),
-    val pendingRequests: List<String> = emptyList(),
+    val pendingRequests: List<JoinRequest> = emptyList(),
     val rejectedParticipants: List<String> = emptyList()
 )

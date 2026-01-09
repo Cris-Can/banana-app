@@ -37,13 +37,6 @@ class EventDetailViewModel(
         }
     }
 
-    fun requestJoinEvent(userId: String) {
-        viewModelScope.launch {
-            repository.requestJoinEvent(eventId, userId)
-            loadEvent()
-        }
-    }
-
     fun approveParticipant(userId: String) {
         viewModelScope.launch {
             repository.approveParticipant(eventId, userId)
@@ -57,4 +50,42 @@ class EventDetailViewModel(
             loadEvent()
         }
     }
+    fun requestJoinEventWithAnswers(
+        userId: String,
+        answers: Map<String, String>
+    ) {
+        viewModelScope.launch {
+
+            val result = repository.requestJoinEventWithAnswers(
+                eventId = eventId,
+                userId = userId,
+                answers = answers
+            )
+
+            result.fold(
+                onSuccess = {
+                    val refreshed = repository.getEventById(eventId)
+
+                    _uiState.value = refreshed.fold(
+                        onSuccess = { event ->
+                            EventDetailUiState.Success(event)
+                        },
+                        onFailure = { error ->
+                            EventDetailUiState.Error(
+                                error.message ?: "Error al actualizar evento"
+                            )
+                        }
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = EventDetailUiState.Error(
+                        error.message ?: "No se pudo enviar la solicitud"
+                    )
+                }
+            )
+        }
+    }
+
+
+
 }

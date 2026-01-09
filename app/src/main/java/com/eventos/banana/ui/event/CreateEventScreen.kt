@@ -2,6 +2,8 @@ package com.eventos.banana.ui.event
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,7 +12,9 @@ import androidx.compose.ui.unit.dp
 import com.eventos.banana.data.local.regionsWithCommunes
 import com.eventos.banana.domain.model.CreateEventUiState
 import com.eventos.banana.domain.model.Event
-
+import com.eventos.banana.domain.model.JoinQuestion
+import java.util.UUID
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateEventScreen(
     creatorId: String,
@@ -18,6 +22,7 @@ fun CreateEventScreen(
     onCreateEvent: (Event) -> Unit,
     onSuccess: () -> Unit
 ) {
+    // ================= ESTADO BÁSICO =================
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
@@ -25,15 +30,22 @@ fun CreateEventScreen(
     var commune by remember { mutableStateOf("") }
     var maxParticipants by remember { mutableStateOf("") }
 
-    var showRegionMenu by remember { mutableStateOf(false) }
+    // ================= A7.7 — PREGUNTAS =================
+    var questions by remember { mutableStateOf<List<JoinQuestion>>(emptyList()) }
+
+    // ================= DROPDOWNS =================
+
     var showCommuneMenu by remember { mutableStateOf(false) }
+    var communeExpanded by remember { mutableStateOf(false) }
+    var regionExpanded by remember { mutableStateOf(false) }
+    var showRegionMenu by remember { mutableStateOf(false) }
+
 
     val communes = regionsWithCommunes[region] ?: emptyList()
-    LaunchedEffect(Unit) {
-        println("REGIONES = ${regionsWithCommunes.keys}")
-    }
+    val scrollState = rememberScrollState()
 
 
+    // ================= ÉXITO =================
     LaunchedEffect(uiState) {
         if (uiState.success) onSuccess()
     }
@@ -45,15 +57,16 @@ fun CreateEventScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .verticalScroll(scrollState)
+                .padding(16.dp)
         ) {
 
             Text("Crear evento", style = MaterialTheme.typography.headlineSmall)
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            TextField(
+            // ================= CAMPOS BÁSICOS =================
+            OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
                 label = { Text("Título") },
@@ -62,7 +75,7 @@ fun CreateEventScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            TextField(
+            OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("Descripción") },
@@ -71,7 +84,7 @@ fun CreateEventScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            TextField(
+            OutlinedTextField(
                 value = category,
                 onValueChange = { category = it },
                 label = { Text("Categoría") },
@@ -80,25 +93,25 @@ fun CreateEventScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-        // -------- REGIÓN --------
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showRegionMenu = true }
+            // ================= REGIÓN =================
+
+            ExposedDropdownMenuBox(
+                expanded = regionExpanded,
+                onExpandedChange = { regionExpanded = !regionExpanded }
             ) {
-                TextField(
+                OutlinedTextField(
                     value = region,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Región") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = false
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
                 )
 
-                DropdownMenu(
-                    expanded = showRegionMenu,
-                    onDismissRequest = { showRegionMenu = false },
-                    modifier = Modifier.fillMaxWidth()
+                ExposedDropdownMenu(
+                    expanded = regionExpanded,
+                    onDismissRequest = { regionExpanded = false }
                 ) {
                     regionsWithCommunes.keys.forEach { regionName ->
                         DropdownMenuItem(
@@ -106,7 +119,7 @@ fun CreateEventScreen(
                             onClick = {
                                 region = regionName
                                 commune = ""
-                                showRegionMenu = false
+                                regionExpanded = false
                             }
                         )
                     }
@@ -116,36 +129,37 @@ fun CreateEventScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-        // -------- COMUNA --------
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (communes.isNotEmpty()) {
-                            showCommuneMenu = true
-                        }
+            // ================= COMUNA =================
+
+            ExposedDropdownMenuBox(
+                expanded = communeExpanded,
+                onExpandedChange = {
+                    if (communes.isNotEmpty()) {
+                        communeExpanded = !communeExpanded
                     }
+                }
             ) {
-                TextField(
+                OutlinedTextField(
                     value = commune,
                     onValueChange = {},
                     readOnly = true,
+                    enabled = communes.isNotEmpty(),
                     label = { Text("Comuna") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = false
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
                 )
 
-                DropdownMenu(
-                    expanded = showCommuneMenu,
-                    onDismissRequest = { showCommuneMenu = false },
-                    modifier = Modifier.fillMaxWidth()
+                ExposedDropdownMenu(
+                    expanded = communeExpanded,
+                    onDismissRequest = { communeExpanded = false }
                 ) {
                     communes.forEach { communeName ->
                         DropdownMenuItem(
                             text = { Text(communeName) },
                             onClick = {
                                 commune = communeName
-                                showCommuneMenu = false
+                                communeExpanded = false
                             }
                         )
                     }
@@ -155,29 +169,73 @@ fun CreateEventScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            TextField(
+            // ================= CUPOS =================
+            OutlinedTextField(
                 value = maxParticipants,
-                onValueChange = { value ->
-                    if (value.all { it.isDigit() }) {
-                        maxParticipants = value
-                    }
-                },
+                onValueChange = { if (it.all(Char::isDigit)) maxParticipants = it },
                 label = { Text("Cupos máximos") },
                 modifier = Modifier.fillMaxWidth()
             )
-            if (maxParticipants.isNotEmpty() && maxParticipants.toIntOrNull() == null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Ingresa solo números",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // =====================================================
+            // ================= A7.7 — PREGUNTAS =================
+            // =====================================================
+
+            Text(
+                text = "Preguntas para solicitar acceso (opcional)",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            questions.forEachIndexed { index, question ->
+
+                OutlinedTextField(
+                    value = question.text,
+                    onValueChange = { newText ->
+                        questions = questions.toMutableList().also {
+                            it[index] = question.copy(text = newText)
+                        }
+                    },
+                    label = { Text("Pregunta ${index + 1}") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = question.required,
+                        onCheckedChange = { checked ->
+                            questions = questions.toMutableList().also {
+                                it[index] = question.copy(required = checked)
+                            }
+                        }
+                    )
+                    Text("Obligatoria")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            OutlinedButton(
+                onClick = {
+                    questions = questions + JoinQuestion(
+                        id = UUID.randomUUID().toString(),
+                        text = "",
+                        required = false
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Agregar pregunta")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ================= CREAR EVENTO =================
             Button(
                 enabled = !uiState.isLoading &&
                         title.isNotBlank() &&
@@ -185,19 +243,8 @@ fun CreateEventScreen(
                         category.isNotBlank() &&
                         region.isNotBlank() &&
                         commune.isNotBlank() &&
-                        maxParticipants.toIntOrNull()?.let { it > 0 } == true
-                ,
+                        maxParticipants.toIntOrNull()?.let { it > 0 } == true,
                 onClick = {
-                    if (
-                        title.isBlank() ||
-                        description.isBlank() ||
-                        category.isBlank() ||
-                        region.isBlank() ||
-                        commune.isBlank() ||
-                        maxParticipants.toIntOrNull() == null ||
-                        maxParticipants.toInt() <= 0
-                    ) return@Button
-
                     onCreateEvent(
                         Event(
                             creatorId = creatorId,
@@ -207,7 +254,8 @@ fun CreateEventScreen(
                             region = region,
                             commune = commune,
                             maxParticipants = maxParticipants.toInt(),
-                            eventTimestamp = System.currentTimeMillis()
+                            eventTimestamp = System.currentTimeMillis(),
+                            joinQuestions = questions
                         )
                     )
                 },

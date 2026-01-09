@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.Event
 
@@ -18,13 +19,11 @@ fun EventDetailScreen(
 ) {
     val isCreator = event.creatorId == currentUserId
     val isApproved = event.approvedParticipants.contains(currentUserId)
-    val isPending = event.pendingRequests.contains(currentUserId)
+    val isPending = event.pendingRequests.any { it.userId == currentUserId }
     val isRejected = event.rejectedParticipants.contains(currentUserId)
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
 
@@ -32,14 +31,10 @@ fun EventDetailScreen(
         Text("${event.region} • ${event.commune}")
 
         Divider()
-
         Text(event.description)
-
         Divider()
 
-        Text(
-            "Cupos: ${event.approvedParticipants.size} / ${event.maxParticipants}"
-        )
+        Text("Cupos: ${event.approvedParticipants.size} / ${event.maxParticipants}")
 
         // ---------- USUARIO ----------
         if (!isCreator) {
@@ -63,28 +58,41 @@ fun EventDetailScreen(
         if (isCreator && event.pendingRequests.isNotEmpty()) {
 
             Divider()
-            Text("Solicitudes pendientes")
+            Text("Solicitudes pendientes", style = MaterialTheme.typography.titleMedium)
 
-            event.pendingRequests.forEach { userId ->
-                Card {
+            event.pendingRequests.forEach { request ->
+                Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
 
-                        Text(userId)
+                        Text("Usuario: ${request.userId}")
 
                         Spacer(Modifier.height(8.dp))
 
-                        Row {
+                        // 🔥 AQUÍ YA SE VE EL TEXTO REAL
+                        request.answers.forEach { (questionId, answer) ->
+
+                            val questionText = event.joinQuestions
+                                .find { it.id == questionId }
+                                ?.text ?: "Pregunta eliminada"
+
+                            Text("• $questionText", fontWeight = FontWeight.Bold)
+                            Text(answer)
+
+                            Spacer(Modifier.height(6.dp))
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
-                                onClick = { onRejectClick(userId) },
+                                onClick = { onRejectClick(request.userId) },
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text("Rechazar")
                             }
 
-                            Spacer(Modifier.width(8.dp))
-
                             Button(
-                                onClick = { onApproveClick(userId) },
+                                onClick = { onApproveClick(request.userId) },
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text("Aceptar")
@@ -92,6 +100,8 @@ fun EventDetailScreen(
                         }
                     }
                 }
+
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
@@ -99,11 +109,7 @@ fun EventDetailScreen(
 
 @Composable
 private fun DisabledButton(text: String) {
-    Button(
-        onClick = {},
-        enabled = false,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
         Text(text)
     }
 }

@@ -4,6 +4,7 @@ import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.JoinRequest
 import com.eventos.banana.domain.model.AppNotification
 import com.eventos.banana.domain.model.NotificationType
+import com.eventos.banana.domain.model.EventStatus
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.channels.awaitClose
@@ -30,7 +31,6 @@ class EventRepository {
 
                 // El creador queda aprobado automáticamente
                 approvedParticipants = listOf(event.creatorId),
-
                 pendingRequests = emptyList(),
                 rejectedParticipants = emptyList()
             )
@@ -75,7 +75,7 @@ class EventRepository {
     }
 
     // =========================================================
-    // SOLICITAR ACCESO CON RESPUESTAS (A7.7)
+    // SOLICITAR ACCESO CON RESPUESTAS
     // =========================================================
     suspend fun requestJoinEventWithAnswers(
         eventId: String,
@@ -92,6 +92,10 @@ class EventRepository {
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(Event::class.java)
                     ?: throw Exception("Evento no encontrado")
+
+                if (event.status != EventStatus.OPEN) {
+                    throw Exception("El evento no acepta solicitudes")
+                }
 
                 creatorId = event.creatorId
                 eventTitle = event.title
@@ -125,7 +129,6 @@ class EventRepository {
                 )
             }.await()
 
-            // 🔔 Notificación al creador
             notificationRepository.sendNotification(
                 AppNotification(
                     userId = creatorId,
@@ -145,7 +148,7 @@ class EventRepository {
     }
 
     // =========================================================
-    // APROBAR PARTICIPANTE (CREADOR)
+    // APROBAR PARTICIPANTE
     // =========================================================
     suspend fun approveParticipant(
         eventId: String,
@@ -160,6 +163,10 @@ class EventRepository {
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(Event::class.java)
                     ?: throw Exception("Evento no encontrado")
+
+                if (event.status != EventStatus.OPEN) {
+                    throw Exception("El evento no acepta cambios")
+                }
 
                 eventTitle = event.title
 
@@ -178,7 +185,6 @@ class EventRepository {
                 )
             }.await()
 
-            // 🔔 Notificación al usuario
             notificationRepository.sendNotification(
                 AppNotification(
                     userId = userId,
@@ -198,7 +204,7 @@ class EventRepository {
     }
 
     // =========================================================
-    // RECHAZAR PARTICIPANTE (CREADOR)
+    // RECHAZAR PARTICIPANTE
     // =========================================================
     suspend fun rejectParticipant(
         eventId: String,
@@ -214,6 +220,10 @@ class EventRepository {
                 val event = tx.get(ref).toObject(Event::class.java)
                     ?: throw Exception("Evento no encontrado")
 
+                if (event.status != EventStatus.OPEN) {
+                    throw Exception("El evento no acepta cambios")
+                }
+
                 eventTitle = event.title
 
                 tx.update(
@@ -227,7 +237,6 @@ class EventRepository {
                 )
             }.await()
 
-            // 🔔 Notificación al usuario
             notificationRepository.sendNotification(
                 AppNotification(
                     userId = userId,
@@ -246,6 +255,118 @@ class EventRepository {
         }
     }
 
+    // =========================================================
+    // 🔴 A15.1 — MODERACIÓN
+    // =========================================================
+    suspend fun cancelEvent(
+        eventId: String,
+        reason: String
+    ): Result<Unit> {
+        return try {
+
+            var participants: List<String> = emptyList()
+            var title = ""
+
+            FirebaseFirestore.getInstance().runTransaction { tx ->
+
+                val ref = eventsCollection.document(eventId)
+                val event = tx.get(ref).toObject(Event::class.java)
+                    ?: throw Exception("Evento no encontrado")
+
+                title = event.title
+                participants = event.approvedParticipants
+
+                tx.update(
+                    ref,
+                    mapOf(
+                        "status" to EventStatus.CANCELLED,
+                        "cancelReason" to reason,
+                        "cancelledAt" to System.currentTimeMillis()
+                    )
+                )
+            }.await()
+
+            participants.forEach { userId ->
+                notificationRepository.sendNotification(
+                    AppNotification(
+                        userId = userId,
+                        title = "Evento cancelado",
+                        message = "El evento \"$title\" fue cancelado",
+                        eventId = eventId,
+                        createdAt = System.currentTimeMillis(),
+                        type = NotificationType.EVENT_CANCELLED
+                    )
+                )
+            }
+
+            Result.success(Unit)
+
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun closeEvent(eventId: String): Result<Unit> {
+        return try {
+            eventsCollection.document(eventId)
+                .update("status", EventStatus.CLOSED)
+                .await()
+
+            Result.success(Unit)
+
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeParticipant(
+        eventId: String,
+        userId: String
+    ): Result<Unit> {
+        return try {
+
+            var title = ""
+
+            FirebaseFirestore.getInstance().runTransaction { tx ->
+
+                val ref = eventsCollection.document(eventId)
+                val event = tx.get(ref).toObject(Event::class.java)
+                    ?: throw Exception("Evento no encontrado")
+                if (event.creatorId == userId) {
+                    throw Exception("No se puede eliminar al creador del evento")
+                }
+
+
+                title = event.title
+
+                tx.update(
+                    ref,
+                    "approvedParticipants",
+                    event.approvedParticipants.filterNot { it == userId }
+                )
+            }.await()
+
+            notificationRepository.sendNotification(
+                AppNotification(
+                    userId = userId,
+                    title = "Expulsado del evento",
+                    message = "Fuiste removido del evento \"$title\"",
+                    eventId = eventId,
+                    createdAt = System.currentTimeMillis(),
+                    type = NotificationType.REMOVED_FROM_EVENT
+                )
+            )
+
+            Result.success(Unit)
+
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // =========================================================
+    // OBSERVAR EVENTOS (REALTIME)
+    // =========================================================
     fun observeEvents(): Flow<List<Event>> = callbackFlow {
 
         val listener = eventsCollection

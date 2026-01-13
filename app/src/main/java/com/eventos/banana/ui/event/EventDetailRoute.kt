@@ -15,7 +15,10 @@ fun EventDetailRoute(
     currentUserId: String,
     onJoinClick: () -> Unit,
     onApproveClick: (String) -> Unit,
-    onRejectClick: (String) -> Unit
+    onRejectClick: (String) -> Unit,
+    onCancelEvent: (String) -> Unit,
+    onCloseEvent: () -> Unit,
+    onRemoveParticipant: (String) -> Unit   // 👈 NUEVO
 ) {
     when (uiState) {
 
@@ -38,7 +41,10 @@ fun EventDetailRoute(
                 isJoining = false,
                 onJoinClick = onJoinClick,
                 onApproveClick = onApproveClick,
-                onRejectClick = onRejectClick
+                onRejectClick = onRejectClick,
+                onCancelEvent = onCancelEvent,
+                onCloseEvent = onCloseEvent,
+                onRemoveParticipant = onRemoveParticipant // ✅ YA PASADO
             )
         }
     }

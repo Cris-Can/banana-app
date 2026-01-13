@@ -156,3 +156,18 @@ export const onEventCreatedNotifyCommune = onDocumentCreated(
     );
   }
 );
+/**
+ * =====================================================
+ * 🔔 A15.1 — NOTIFICACIONES DE MODERACIÓN
+ * =====================================================
+ */
+export const onEventUpdatedNotifyModeration = onDocumentCreated(
+  "events/{eventId}",
+  async () => {
+    // 👉 Ya tienes el sistema de notifications listo
+    // 👉 Las notificaciones se crean desde EventRepository
+    // 👉 Esta función NO es obligatoria en esta fase
+    // 👉 La dejamos documentada para A15.2+
+  }
+);
+

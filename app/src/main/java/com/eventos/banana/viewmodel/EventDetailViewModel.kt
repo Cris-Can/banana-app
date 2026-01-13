@@ -37,6 +37,7 @@ class EventDetailViewModel(
         }
     }
 
+    // ---------- SOLICITUDES ----------
     fun approveParticipant(userId: String) {
         viewModelScope.launch {
             repository.approveParticipant(eventId, userId)
@@ -50,42 +51,40 @@ class EventDetailViewModel(
             loadEvent()
         }
     }
+
     fun requestJoinEventWithAnswers(
         userId: String,
         answers: Map<String, String>
     ) {
         viewModelScope.launch {
-
-            val result = repository.requestJoinEventWithAnswers(
+            repository.requestJoinEventWithAnswers(
                 eventId = eventId,
                 userId = userId,
                 answers = answers
             )
-
-            result.fold(
-                onSuccess = {
-                    val refreshed = repository.getEventById(eventId)
-
-                    _uiState.value = refreshed.fold(
-                        onSuccess = { event ->
-                            EventDetailUiState.Success(event)
-                        },
-                        onFailure = { error ->
-                            EventDetailUiState.Error(
-                                error.message ?: "Error al actualizar evento"
-                            )
-                        }
-                    )
-                },
-                onFailure = { error ->
-                    _uiState.value = EventDetailUiState.Error(
-                        error.message ?: "No se pudo enviar la solicitud"
-                    )
-                }
-            )
+            loadEvent()
         }
     }
 
+    // ---------- A15.1 MODERACIÓN ----------
+    fun cancelEvent(reason: String) {
+        viewModelScope.launch {
+            repository.cancelEvent(eventId, reason)
+            loadEvent()
+        }
+    }
 
+    fun closeEvent() {
+        viewModelScope.launch {
+            repository.closeEvent(eventId)
+            loadEvent()
+        }
+    }
 
+    fun removeParticipant(userId: String) {
+        viewModelScope.launch {
+            repository.removeParticipant(eventId, userId)
+            loadEvent()
+        }
+    }
 }

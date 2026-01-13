@@ -25,10 +25,12 @@ data class Event(
     val approvalRequired: Boolean = true,
     val joinQuestions: List<JoinQuestion> = emptyList(),
 
-    // Estado
+    // 🔴 ESTADO DE MODERACIÓN
     val status: EventStatus = EventStatus.OPEN,
+    val cancelledAt: Long? = null,
+    val cancelReason: String? = null,
 
-    // Participación (ÚNICA FUENTE DE VERDAD)
+    // Participación
     val approvedParticipants: List<String> = emptyList(),
     val pendingRequests: List<JoinRequest> = emptyList(),
     val rejectedParticipants: List<String> = emptyList()

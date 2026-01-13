@@ -24,7 +24,6 @@ fun AppNavigation() {
     val sessionViewModel: SessionViewModel = viewModel()
     val sessionState by sessionViewModel.sessionState.collectAsState()
 
-
     NavHost(
         navController = navController,
         startDestination = "splash"
@@ -55,12 +54,11 @@ fun AppNavigation() {
             }
 
             val notifications by notificationViewModel.notifications.collectAsState()
-
             val unreadCount = notifications.count { !it.read }
 
             HomeScreen(
                 sessionViewModel = sessionViewModel,
-                unreadNotifications = unreadCount, // 👈 PASA EL DATO
+                unreadNotifications = unreadCount,
                 onCreateEventClick = {
                     navController.navigate("create_event")
                 },
@@ -75,7 +73,6 @@ fun AppNavigation() {
                 }
             )
         }
-
 
         // ---------- CREATE EVENT ----------
         composable("create_event") {
@@ -120,8 +117,21 @@ fun AppNavigation() {
                     navController.navigate("questionnaire/$eventId")
                 },
                 onApproveClick = vm::approveParticipant,
-                onRejectClick = vm::rejectParticipant
+                onRejectClick = vm::rejectParticipant,
+                onCancelEvent = { reason ->
+                    vm.cancelEvent(reason)
+                    navController.popBackStack("home", inclusive = false)
+                },
+                onCloseEvent = {
+                    vm.closeEvent()
+                    navController.popBackStack("home", inclusive = false)
+                },
+                onRemoveParticipant = { userId ->
+                    vm.removeParticipant(userId)
+                }
             )
+
+
         }
 
         // ---------- QUESTIONNAIRE ----------
@@ -167,7 +177,7 @@ fun AppNavigation() {
 
             LaunchedEffect(Unit) {
                 notificationViewModel.start(userId)
-                notificationViewModel.markAllAsRead(userId) // 🔴 A9.5
+                notificationViewModel.markAllAsRead(userId)
             }
 
             val notifications by notificationViewModel.notifications.collectAsState()
@@ -176,20 +186,19 @@ fun AppNavigation() {
                 notifications = notifications,
                 onBack = { navController.popBackStack() },
                 onNotificationClick = { eventId ->
-                    notificationViewModel.markAllAsRead(sessionViewModel.currentUserId())
+                    notificationViewModel.markAllAsRead(userId)
                     navController.navigate("event_detail/$eventId")
                 }
             )
-
         }
+
+        // ---------- PROFILE ----------
         composable("profile") {
             ProfileScreen(
                 sessionViewModel = sessionViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
-
-
     }
 
     // ---------- SESSION REDIRECTION ----------
@@ -206,9 +215,5 @@ fun AppNavigation() {
                     popUpTo(0) { inclusive = true }
                 }
         }
-
     }
-
-
-    }
-
+}

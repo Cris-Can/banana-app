@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,24 +23,67 @@ import com.eventos.banana.viewmodel.SessionViewModel
 fun HomeScreen(
     sessionViewModel: SessionViewModel,
     onCreateEventClick: () -> Unit,
+    unreadNotifications: Int,
     onEventClick: (String) -> Unit,
+    onNotificationsClick: () -> Unit,
+    onProfileClick: () -> Unit,
     eventListViewModel: EventListViewModel = viewModel()
 ) {
     val uiState by eventListViewModel.uiState.collectAsState()
 
-    // Refresh al volver a Home
-    LaunchedEffect(Unit) {
-        eventListViewModel.loadEvents()
-    }
+    // ---------- PERFIL ----------
+    val profileUiState by sessionViewModel.profileUiState.collectAsState()
+    val userCommune = profileUiState.profile?.commune
+    val nickname = profileUiState.profile?.nickname
 
+    // ---------- FILTROS MANUALES ----------
     var selectedRegion by remember { mutableStateOf<String?>(null) }
     var selectedCommune by remember { mutableStateOf<String?>(null) }
+
+    // 👉 COMUNA EFECTIVA (manual tiene prioridad)
+    val effectiveCommune = selectedCommune ?: userCommune
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Eventos") },
+                title = {
+                    Column {
+                        Text(
+                            text = "Eventos",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        nickname?.let {
+                            Text(
+                                text = "Hola, $it 👋",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 actions = {
+                    IconButton(onClick = onNotificationsClick) {
+                        BadgedBox(
+                            badge = {
+                                if (unreadNotifications > 0) {
+                                    Badge {
+                                        Text(unreadNotifications.toString())
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notificaciones"
+                            )
+                        }
+                    }
+
+                    TextButton(onClick = onProfileClick) {
+                        Text("Perfil")
+                    }
+
                     TextButton(onClick = { sessionViewModel.logout() }) {
                         Text("Cerrar sesión")
                     }
@@ -71,14 +116,15 @@ fun HomeScreen(
                     expanded = regionExpanded,
                     onExpandedChange = { regionExpanded = !regionExpanded }
                 ) {
-                    TextField(
-                        value = selectedRegion ?: "Selecciona región",
+                    OutlinedTextField(
+                        value = selectedRegion ?: "",
                         onValueChange = {},
                         readOnly = true,
+                        label = { Text("Región") },
+                        placeholder = { Text("Selecciona región") },
                         modifier = Modifier
                             .menuAnchor()
-                            .fillMaxWidth(),
-                        label = { Text("Región") }
+                            .fillMaxWidth()
                     )
 
                     ExposedDropdownMenu(
@@ -110,15 +156,16 @@ fun HomeScreen(
                         }
                     }
                 ) {
-                    TextField(
-                        value = selectedCommune ?: "Selecciona comuna",
+                    OutlinedTextField(
+                        value = selectedCommune ?: "",
                         onValueChange = {},
                         readOnly = true,
                         enabled = selectedRegion != null,
+                        label = { Text("Comuna") },
+                        placeholder = { Text("Selecciona comuna") },
                         modifier = Modifier
                             .menuAnchor()
-                            .fillMaxWidth(),
-                        label = { Text("Comuna") }
+                            .fillMaxWidth()
                     )
 
                     ExposedDropdownMenu(
@@ -166,14 +213,14 @@ fun HomeScreen(
 
                     val filteredEvents = allEvents.filter { event ->
                         (selectedRegion == null || event.region == selectedRegion) &&
-                                (selectedCommune == null || event.commune == selectedCommune)
+                                (effectiveCommune == null || event.commune == effectiveCommune)
                     }
 
                     when {
                         allEvents.isEmpty() -> {
                             EmptyState(
                                 title = "Aún no hay eventos",
-                                message = "Sé el primero en crear un evento y comenzar la comunidad.",
+                                message = "Sé el primero en crear un evento.",
                                 buttonText = "Crear evento",
                                 onActionClick = onCreateEventClick
                             )
@@ -182,7 +229,7 @@ fun HomeScreen(
                         filteredEvents.isEmpty() -> {
                             EmptyState(
                                 title = "No hay resultados",
-                                message = "Prueba cambiando la región o la comuna.",
+                                message = "Prueba cambiando los filtros.",
                                 buttonText = "Limpiar filtros",
                                 onActionClick = {
                                     selectedRegion = null
@@ -194,10 +241,7 @@ fun HomeScreen(
                         else -> {
                             EventList(
                                 events = filteredEvents,
-                                modifier = Modifier.weight(1f),
-                                onEventClick = { eventId ->
-                                    onEventClick(eventId)
-                                }
+                                onEventClick = onEventClick
                             )
                         }
                     }
@@ -207,14 +251,15 @@ fun HomeScreen(
     }
 }
 
+// ================= COMPONENTES =================
+
 @Composable
 private fun EventList(
     events: List<Event>,
-    modifier: Modifier = Modifier,
     onEventClick: (String) -> Unit
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

@@ -70,6 +70,12 @@ fun CreateEventScreen(
                 value = title,
                 onValueChange = { title = it },
                 label = { Text("Título") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -79,6 +85,12 @@ fun CreateEventScreen(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("Descripción") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -88,6 +100,12 @@ fun CreateEventScreen(
                 value = category,
                 onValueChange = { category = it },
                 label = { Text("Categoría") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -104,6 +122,12 @@ fun CreateEventScreen(
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Región") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
                     modifier = Modifier
                         .menuAnchor()
                         .fillMaxWidth()

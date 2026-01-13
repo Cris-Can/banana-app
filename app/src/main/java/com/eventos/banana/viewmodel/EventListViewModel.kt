@@ -18,25 +18,14 @@ class EventListViewModel(
     val uiState: StateFlow<EventListUiState> = _uiState
 
     init {
-        loadEvents()
+        observeEvents()
     }
 
-     fun loadEvents() {
+    private fun observeEvents() {
         viewModelScope.launch {
-            _uiState.value = EventListUiState.Loading
-
-            val result = repository.getEvents()
-
-            _uiState.value = result.fold(
-                onSuccess = { events ->
-                    EventListUiState.Success(events)
-                },
-                onFailure = { error ->
-                    EventListUiState.Error(
-                        error.message ?: "Error al cargar eventos"
-                    )
-                }
-            )
+            repository.observeEvents().collect { events ->
+                _uiState.value = EventListUiState.Success(events)
+            }
         }
     }
 }

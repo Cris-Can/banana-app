@@ -1,28 +1,21 @@
 package com.eventos.banana.navigation
 
 import androidx.compose.runtime.*
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
-import com.eventos.banana.domain.model.SessionState
-import com.eventos.banana.ui.event.CreateEventScreen
-import com.eventos.banana.ui.event.EventDetailRoute
-import com.eventos.banana.ui.home.HomeScreen
-import com.eventos.banana.ui.login.LoginScreen
-import com.eventos.banana.ui.splash.SplashScreen
-import com.eventos.banana.viewmodel.CreateEventViewModel
-import com.eventos.banana.viewmodel.EventDetailViewModel
-import com.eventos.banana.viewmodel.SessionViewModel
-import kotlinx.coroutines.flow.collectLatest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import com.eventos.banana.domain.model.EventDetailUiState
-import com.eventos.banana.ui.event.QuestionnaireScreen
-
+import com.eventos.banana.domain.model.SessionState
+import com.eventos.banana.ui.event.*
+import com.eventos.banana.ui.home.HomeScreen
+import com.eventos.banana.ui.login.LoginScreen
+import com.eventos.banana.ui.notifications.NotificationsScreen
+import com.eventos.banana.ui.profile.ProfileScreen
+import com.eventos.banana.ui.splash.SplashScreen
+import com.eventos.banana.viewmodel.*
 
 @Composable
 fun AppNavigation() {
@@ -30,6 +23,7 @@ fun AppNavigation() {
     val navController = rememberNavController()
     val sessionViewModel: SessionViewModel = viewModel()
     val sessionState by sessionViewModel.sessionState.collectAsState()
+
 
     NavHost(
         navController = navController,
@@ -47,96 +41,68 @@ fun AppNavigation() {
 
             LoginScreen(
                 uiState = loginUiState,
-                onLogin = { email, password ->
-                    sessionViewModel.login(email, password)
-                }
+                onLogin = sessionViewModel::login
             )
         }
 
         // ---------- HOME ----------
         composable("home") {
+
+            val notificationViewModel: NotificationViewModel = viewModel()
+
+            LaunchedEffect(Unit) {
+                notificationViewModel.start(sessionViewModel.currentUserId())
+            }
+
+            val notifications by notificationViewModel.notifications.collectAsState()
+
+            val unreadCount = notifications.count { !it.read }
+
             HomeScreen(
                 sessionViewModel = sessionViewModel,
+                unreadNotifications = unreadCount, // 👈 PASA EL DATO
                 onCreateEventClick = {
                     navController.navigate("create_event")
                 },
                 onEventClick = { eventId ->
                     navController.navigate("event_detail/$eventId")
+                },
+                onNotificationsClick = {
+                    navController.navigate("notifications")
+                },
+                onProfileClick = {
+                    navController.navigate("profile")
                 }
             )
         }
 
+
         // ---------- CREATE EVENT ----------
         composable("create_event") {
-            val createEventViewModel: CreateEventViewModel = viewModel()
-            val uiState by createEventViewModel.uiState.collectAsState()
+            val vm: CreateEventViewModel = viewModel()
+            val uiState by vm.uiState.collectAsState()
 
             CreateEventScreen(
                 creatorId = sessionViewModel.currentUserId(),
                 uiState = uiState,
-                onCreateEvent = { event ->
-                    createEventViewModel.createEvent(event)
-                },
+                onCreateEvent = vm::createEvent,
                 onSuccess = {
-                    createEventViewModel.resetState()
+                    vm.resetState()
                     navController.popBackStack()
                 }
             )
         }
 
-
-
         // ---------- EVENT DETAIL ----------
         composable(
-            route = "event_detail/{eventId}",
-            arguments = listOf(
-                navArgument("eventId") { type = NavType.StringType }
-            )
+            "event_detail/{eventId}",
+            arguments = listOf(navArgument("eventId") { type = NavType.StringType })
         ) { backStackEntry ->
 
-            val eventId = backStackEntry.arguments?.getString("eventId")
-                ?: return@composable
+            val eventId =
+                backStackEntry.arguments?.getString("eventId") ?: return@composable
 
-            val eventDetailViewModel: EventDetailViewModel = viewModel(
-                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-                    override fun <T : androidx.lifecycle.ViewModel> create(
-                        modelClass: Class<T>
-                    ): T {
-                        return EventDetailViewModel(eventId) as T
-                    }
-                }
-            )
-
-            val uiState by eventDetailViewModel.uiState.collectAsState()
-
-            EventDetailRoute(
-                uiState = uiState,
-                currentUserId = sessionViewModel.currentUserId(),
-                onJoinClick = {
-                    navController.navigate("questionnaire/${eventId}")
-
-                },
-                onApproveClick = { userId ->
-                    eventDetailViewModel.approveParticipant(userId)
-                },
-                onRejectClick = { userId ->
-                    eventDetailViewModel.rejectParticipant(userId)
-                }
-            )
-
-        }
-
-        composable(
-            route = "questionnaire/{eventId}",
-            arguments = listOf(
-                navArgument("eventId") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-
-            val eventId = backStackEntry.arguments?.getString("eventId")
-                ?: return@composable
-
-            val viewModel: EventDetailViewModel = viewModel(
+            val vm: EventDetailViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -145,25 +111,82 @@ fun AppNavigation() {
                 }
             )
 
-            val uiState by viewModel.uiState.collectAsState()
+            val uiState by vm.uiState.collectAsState()
+
+            EventDetailRoute(
+                uiState = uiState,
+                currentUserId = sessionViewModel.currentUserId(),
+                onJoinClick = {
+                    navController.navigate("questionnaire/$eventId")
+                },
+                onApproveClick = vm::approveParticipant,
+                onRejectClick = vm::rejectParticipant
+            )
+        }
+
+        // ---------- QUESTIONNAIRE ----------
+        composable(
+            "questionnaire/{eventId}",
+            arguments = listOf(navArgument("eventId") { type = NavType.StringType })
+        ) { backStackEntry ->
+
+            val eventId =
+                backStackEntry.arguments?.getString("eventId") ?: return@composable
+
+            val vm: EventDetailViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return EventDetailViewModel(eventId) as T
+                    }
+                }
+            )
+
+            val uiState by vm.uiState.collectAsState()
 
             if (uiState is EventDetailUiState.Success) {
-                val event = (uiState as EventDetailUiState.Success).event
-
                 QuestionnaireScreen(
-                    event = event,
+                    event = (uiState as EventDetailUiState.Success).event,
                     onSubmit = { answers ->
-                        viewModel.requestJoinEventWithAnswers(
+                        vm.requestJoinEventWithAnswers(
                             userId = sessionViewModel.currentUserId(),
                             answers = answers
                         )
                         navController.popBackStack()
                     },
-                    onCancel = {
-                        navController.popBackStack()
-                    }
+                    onCancel = { navController.popBackStack() }
                 )
             }
+        }
+
+        // ---------- NOTIFICATIONS ----------
+        composable("notifications") {
+
+            val notificationViewModel: NotificationViewModel = viewModel()
+            val userId = sessionViewModel.currentUserId()
+
+            LaunchedEffect(Unit) {
+                notificationViewModel.start(userId)
+                notificationViewModel.markAllAsRead(userId) // 🔴 A9.5
+            }
+
+            val notifications by notificationViewModel.notifications.collectAsState()
+
+            NotificationsScreen(
+                notifications = notifications,
+                onBack = { navController.popBackStack() },
+                onNotificationClick = { eventId ->
+                    notificationViewModel.markAllAsRead(sessionViewModel.currentUserId())
+                    navController.navigate("event_detail/$eventId")
+                }
+            )
+
+        }
+        composable("profile") {
+            ProfileScreen(
+                sessionViewModel = sessionViewModel,
+                onBack = { navController.popBackStack() }
+            )
         }
 
 
@@ -173,20 +196,19 @@ fun AppNavigation() {
     LaunchedEffect(sessionState) {
         when (sessionState) {
             SessionState.LOADING -> Unit
-
-            SessionState.NOT_AUTHENTICATED -> {
+            SessionState.NOT_AUTHENTICATED ->
                 navController.navigate("login") {
                     popUpTo(0) { inclusive = true }
-                    launchSingleTop = true
                 }
-            }
 
-            SessionState.AUTHENTICATED -> {
+            SessionState.AUTHENTICATED ->
                 navController.navigate("home") {
                     popUpTo(0) { inclusive = true }
-                    launchSingleTop = true
                 }
-            }
         }
+
     }
-}
+
+
+    }
+

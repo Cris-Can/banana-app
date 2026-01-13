@@ -64,6 +64,12 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-functions-ktx")
+
+
+
 
 
 }

@@ -6,7 +6,9 @@ sealed interface EventDetailUiState {
 
 
     data class Success(
-        val event: Event
+        val event: Event,
+        val isJoining: Boolean = false,
+        val userNicknames: Map<String, String> = emptyMap() // userId -> nickname
     ) : EventDetailUiState
 
     data class Error(

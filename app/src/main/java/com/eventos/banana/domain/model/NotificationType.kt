@@ -9,11 +9,19 @@ enum class NotificationType {
     JOIN_APPROVED,
     JOIN_REJECTED,
 
+    // Amigos
+    FRIEND_REQUEST,
+    FRIEND_ACCEPTED,
+
     // Eventos
     EVENT_CREATED,
     EVENT_CANCELLED,     // 👈 A15.1
     EVENT_CLOSED,        // 👈 A15.1
 
     // Moderación
-    REMOVED_FROM_EVENT   // 👈 A15.1
+    // Moderación
+    REMOVED_FROM_EVENT,   // 👈 A15.1
+    
+    // Chat
+    NEW_MESSAGE
 }

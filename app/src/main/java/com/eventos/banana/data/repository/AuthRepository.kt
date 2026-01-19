@@ -31,21 +31,53 @@ class AuthRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
-        fun currentUserEmail(): String? {
-            return firebaseAuth.currentUser?.email
-        }
+    }
 
+    suspend fun sendEmailVerification(): Result<Unit> {
+        return try {
+            firebaseAuth.currentUser?.sendEmailVerification()?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reloadUser(): Result<Unit> {
+        return try {
+            val user = firebaseAuth.currentUser
+            user?.reload()?.await()
+            // 🔄 Force token refresh to update custom claims (like email_verified) for Firestore rules
+            user?.getIdToken(true)?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun isEmailVerified(): Boolean {
+        return firebaseAuth.currentUser?.isEmailVerified == true
     }
 
     fun currentUid(): String? {
         return firebaseAuth.currentUser?.uid
     }
 
-    fun logout() {
-        firebaseAuth.signOut()
-    }
+    fun getCurrentUser() = firebaseAuth.currentUser
+
     fun currentUserEmail(): String? {
         return firebaseAuth.currentUser?.email
     }
 
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return try {
+            firebaseAuth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun logout() {
+        firebaseAuth.signOut()
+    }
 }

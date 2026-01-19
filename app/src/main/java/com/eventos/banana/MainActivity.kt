@@ -29,7 +29,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 🔍 DIAGNÓSTICO: GMS Security Patch
+        // 🔍 DIAGNÓSTICO: GMSS Security Patch
         try {
             com.google.android.gms.security.ProviderInstaller.installIfNeeded(this)
         } catch (e: Exception) {

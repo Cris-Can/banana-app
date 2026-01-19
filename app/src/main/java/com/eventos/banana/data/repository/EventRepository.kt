@@ -1,43 +1,154 @@
 package com.eventos.banana.data.repository
 
-import com.eventos.banana.domain.model.Event
-import com.eventos.banana.domain.model.JoinRequest
-import com.eventos.banana.domain.model.AppNotification
-import com.eventos.banana.domain.model.NotificationType
-import com.eventos.banana.domain.model.EventStatus
+import com.eventos.banana.domain.model.*
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 
 class EventRepository {
 
-    private val eventsCollection =
-        FirebaseFirestore.getInstance().collection("events")
+    private val firestore = FirebaseFirestore.getInstance()
+    private val eventsCollection = firestore.collection("events")
 
     private val notificationRepository = NotificationRepository()
 
-    // =========================================================
-    // CREAR EVENTO
-    // =========================================================
-    suspend fun createEvent(event: Event): Result<Unit> {
+    suspend fun createEvent(event: Event, imageBytes: ByteArray? = null): Result<Unit> {
+        val docRef = eventsCollection.document()
+        val imagePath = "events_covers/${docRef.id}.jpg"
+        
         return try {
-            val docRef = eventsCollection.document()
+            var imageUrl: String? = null
+            
+            if (imageBytes != null && imageBytes.isNotEmpty()) {
+                val projectID = "bananaapp-aa46e"
+                val buckets = listOf(
+                    "default", // tries default from JSON
+                    "$projectID.appspot.com",
+                    "$projectID.firebasestorage.app"
+                )
+                
+                var lastStorageEx: Exception? = null
+
+                for (bucketName in buckets) {
+                    try {
+                        val storageInstance = if (bucketName == "default") {
+                            com.google.firebase.storage.FirebaseStorage.getInstance()
+                        } else {
+                            com.google.firebase.storage.FirebaseStorage.getInstance("gs://$bucketName")
+                        }
+                        
+                        val storageRef = storageInstance.reference.child(imagePath)
+                        
+                        // Try Upload
+                        storageRef.putBytes(imageBytes).await()
+                        
+                        // Try Get URL
+                        for (i in 1..3) {
+                            try {
+                                kotlinx.coroutines.delay(500L * i)
+                                imageUrl = storageRef.downloadUrl.await().toString()
+                                if (imageUrl != null) break
+                            } catch (e: Exception) { /* retry */ }
+                        }
+                        
+                        if (imageUrl != null) break // Success!
+                        
+                    } catch (e: Exception) {
+                        lastStorageEx = e
+                        // if it's 404, try next bucket
+                        if (e is com.google.firebase.storage.StorageException && e.errorCode == -13010) {
+                            continue
+                        } else {
+                            break // other error, abort loop
+                        }
+                    }
+                }
+
+                if (imageUrl == null) {
+                    val msg = (lastStorageEx as? com.google.firebase.storage.StorageException)?.let {
+                        "Error Storage (-13010): El bucket no existe o no está activado en la Consola. Bucket intentado: ${it.message}"
+                    } ?: lastStorageEx?.message ?: "Error desconocido en subida"
+                    throw Exception("Fallo al subir foto. Asegúrate de que 'Storage' esté activado en Firebase Console: $msg")
+                }
+            }
 
             val eventWithId = event.copy(
                 id = docRef.id,
+                imageUrl = imageUrl,
                 createdAt = System.currentTimeMillis(),
-
-                // El creador queda aprobado automáticamente
                 approvedParticipants = listOf(event.creatorId),
                 pendingRequests = emptyList(),
                 rejectedParticipants = emptyList()
             )
 
             docRef.set(eventWithId).await()
+            
+            // 🔔 NOTIFY ZONE USERS (Client-side implementation)
+            try {
+                notifyZoneUsers(eventWithId)
+            } catch (e: Exception) {
+                // Log error but don't fail event creation
+                android.util.Log.e("EventRepository", "Failed to notify zone users: ${e.message}")
+            }
+
             Result.success(Unit)
 
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun notifyZoneUsers(event: Event) {
+        // Query users in the same commune who want notifications
+        val snapshot = firestore.collection("users")
+            .whereEqualTo("commune", event.commune)
+            .whereEqualTo("notifyEventsByCommune", true)
+            .get()
+            .await()
+
+        snapshot.documents.forEach { doc ->
+            val userId = doc.id
+            // Don't notify creator
+            if (userId != event.creatorId) {
+                notificationRepository.sendNotification(
+                    AppNotification(
+                        userId = userId,
+                        title = "Nuevo evento en ${event.commune}",
+                        message = event.title,
+                        eventId = event.id,
+                        type = NotificationType.EVENT_CREATED
+                    )
+                )
+            }
+        }
+    }
+
+    // =========================================================
+    // ARCHIVAR EVENTOS PASADOS (A17 base)
+    // =========================================================
+    suspend fun archivePastEvents(): Result<Unit> {
+        return try {
+            val now = System.currentTimeMillis()
+
+            val snapshot = eventsCollection
+                .whereLessThan("endAt", now)
+                .get()
+                .await()
+
+            snapshot.documents.forEach { doc ->
+                doc.reference.update(
+                    mapOf(
+                        "status" to EventStatus.CLOSED
+                        // más adelante:
+                        // "isArchived" to true,
+                        // "archivedAt" to now
+                    )
+                ).await()
+            }
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -59,6 +170,21 @@ class EventRepository {
         }
     }
 
+    fun listenToEvent(eventId: String): Flow<Event> = callbackFlow {
+        val listener = eventsCollection.document(eventId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val event = snapshot?.toObject(Event::class.java)
+                if (event != null) {
+                    trySend(event)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
     // =========================================================
     // OBTENER EVENTO POR ID
     // =========================================================
@@ -75,7 +201,7 @@ class EventRepository {
     }
 
     // =========================================================
-    // SOLICITAR ACCESO CON RESPUESTAS
+    // SOLICITAR ACCESO
     // =========================================================
     suspend fun requestJoinEventWithAnswers(
         eventId: String,
@@ -87,8 +213,7 @@ class EventRepository {
             var creatorId = ""
             var eventTitle = ""
 
-            FirebaseFirestore.getInstance().runTransaction { tx ->
-
+            firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(Event::class.java)
                     ?: throw Exception("Evento no encontrado")
@@ -97,35 +222,37 @@ class EventRepository {
                     throw Exception("El evento no acepta solicitudes")
                 }
 
-                creatorId = event.creatorId
-                eventTitle = event.title
-
                 if (event.creatorId == userId) {
                     throw Exception("El creador no puede solicitar acceso")
                 }
 
-                if (event.approvedParticipants.contains(userId)) {
-                    throw Exception("Ya estás aceptado")
+                if (
+                    event.approvedParticipants.contains(userId) ||
+                    event.rejectedParticipants.contains(userId) ||
+                    event.pendingRequests.any { it.userId == userId }
+                ) {
+                    throw Exception("Solicitud inválida")
                 }
 
-                if (event.rejectedParticipants.contains(userId)) {
-                    throw Exception("Solicitud rechazada previamente")
-                }
-
-                if (event.pendingRequests.any { it.userId == userId }) {
-                    throw Exception("Solicitud duplicada")
-                }
-
+                creatorId = event.creatorId
+                eventTitle = event.title
+                
+                // Fetch user info to include in request (A23 enhancement)
+                // Since this is inside runTransaction, we should ideally have the nickname before.
+                // But for now we'll pass it from the ViewModel or use the provided logic.
+                // For simplicity, I'll assume the nickname is provided or we use a placeholder.
+                
                 val request = JoinRequest(
                     userId = userId,
-                    answers = answers,
+                    userNickname = answers["_nickname"] ?: "Usuario", 
+                    answers = answers.filterKeys { !it.startsWith("_") },
                     createdAt = System.currentTimeMillis()
                 )
 
                 tx.update(
                     ref,
                     "pendingRequests",
-                    event.pendingRequests + request
+                    com.google.firebase.firestore.FieldValue.arrayUnion(request)
                 )
             }.await()
 
@@ -133,9 +260,8 @@ class EventRepository {
                 AppNotification(
                     userId = creatorId,
                     title = "Nueva solicitud",
-                    message = "Un usuario solicitó unirse a tu evento \"$eventTitle\"",
+                    message = "Un usuario solicitó unirse a \"$eventTitle\"",
                     eventId = eventId,
-                    createdAt = System.currentTimeMillis(),
                     type = NotificationType.JOIN_REQUEST_SENT
                 )
             )
@@ -158,27 +284,27 @@ class EventRepository {
 
             var eventTitle = ""
 
-            FirebaseFirestore.getInstance().runTransaction { tx ->
-
+            firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(Event::class.java)
                     ?: throw Exception("Evento no encontrado")
 
                 if (event.status != EventStatus.OPEN) {
-                    throw Exception("El evento no acepta cambios")
+                    throw Exception("Evento cerrado")
                 }
-
-                eventTitle = event.title
 
                 if (event.approvedParticipants.size >= event.maxParticipants) {
                     throw Exception("Evento sin cupos")
                 }
 
+                eventTitle = event.title
+
                 tx.update(
                     ref,
                     mapOf(
-                        "pendingRequests" to event.pendingRequests
-                            .filterNot { it.userId == userId },
+                        "pendingRequests" to event.pendingRequests.filterNot {
+                            it.userId == userId
+                        },
                         "approvedParticipants" to
                                 (event.approvedParticipants + userId)
                     )
@@ -189,15 +315,13 @@ class EventRepository {
                 AppNotification(
                     userId = userId,
                     title = "Solicitud aceptada",
-                    message = "Fuiste aceptado en el evento \"$eventTitle\"",
+                    message = "Fuiste aceptado en \"$eventTitle\"",
                     eventId = eventId,
-                    createdAt = System.currentTimeMillis(),
                     type = NotificationType.JOIN_APPROVED
                 )
             )
 
             Result.success(Unit)
-
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -213,24 +337,22 @@ class EventRepository {
         return try {
 
             var eventTitle = ""
+            var userNickname = ""
 
-            FirebaseFirestore.getInstance().runTransaction { tx ->
-
+            firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(Event::class.java)
                     ?: throw Exception("Evento no encontrado")
 
-                if (event.status != EventStatus.OPEN) {
-                    throw Exception("El evento no acepta cambios")
-                }
-
                 eventTitle = event.title
+                userNickname = event.pendingRequests.firstOrNull { it.userId == userId }?.userNickname ?: "Usuario"
 
                 tx.update(
                     ref,
                     mapOf(
-                        "pendingRequests" to event.pendingRequests
-                            .filterNot { it.userId == userId },
+                        "pendingRequests" to event.pendingRequests.filterNot {
+                            it.userId == userId
+                        },
                         "rejectedParticipants" to
                                 (event.rejectedParticipants + userId)
                     )
@@ -241,41 +363,25 @@ class EventRepository {
                 AppNotification(
                     userId = userId,
                     title = "Solicitud rechazada",
-                    message = "Tu solicitud para el evento \"$eventTitle\" fue rechazada",
+                    message = "Tu solicitud a \"$eventTitle\" fue rechazada",
                     eventId = eventId,
-                    createdAt = System.currentTimeMillis(),
                     type = NotificationType.JOIN_REJECTED
                 )
             )
 
             Result.success(Unit)
-
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
     // =========================================================
-    // 🔴 A15.1 — MODERACIÓN
+    // MODERACIÓN
     // =========================================================
-    suspend fun cancelEvent(
-        eventId: String,
-        reason: String
-    ): Result<Unit> {
+    suspend fun cancelEvent(eventId: String, reason: String): Result<Unit> {
         return try {
-
-            var participants: List<String> = emptyList()
-            var title = ""
-
-            FirebaseFirestore.getInstance().runTransaction { tx ->
-
+            firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
-                val event = tx.get(ref).toObject(Event::class.java)
-                    ?: throw Exception("Evento no encontrado")
-
-                title = event.title
-                participants = event.approvedParticipants
-
                 tx.update(
                     ref,
                     mapOf(
@@ -286,21 +392,7 @@ class EventRepository {
                 )
             }.await()
 
-            participants.forEach { userId ->
-                notificationRepository.sendNotification(
-                    AppNotification(
-                        userId = userId,
-                        title = "Evento cancelado",
-                        message = "El evento \"$title\" fue cancelado",
-                        eventId = eventId,
-                        createdAt = System.currentTimeMillis(),
-                        type = NotificationType.EVENT_CANCELLED
-                    )
-                )
-            }
-
             Result.success(Unit)
-
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -313,31 +405,21 @@ class EventRepository {
                 .await()
 
             Result.success(Unit)
-
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun removeParticipant(
-        eventId: String,
-        userId: String
-    ): Result<Unit> {
+    suspend fun removeParticipant(eventId: String, userId: String): Result<Unit> {
         return try {
-
-            var title = ""
-
-            FirebaseFirestore.getInstance().runTransaction { tx ->
-
+            firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(Event::class.java)
                     ?: throw Exception("Evento no encontrado")
+
                 if (event.creatorId == userId) {
-                    throw Exception("No se puede eliminar al creador del evento")
+                    throw Exception("No se puede eliminar al creador")
                 }
-
-
-                title = event.title
 
                 tx.update(
                     ref,
@@ -346,19 +428,19 @@ class EventRepository {
                 )
             }.await()
 
-            notificationRepository.sendNotification(
-                AppNotification(
-                    userId = userId,
-                    title = "Expulsado del evento",
-                    message = "Fuiste removido del evento \"$title\"",
-                    eventId = eventId,
-                    createdAt = System.currentTimeMillis(),
-                    type = NotificationType.REMOVED_FROM_EVENT
-                )
-            )
-
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
+    // =========================================================
+    // ELIMINAR EVENTO DEFINITIVAMENTE
+    // =========================================================
+    suspend fun deleteEvent(eventId: String): Result<Unit> {
+        return try {
+            eventsCollection.document(eventId).delete().await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -378,15 +460,20 @@ class EventRepository {
                     return@addSnapshotListener
                 }
 
+                val now = System.currentTimeMillis()
+
                 val events = snapshot
                     ?.toObjects(Event::class.java)
+                    ?.filter {
+                        it.status == EventStatus.OPEN &&
+                                it.endAt > now
+                    }
                     ?: emptyList()
 
                 trySend(events)
             }
 
-        awaitClose {
-            listener.remove()
-        }
+        awaitClose { listener.remove() }
     }
+
 }

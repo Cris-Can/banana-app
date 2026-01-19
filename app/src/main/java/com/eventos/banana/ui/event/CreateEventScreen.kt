@@ -1,304 +1,419 @@
 package com.eventos.banana.ui.event
 
-import androidx.compose.foundation.clickable
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.eventos.banana.data.local.regionsWithCommunes
+import com.eventos.banana.data.location.ChileLocationProvider
 import com.eventos.banana.domain.model.CreateEventUiState
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.JoinQuestion
-import java.util.UUID
+import com.eventos.banana.location.LocationHelper
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.clickable
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateEventScreen(
     creatorId: String,
-    uiState: CreateEventUiState,
-    onCreateEvent: (Event) -> Unit,
-    onSuccess: () -> Unit
+    viewModel: com.eventos.banana.viewmodel.CreateEventViewModel,
+    onSuccess: () -> Unit,
+    onSelectExactLocation: () -> Unit
 ) {
-    // ================= ESTADO BÁSICO =================
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var region by remember { mutableStateOf("") }
-    var commune by remember { mutableStateOf("") }
-    var maxParticipants by remember { mutableStateOf("") }
+    // ================= CONTEXTO =================
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val locations = remember {
+        ChileLocationProvider.getRegionsWithCommunes(context)
+    }
 
-    // ================= A7.7 — PREGUNTAS =================
-    var questions by remember { mutableStateOf<List<JoinQuestion>>(emptyList()) }
+    // ================= ESTADO (ViewModel) =================
+    val uiState by viewModel.uiState.collectAsState()
+    val formState by viewModel.formState.collectAsState()
 
-    // ================= DROPDOWNS =================
+    val regionExpanded = remember { mutableStateOf(false) }
+    val communeExpanded = remember { mutableStateOf(false) }
 
-    var showCommuneMenu by remember { mutableStateOf(false) }
-    var communeExpanded by remember { mutableStateOf(false) }
-    var regionExpanded by remember { mutableStateOf(false) }
-    var showRegionMenu by remember { mutableStateOf(false) }
-
-
-    val communes = regionsWithCommunes[region] ?: emptyList()
+    val communes = locations[formState.region] ?: emptyList()
     val scrollState = rememberScrollState()
+    var timeError by remember { mutableStateOf<String?>(null) }
 
+    // Image Picker
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri -> viewModel.updateSelectedImageUri(uri) }
+    )
+
+    // Location Permission
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            scope.launch {
+                val result = LocationHelper(context).getRegionAndCommune()
+                if (result.region != null && result.commune != null) {
+                    viewModel.updateLocationResult(
+                        region = result.region,
+                        commune = result.commune,
+                        lat = result.latitude,
+                        lng = result.longitude
+                    )
+                    // Resetear communeExpanded para que no muestre el menú
+                    communeExpanded.value = false
+                }
+            }
+        }
+    }
+
+    // Auto-fill address from Map Picker
+    // Auto-fill address handled in ViewModel now
 
     // ================= ÉXITO =================
-    LaunchedEffect(uiState) {
+    LaunchedEffect(uiState.success) {
         if (uiState.success) onSuccess()
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
+
+        Text("Crear evento", style = MaterialTheme.typography.headlineSmall)
+
+        // ---------- FOTO DE PORTADA ----------
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(scrollState)
-                .padding(16.dp)
+                .height(200.dp)
+                .clickable {
+                    photoPicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
-
-            Text("Crear evento", style = MaterialTheme.typography.headlineSmall)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ================= CAMPOS BÁSICOS =================
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Título") },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Descripción") },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Categoría") },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ================= REGIÓN =================
-
-            ExposedDropdownMenuBox(
-                expanded = regionExpanded,
-                onExpandedChange = { regionExpanded = !regionExpanded }
-            ) {
-                OutlinedTextField(
-                    value = region,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Región") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-
-                ExposedDropdownMenu(
-                    expanded = regionExpanded,
-                    onDismissRequest = { regionExpanded = false }
-                ) {
-                    regionsWithCommunes.keys.forEach { regionName ->
-                        DropdownMenuItem(
-                            text = { Text(regionName) },
-                            onClick = {
-                                region = regionName
-                                commune = ""
-                                regionExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ================= COMUNA =================
-
-            ExposedDropdownMenuBox(
-                expanded = communeExpanded,
-                onExpandedChange = {
-                    if (communes.isNotEmpty()) {
-                        communeExpanded = !communeExpanded
-                    }
-                }
-            ) {
-                OutlinedTextField(
-                    value = commune,
-                    onValueChange = {},
-                    readOnly = true,
-                    enabled = communes.isNotEmpty(),
-                    label = { Text("Comuna") },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-
-                ExposedDropdownMenu(
-                    expanded = communeExpanded,
-                    onDismissRequest = { communeExpanded = false }
-                ) {
-                    communes.forEach { communeName ->
-                        DropdownMenuItem(
-                            text = { Text(communeName) },
-                            onClick = {
-                                commune = communeName
-                                communeExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ================= CUPOS =================
-            OutlinedTextField(
-                value = maxParticipants,
-                onValueChange = { if (it.all(Char::isDigit)) maxParticipants = it },
-                label = { Text("Cupos máximos") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // =====================================================
-            // ================= A7.7 — PREGUNTAS =================
-            // =====================================================
-
-            Text(
-                text = "Preguntas para solicitar acceso (opcional)",
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            questions.forEachIndexed { index, question ->
-
-                OutlinedTextField(
-                    value = question.text,
-                    onValueChange = { newText ->
-                        questions = questions.toMutableList().also {
-                            it[index] = question.copy(text = newText)
-                        }
-                    },
-                    label = { Text("Pregunta ${index + 1}") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = question.required,
-                        onCheckedChange = { checked ->
-                            questions = questions.toMutableList().also {
-                                it[index] = question.copy(required = checked)
-                            }
-                        }
-                    )
-                    Text("Obligatoria")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            OutlinedButton(
-                onClick = {
-                    questions = questions + JoinQuestion(
-                        id = UUID.randomUUID().toString(),
-                        text = "",
-                        required = false
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Agregar pregunta")
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ================= CREAR EVENTO =================
-            Button(
-                enabled = !uiState.isLoading &&
-                        title.isNotBlank() &&
-                        description.isNotBlank() &&
-                        category.isNotBlank() &&
-                        region.isNotBlank() &&
-                        commune.isNotBlank() &&
-                        maxParticipants.toIntOrNull()?.let { it > 0 } == true,
-                onClick = {
-                    onCreateEvent(
-                        Event(
-                            creatorId = creatorId,
-                            title = title,
-                            description = description,
-                            category = category,
-                            region = region,
-                            commune = commune,
-                            maxParticipants = maxParticipants.toInt(),
-                            eventTimestamp = System.currentTimeMillis(),
-                            joinQuestions = questions
-                        )
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
+            Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                if (formState.selectedImageUri != null) {
+                    AsyncImage(
+                        model = formState.selectedImageUri,
+                        contentDescription = "Portada",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
                 } else {
-                    Text("Crear evento")
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Text("📷", style = MaterialTheme.typography.displayMedium)
+                        Text("Agregar Foto de Portada")
+                    }
                 }
             }
+        }
 
-            uiState.errorMessage?.let {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(it, color = MaterialTheme.colorScheme.error)
+        // ---------- DATOS BÁSICOS ----------
+        OutlinedTextField(formState.title, { viewModel.updateTitle(it) }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(formState.description, { viewModel.updateDescription(it) }, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(formState.category, { viewModel.updateCategory(it) }, label = { Text("Categoría") }, modifier = Modifier.fillMaxWidth())
+
+        // ---------- REGIÓN ----------
+        ExposedDropdownMenuBox(
+            expanded = regionExpanded.value,
+            onExpandedChange = { regionExpanded.value = !regionExpanded.value }
+        ) {
+            OutlinedTextField(
+                value = formState.region,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Región") },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+
+            ExposedDropdownMenu(
+                expanded = regionExpanded.value,
+                onDismissRequest = { regionExpanded.value = false }
+            ) {
+                locations.keys.forEach {
+                    DropdownMenuItem(
+                        text = { Text(it) },
+                        onClick = {
+                            viewModel.updateRegion(it)
+                            viewModel.updateCommune("")
+                            regionExpanded.value = false
+                        }
+                    )
+                }
             }
+        }
+
+        // ---------- COMUNA ----------
+        ExposedDropdownMenuBox(
+            expanded = communeExpanded.value,
+            onExpandedChange = {
+                if (communes.isNotEmpty()) communeExpanded.value = !communeExpanded.value
+            }
+        ) {
+            OutlinedTextField(
+                value = formState.commune,
+                onValueChange = {},
+                readOnly = true,
+                enabled = communes.isNotEmpty(),
+                label = { Text("Comuna") },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+
+            ExposedDropdownMenu(
+                expanded = communeExpanded.value,
+                onDismissRequest = { communeExpanded.value = false }
+            ) {
+                communes.forEach {
+                    DropdownMenuItem(
+                        text = { Text(it) },
+                        onClick = {
+                            viewModel.updateCommune(it)
+                            communeExpanded.value = false
+                        }
+                    )
+                }
+            }
+        }
+
+        // ---------- UBICACIÓN AUTOMÁTICA ----------
+        Button(
+            onClick = {
+                locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("📍 Usar mi ubicación (Región/Comuna)")
+        }
+        
+        // ---------- DIRECCIÓN EXACTA (PRIVADA) ----------
+        OutlinedTextField(
+            value = formState.address,
+            onValueChange = { viewModel.updateAddress(it) },
+            label = { Text("Dirección Exacta (Solo para aceptados)") },
+            placeholder = { Text("Ej: Calle Falsa 123, Depto 401") },
+            modifier = Modifier.fillMaxWidth(),
+            supportingText = { Text("Esta información NO es pública.") }
+        )
+
+        // Exact Location Picker
+        OutlinedCard(
+            onClick = onSelectExactLocation,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (formState.exactLocation != null) "📍 Ubicación exacta seleccionada" else "🗺️ Seleccionar ubicación exacta en Mapa",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (formState.exactLocation != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        // ---------- CUPOS ----------
+        OutlinedTextField(
+            value = formState.maxParticipants,
+            onValueChange = { if (it.all(Char::isDigit)) viewModel.updateMaxParticipants(it) },
+            label = { Text("Cupos máximos") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // ---------- FECHA INICIO ----------
+        Text("Inicio", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Button Date
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    formState.startAt?.let { cal.timeInMillis = it }
+                    DatePickerDialog(
+                        context,
+                        { _, y, m, d ->
+                            val newCal = Calendar.getInstance()
+                            formState.startAt?.let { newCal.timeInMillis = it }
+                            newCal.set(y, m, d)
+                            viewModel.updateStartAt(newCal.timeInMillis)
+                        },
+                        cal.get(Calendar.YEAR),
+                        cal.get(Calendar.MONTH),
+                        cal.get(Calendar.DAY_OF_MONTH)
+                    ).show()
+                }
+            ) {
+                Text(formState.startAt?.let { SimpleDateFormat("dd/MM/yyyy").format(Date(it)) } ?: "📅 Fecha")
+            }
+
+            // Button Time
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    formState.startAt?.let { cal.timeInMillis = it }
+                    TimePickerDialog(
+                        context,
+                        { _, h, min ->
+                            val newCal = Calendar.getInstance()
+                            formState.startAt?.let { newCal.timeInMillis = it }
+                            newCal.set(Calendar.HOUR_OF_DAY, h)
+                            newCal.set(Calendar.MINUTE, min)
+                            viewModel.updateStartAt(newCal.timeInMillis)
+                        },
+                        cal.get(Calendar.HOUR_OF_DAY),
+                        cal.get(Calendar.MINUTE),
+                        true
+                    ).show()
+                }
+            ) {
+                Text(formState.startAt?.let { SimpleDateFormat("HH:mm").format(Date(it)) } ?: "⏰ Hora")
+            }
+        }
+
+        // ---------- FECHA TÉRMINO ----------
+        Text("Término", style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Button Date
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    formState.endAt?.let { cal.timeInMillis = it }
+                    DatePickerDialog(
+                        context,
+                        { _, y, m, d ->
+                            val newCal = Calendar.getInstance()
+                            formState.endAt?.let { newCal.timeInMillis = it }
+                            newCal.set(y, m, d)
+                            
+                            // Simple client-side check
+                            val start = formState.startAt
+                            if (start != null && newCal.timeInMillis <= start) {
+                                timeError = "El término debe ser posterior al inicio"
+                            } else {
+                                timeError = null
+                            }
+                            viewModel.updateEndAt(newCal.timeInMillis)
+                        },
+                        cal.get(Calendar.YEAR),
+                        cal.get(Calendar.MONTH),
+                        cal.get(Calendar.DAY_OF_MONTH)
+                    ).show()
+                }
+            ) {
+                Text(formState.endAt?.let { SimpleDateFormat("dd/MM/yyyy").format(Date(it)) } ?: "📅 Fecha")
+            }
+
+            // Button Time
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    formState.endAt?.let { cal.timeInMillis = it }
+                    TimePickerDialog(
+                        context,
+                        { _, h, min ->
+                            val newCal = Calendar.getInstance()
+                            formState.endAt?.let { newCal.timeInMillis = it }
+                            newCal.set(Calendar.HOUR_OF_DAY, h)
+                            newCal.set(Calendar.MINUTE, min)
+
+                            // Simple client-side check
+                            val startAt = formState.startAt
+                            if (startAt != null && newCal.timeInMillis <= startAt) {
+                                timeError = "El término debe ser posterior al inicio"
+                            } else {
+                                timeError = null
+                            }
+                            viewModel.updateEndAt(newCal.timeInMillis)
+                        },
+                        cal.get(Calendar.HOUR_OF_DAY),
+                        cal.get(Calendar.MINUTE),
+                        true
+                    ).show()
+                }
+            ) {
+                Text(formState.endAt?.let { SimpleDateFormat("HH:mm").format(Date(it)) } ?: "⏰ Hora")
+            }
+        }
+
+        timeError?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+
+
+        Divider()
+
+        // ---------- CREAR EVENTO ----------
+        Button(
+            enabled =
+                formState.startAt != null &&
+                        formState.endAt != null &&
+                        formState.startAt!! < formState.endAt!! &&
+                        formState.title.isNotBlank() &&
+                        formState.description.isNotBlank() &&
+                        formState.category.isNotBlank() &&
+                        formState.region.isNotBlank() &&
+                        formState.commune.isNotBlank() &&
+                        formState.address.isNotBlank() &&
+                        formState.maxParticipants.toIntOrNull()?.let { it > 0 } == true,
+            onClick = {
+                scope.launch {
+                    val imageBytes = formState.selectedImageUri?.let { uri ->
+                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    }
+                    viewModel.createEvent(
+                        Event(
+                            creatorId = creatorId,
+                            title = formState.title,
+                            description = formState.description,
+                            category = formState.category,
+                             region = formState.region,
+                             commune = formState.commune,
+                             address = formState.address,
+                             exactLatitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
+                             exactLongitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
+                             exactAddress = formState.exactLocation?.address ?: formState.address,
+                             maxParticipants = formState.maxParticipants.toInt(),
+                             startAt = formState.startAt!!,
+                             endAt = formState.endAt!!,
+                             eventTimestamp = formState.startAt!!,
+                             joinQuestions = formState.questions
+                        ),
+                        imageBytes
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Crear evento")
+        }
+
+        uiState.errorMessage?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
         }
     }
 }

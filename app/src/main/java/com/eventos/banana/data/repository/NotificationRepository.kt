@@ -17,7 +17,7 @@ class NotificationRepository {
 
             val listener = notificationsCollection
                 .whereEqualTo("userId", userId)
-                .orderBy("createdAt")
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
 
                     if (error != null) {
@@ -38,7 +38,17 @@ class NotificationRepository {
     // ✅ A9 — enviar notificación
     suspend fun sendNotification(notification: AppNotification) {
         val doc = notificationsCollection.document()
-        doc.set(notification.copy(id = doc.id)).await()
+        val data = hashMapOf(
+            "id" to doc.id,
+            "userId" to notification.userId,
+            "title" to notification.title,
+            "message" to notification.message,
+            "eventId" to notification.eventId,
+            "read" to notification.read,
+            "type" to notification.type.name,
+            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        )
+        doc.set(data).await()
     }
 
     // ✅ A9.5 — marcar como leídas

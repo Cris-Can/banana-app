@@ -72,6 +72,8 @@ class CreateEventViewModel(
     private val _uiState = MutableStateFlow(CreateEventUiState())
     val uiState: StateFlow<CreateEventUiState> = _uiState
 
+    private val subscriptionRepository = com.eventos.banana.data.repository.SubscriptionRepository()
+
     fun createEvent(event: Event, imageBytes: ByteArray? = null) {
         if (event.endAt <= event.startAt) {
             _uiState.value = _uiState.value.copy(errorMessage = "La fecha de término debe ser posterior al inicio")
@@ -81,9 +83,21 @@ class CreateEventViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
+            // Check Limits
+            val canCreate = subscriptionRepository.canCreateEvent(event.creatorId)
+            if (canCreate.isFailure || !canCreate.getOrDefault(false)) {
+                _uiState.value = CreateEventUiState(
+                    errorMessage = "Has alcanzado tu límite mensual de eventos gratuitos. ¡Mejórate a Premium!",
+                    isLoading = false
+                )
+                return@launch
+            }
+
             val result = repository.createEvent(event, imageBytes)
 
             _uiState.value = if (result.isSuccess) {
+                // Increment Usage
+                subscriptionRepository.incrementCreateCount(event.creatorId)
                 CreateEventUiState(success = true)
             } else {
                 CreateEventUiState(
@@ -93,6 +107,25 @@ class CreateEventViewModel(
         }
     }
 
+    private val _debugStatus = MutableStateFlow("Cargando limites...")
+    val debugStatus: StateFlow<String> = _debugStatus
+
+    fun loadDebugInfo(userId: String) {
+        viewModelScope.launch {
+            _debugStatus.value = "Cargando..."
+            val stats = subscriptionRepository.getDebugStats(userId)
+            _debugStatus.value = stats
+        }
+    }
+    
+    fun setDebugSubscription(userId: String, isPremium: Boolean) {
+        viewModelScope.launch {
+            val type = if (isPremium) com.eventos.banana.domain.model.SubscriptionType.PREMIUM else com.eventos.banana.domain.model.SubscriptionType.FREE
+            subscriptionRepository.updateSubscriptionType(userId, type)
+            // Refresh info
+            loadDebugInfo(userId)
+        }
+    }
     fun resetState() {
         _uiState.value = CreateEventUiState()
     }

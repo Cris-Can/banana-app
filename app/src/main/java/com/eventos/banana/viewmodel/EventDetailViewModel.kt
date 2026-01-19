@@ -104,12 +104,24 @@ class EventDetailViewModel(
         }
     }
 
+    private val subscriptionRepository = com.eventos.banana.data.repository.SubscriptionRepository()
+
     fun requestJoinEventWithAnswers(
         userId: String,
         answers: Map<String, String>
     ) {
         viewModelScope.launch {
             _joinSubmissionState.value = JoinSubmissionState.Loading
+            
+            // Check Limits
+            val canJoin = subscriptionRepository.canJoinEvent(userId)
+            if (canJoin.isFailure || !canJoin.getOrDefault(false)) {
+                _joinSubmissionState.value = JoinSubmissionState.Error(
+                    "Has alcanzado tu límite mensual de solicitudes (3/mes). ¡Mejórate a Premium!"
+                )
+                return@launch
+            }
+
             try {
                 val userNickname = userRepository.getUserProfile(userId)?.nickname ?: "Usuario"
                 val answersWithNickname = answers + ("_nickname" to userNickname)
@@ -121,6 +133,8 @@ class EventDetailViewModel(
                 )
 
                 if (result.isSuccess) {
+                    // Increment Usage
+                    subscriptionRepository.incrementJoinCount(userId)
                     _joinSubmissionState.value = JoinSubmissionState.Success
                 } else {
                     _joinSubmissionState.value = JoinSubmissionState.Error(

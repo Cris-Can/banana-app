@@ -7,9 +7,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.Event
 
+import com.eventos.banana.viewmodel.JoinSubmissionState
+
 @Composable
 fun QuestionnaireScreen(
     event: Event,
+    submissionState: JoinSubmissionState,
     onSubmit: (Map<String, String>) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -48,6 +51,10 @@ fun QuestionnaireScreen(
             Text(it, color = MaterialTheme.colorScheme.error)
         }
 
+        if (submissionState is JoinSubmissionState.Error) {
+            Text(submissionState.message, color = MaterialTheme.colorScheme.error)
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
@@ -63,9 +70,18 @@ fun QuestionnaireScreen(
 
                 onSubmit(answers.toMap())
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = submissionState !is JoinSubmissionState.Loading
         ) {
-            Text("Enviar solicitud")
+            if (submissionState is JoinSubmissionState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("Enviar solicitud")
+            }
         }
 
         OutlinedButton(
@@ -74,5 +90,6 @@ fun QuestionnaireScreen(
         ) {
             Text("Cancelar")
         }
+
     }
 }

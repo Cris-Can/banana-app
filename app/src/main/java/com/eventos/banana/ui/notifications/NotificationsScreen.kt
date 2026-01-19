@@ -18,7 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 fun NotificationsScreen(
     notifications: List<AppNotification>,
     onBack: () -> Unit,
-    onNotificationClick: (String) -> Unit
+    onNotificationClick: (AppNotification) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -55,9 +55,7 @@ fun NotificationsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                notification.eventId?.let {
-                                    onNotificationClick(it)
-                                }
+                                onNotificationClick(notification)
                             }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {

@@ -13,12 +13,16 @@ import com.eventos.banana.domain.model.EventDetailUiState
 fun EventDetailRoute(
     uiState: EventDetailUiState,
     currentUserId: String,
+    isEmailVerified: Boolean,
     onJoinClick: () -> Unit,
     onApproveClick: (String) -> Unit,
     onRejectClick: (String) -> Unit,
     onCancelEvent: (String) -> Unit,
     onCloseEvent: () -> Unit,
-    onRemoveParticipant: (String) -> Unit   // 👈 NUEVO
+    onRemoveParticipant: (String) -> Unit,
+    onDeleteEvent: () -> Unit,
+    onRateUser: (String) -> Unit,
+    onUserClick: (String) -> Unit
 ) {
     when (uiState) {
 
@@ -38,13 +42,18 @@ fun EventDetailRoute(
             EventDetailScreen(
                 event = uiState.event,
                 currentUserId = currentUserId,
-                isJoining = false,
+                isEmailVerified = isEmailVerified,
+                isJoining = uiState.isJoining,
                 onJoinClick = onJoinClick,
                 onApproveClick = onApproveClick,
                 onRejectClick = onRejectClick,
                 onCancelEvent = onCancelEvent,
                 onCloseEvent = onCloseEvent,
-                onRemoveParticipant = onRemoveParticipant // ✅ YA PASADO
+                onRemoveParticipant = onRemoveParticipant,
+                onDeleteEvent = onDeleteEvent,
+                onRateUser = onRateUser,
+                onUserClick = onUserClick,
+                eventState = uiState // Pass full state
             )
         }
     }

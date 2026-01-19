@@ -6,6 +6,8 @@ import com.eventos.banana.data.repository.NotificationRepository
 import com.eventos.banana.domain.model.AppNotification
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class NotificationViewModel(
@@ -19,9 +21,16 @@ class NotificationViewModel(
 
     fun start(userId: String) {
         viewModelScope.launch {
-            repository.observeNotifications(userId).collect { list ->
-                _notifications.value = list
-            }
+            repository.observeNotifications(userId)
+                .catch { e ->
+                    android.util.Log.e("NotificationViewModel", "Error: ${e.message}")
+                }
+                .collect { list ->
+                    // Filter out chat messages from the main notification bell
+                    _notifications.value = list.filter { 
+                        it.type != com.eventos.banana.domain.model.NotificationType.NEW_MESSAGE 
+                    }
+                }
         }
     }
 

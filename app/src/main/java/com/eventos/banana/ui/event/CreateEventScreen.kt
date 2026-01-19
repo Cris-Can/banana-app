@@ -93,7 +93,6 @@ fun CreateEventScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-
         Text("Crear evento", style = MaterialTheme.typography.headlineSmall)
 
         // ---------- FOTO DE PORTADA ----------

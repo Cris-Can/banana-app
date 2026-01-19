@@ -30,5 +30,16 @@ data class UserProfile(
     val friendRequestsReceived: List<String> = emptyList(), // UIDs de solicitudes entrantes
     val friendRequestsSent: List<String> = emptyList(),     // UIDs de solicitudes enviadas
     
+    // 💎 SUSCRIPCIÓN & LÍMITES (A28)
+    var subscriptionType: SubscriptionType = SubscriptionType.PREMIUM, // Default PREMIUM for early adopters
+    var currentCycleStartDate: Long = System.currentTimeMillis(),
+    var eventsCreatedInCycle: Int = 0,
+    var joinRequestsInCycle: Int = 0,
+
     val createdAt: Long = System.currentTimeMillis()
 )
+
+enum class SubscriptionType {
+    FREE,
+    PREMIUM
+}

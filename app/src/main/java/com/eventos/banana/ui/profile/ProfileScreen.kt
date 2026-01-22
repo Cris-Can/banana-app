@@ -10,7 +10,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.eventos.banana.location.LocationHelper
+import com.eventos.banana.util.LocationHelper
 import com.eventos.banana.viewmodel.ProfileUiState
 import com.eventos.banana.viewmodel.ProfileViewModel
 import com.eventos.banana.viewmodel.SessionViewModel
@@ -188,7 +188,7 @@ fun ProfileScreen(
                                     .size(32.dp)
                                     .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
                                     .padding(6.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary
+                                    tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
 
@@ -222,10 +222,61 @@ fun ProfileScreen(
                                 }
                             }
                         }
-
-                        // FRIENDS BUTTON
-                        FilledTonalButton(onClick = onFriendsClick, modifier = Modifier.fillMaxWidth()) {
-                            Text("👥 Ver Amigos")
+                    }
+                }
+                
+                // 1.5 REPUTACIÓN BADGE (Round 11)
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when {
+                            profile.ratingCount == 0 -> MaterialTheme.colorScheme.surfaceVariant
+                            profile.averageRating >= 4.5 -> MaterialTheme.colorScheme.primaryContainer
+                            profile.averageRating >= 4.0 -> MaterialTheme.colorScheme.secondaryContainer
+                            else -> MaterialTheme.colorScheme.surface
+                        }
+                    )
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Badge Emoji
+                            Text(
+                                text = profile.getRatingBadge(),
+                                style = MaterialTheme.typography.displaySmall
+                            )
+                            
+                            Column {
+                                // Badge Text + Score
+                                Text(
+                                    text = profile.getRatingBadgeText(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+                                
+                                // Rating count
+                                if (profile.ratingCount > 0) {
+                                    Text(
+                                        text = "⭐ ${String.format("%.1f", profile.averageRating)} (${profile.ratingCount} ${if(profile.ratingCount == 1) "valoración" else "valoraciones"})",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Sin valoraciones aún",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -344,8 +395,8 @@ fun ProfileScreen(
                             OutlinedButton(
                                 onClick = {
                                     scope.launch {
-                                        val result = LocationHelper(context).getRegionAndCommune()
-                                        if (result.region != null && result.commune != null) {
+                                        val result = LocationHelper(context).detectLocationFull()
+                                        if (result != null) {
                                             detectedRegion = result.region
                                             detectedCommune = result.commune
                                         } else {
@@ -372,10 +423,15 @@ fun ProfileScreen(
 
                         Divider()
                         
+                        Divider()
+                        
+                        Text("🔔 Configuración de Alertas", style = MaterialTheme.typography.titleMedium)
+                        
+                        // 1. Alertas por Comuna
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("🔔 Alertas en mi comuna", style = MaterialTheme.typography.bodyLarge)
-                                Text("Recibe avisos de nuevos eventos", style = MaterialTheme.typography.bodySmall)
+                                Text("Eventos en mi zona", style = MaterialTheme.typography.bodyLarge)
+                                Text("Avisos de nuevos eventos en ${detectedRegion ?: profile.region ?: "tu región"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(
                                 checked = profile.notifyEventsByCommune,
@@ -387,6 +443,21 @@ fun ProfileScreen(
                                     } else {
                                         scope.launch { snackbarHostState.showSnackbar("Guarda tu ubicación primero") }
                                     }
+                                }
+                            )
+                        }
+
+                        // 2. Alertas de Muro
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Muro de Eventos", style = MaterialTheme.typography.bodyLarge)
+                                Text("Avisos cuando alguien comenta en eventos donde participas", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = profile.notifyEventWall,
+                                onCheckedChange = { enabled ->
+                                    val uid = sessionViewModel.currentUserId() ?: return@Switch
+                                    profileViewModel.updateNotifyEventWall(uid, enabled)
                                 }
                             )
                         }
@@ -523,6 +594,41 @@ fun ProfileScreen(
                         }
                     }
                 }
+
+                // LOGOUT BUTTON (at the bottom)
+                Spacer(Modifier.height(24.dp))
+                
+                OutlinedButton(
+                    onClick = { sessionViewModel.logout() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("🚪 Cerrar Sesión")
+                }
+                
+                Spacer(Modifier.height(24.dp))
+                
+                // Instagram Link
+                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { uriHandler.openUri("https://www.instagram.com/somosbananaapp/") }
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "📸 Síguenos en Instagram", 
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(Modifier.height(32.dp))
             }
         }
     }

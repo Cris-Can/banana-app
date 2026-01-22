@@ -17,6 +17,7 @@ enum class NotificationType {
     EVENT_CREATED,
     EVENT_CANCELLED,     // 👈 A15.1
     EVENT_CLOSED,        // 👈 A15.1
+    EVENT_UPDATE,        // 🔔 New updates (Wall posts, edits)
 
     // Moderación
     // Moderación

@@ -62,12 +62,25 @@ fun AppNavigation(startDestination: String = "splash") {
             sharedPreferences.getBoolean("onboarding_seen_v2", false)
         )
     }
+
+    // ---------- GUIDE VIEW MODEL ----------
+    val guideViewModel: GuideViewModel = viewModel(
+        factory = GuideViewModelFactory(sharedPreferences)
+    )
+
+    // Listen for Guide Navigation Events
+    LaunchedEffect(Unit) {
+        guideViewModel.navigationEvent.collect { route ->
+            navController.navigate(route)
+        }
+    }
     
     // Logic: Start at Splash.
     // If Authenticated -> Check Onboarding -> Home/Onboarding
     // If Not Authenticated -> Login
     
-    NavHost(
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
         navController = navController,
         startDestination = "splash"
     ) {
@@ -96,9 +109,11 @@ fun AppNavigation(startDestination: String = "splash") {
         // ---------- LOGIN ----------
         composable("login") {
             val loginUiState by sessionViewModel.loginUiState.collectAsState()
+            val registerUiState by sessionViewModel.registerUiState.collectAsState()
 
             LoginScreen(
-                uiState = loginUiState,
+                loginUiState = loginUiState,
+                registerUiState = registerUiState,
                 onLogin = sessionViewModel::login,
                 onRegister = sessionViewModel::register
             )
@@ -110,6 +125,8 @@ fun AppNavigation(startDestination: String = "splash") {
 
             LaunchedEffect(Unit) {
                 notificationViewModel.start(sessionViewModel.currentUserId())
+                // 🚀 Start Guide if needed (Only on Home)
+                guideViewModel.startGuide()
             }
 
             val notifications by notificationViewModel.notifications.collectAsState()
@@ -135,6 +152,12 @@ fun AppNavigation(startDestination: String = "splash") {
                 },
                 onProfileClick = {
                     navController.navigate("profile")
+                },
+                onSearchClick = {
+                    navController.navigate("search")
+                },
+                onFriendsClick = {
+                    navController.navigate("friends")
                 },
                 onMessagesClick = {
                     navController.navigate("conversations")
@@ -267,6 +290,14 @@ fun AppNavigation(startDestination: String = "splash") {
                     } else {
                         navController.navigate("public_profile/$targetUserId")
                     }
+                },
+                onRateParticipants = { event ->
+                    val participantIds = (event.approvedParticipants + event.creatorId).joinToString(",")
+                    navController.navigate("rate_participants/${event.id}/${event.eventType.name}/$participantIds")
+                },
+                onConfirmEncounters = { event ->
+                    val participantIds = (event.approvedParticipants + event.creatorId).joinToString(",")
+                    navController.navigate("nfc_encounters/${event.id}/$participantIds")
                 }
             )
         }
@@ -316,6 +347,65 @@ fun AppNavigation(startDestination: String = "splash") {
                     }
                 )
             }
+        }
+
+        // ---------- RATE PARTICIPANTS (Round 11) ----------
+        composable(
+            route = "rate_participants/{eventId}/{eventType}/{participantIds}",
+            arguments = listOf(
+                navArgument("eventId") { type = NavType.StringType },
+                navArgument("eventType") { type = NavType.StringType },
+                navArgument("participantIds") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+            val eventTypeStr = backStackEntry.arguments?.getString("eventType") ?: "OTRO"
+            val participantIdsStr = backStackEntry.arguments?.getString("participantIds") ?: ""
+            
+            val eventType = try {
+                com.eventos.banana.domain.model.EventType.valueOf(eventTypeStr)
+            } catch (e: Exception) {
+                com.eventos.banana.domain.model.EventType.OTRO
+            }
+            
+            val participantIds = if (participantIdsStr.isNotBlank()) {
+                participantIdsStr.split(",")
+            } else {
+                emptyList()
+            }
+
+            com.eventos.banana.ui.rating.RateParticipantsScreen(
+                eventId = eventId,
+                eventType = eventType,
+                currentUserId = sessionViewModel.currentUserId(),
+                participantIds = participantIds,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        // ---------- NFC ENCOUNTERS (Round 12) ----------
+        composable(
+            route = "nfc_encounters/{eventId}/{participantIds}",
+            arguments = listOf(
+                navArgument("eventId") { type = NavType.StringType },
+                navArgument("participantIds") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+            val participantIdsStr = backStackEntry.arguments?.getString("participantIds") ?: ""
+            
+            val participantIds = if (participantIdsStr.isNotBlank()) {
+                participantIdsStr.split(",")
+            } else {
+                emptyList()
+            }
+
+            com.eventos.banana.ui.nfc.NFCTapScreen(
+                eventId = eventId,
+                currentUserId = sessionViewModel.currentUserId(),
+                participantIds = participantIds,
+                onBackClick = { navController.popBackStack() }
+            )
         }
 
         // ---------- NOTIFICATIONS ----------
@@ -391,6 +481,14 @@ fun AppNavigation(startDestination: String = "splash") {
                 sessionViewModel = sessionViewModel,
                 onBack = { navController.popBackStack() },
                 onFriendsClick = { navController.navigate("friends") }
+            )
+        }
+
+        // ---------- SEARCH ----------
+        composable("search") {
+            com.eventos.banana.ui.search.UnifiedSearchScreen(
+                navController = navController,
+                currentUserId = sessionViewModel.currentUserId() ?: ""
             )
         }
 
@@ -524,6 +622,12 @@ fun AppNavigation(startDestination: String = "splash") {
                 }
             )
         }
+        }
+        
+        // 🌟 GUIDE OVERLAY (Always on top)
+        com.eventos.banana.ui.components.GuideOverlay(
+            viewModel = guideViewModel
+        )
     }
 
     // ---------- SESSION REDIRECTION ----------

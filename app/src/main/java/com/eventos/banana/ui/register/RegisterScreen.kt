@@ -17,11 +17,24 @@ fun RegisterScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    LaunchedEffect(uiState) {
+        if (uiState.errorMessage != null) {
+            snackbarHostState.showSnackbar("❌ ${uiState.errorMessage}")
+        }
+    }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -78,5 +91,6 @@ fun RegisterScreen(
                 )
             }
         }
+    }
     }
 }

@@ -18,7 +18,8 @@ class CreateEventViewModel(
     data class EventFormState(
         val title: String = "",
         val description: String = "",
-        val category: String = "",
+        val eventType: com.eventos.banana.domain.model.EventType = com.eventos.banana.domain.model.EventType.OTRO,
+        val minimumScore: Double? = null, // null = sin restricción, o 3.0, 3.5, 4.0, 4.5
         val region: String = "",
         val commune: String = "",
         val address: String = "",
@@ -37,7 +38,8 @@ class CreateEventViewModel(
 
     fun updateTitle(value: String) { _formState.value = _formState.value.copy(title = value) }
     fun updateDescription(value: String) { _formState.value = _formState.value.copy(description = value) }
-    fun updateCategory(value: String) { _formState.value = _formState.value.copy(category = value) }
+    fun updateEventType(value: com.eventos.banana.domain.model.EventType) { _formState.value = _formState.value.copy(eventType = value) }
+    fun updateMinimumScore(value: Double?) { _formState.value = _formState.value.copy(minimumScore = value) }
     fun updateRegion(value: String) { _formState.value = _formState.value.copy(region = value) }
     fun updateCommune(value: String) { _formState.value = _formState.value.copy(commune = value) }
     fun updateAddress(value: String) { _formState.value = _formState.value.copy(address = value) }

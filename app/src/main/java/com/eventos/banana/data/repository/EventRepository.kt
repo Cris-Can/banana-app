@@ -476,4 +476,51 @@ class EventRepository {
         awaitClose { listener.remove() }
     }
 
+    // =========================================================
+    // AUTO-MARK EVENTS AS RATABLE (Round 11)
+    // =========================================================
+    /**
+     * Marca eventos finalizados como puntuables y establece el deadline de 5 días.
+     * Esta función debe llamarse periódicamente (ej: cada vez que se abre la app o en un worker).
+     */
+    suspend fun markFinishedEventsAsRatable(): Result<Int> {
+        return try {
+            val now = System.currentTimeMillis()
+            
+            // Buscar eventos cerrados que ya terminaron pero aún no están marcados como puntuables
+            val eventsToMark = eventsCollection
+                .whereEqualTo("status", EventStatus.CLOSED.name)
+                .whereLessThan("endAt", now)
+                .whereEqualTo("canBeRated", false)
+                .get()
+                .await()
+            
+            var markedCount = 0
+            val batch = com.google.firebase.firestore.FirebaseFirestore.getInstance().batch()
+            
+            eventsToMark.documents.forEach { doc ->
+                val event = doc.toObject(Event::class.java)
+                if (event != null) {
+                    val ratingDeadline = event.endAt + (5 * 24 * 60 * 60 * 1000) // +5 días
+                    
+                    batch.update(doc.reference, mapOf(
+                        "canBeRated" to true,
+                        "ratingDeadline" to ratingDeadline
+                    ))
+                    markedCount++
+                }
+            }
+            
+            if (markedCount > 0) {
+                batch.commit().await()
+                android.util.Log.d("EventRepository", "Marked $markedCount events as ratable")
+            }
+            
+            Result.success(markedCount)
+        } catch (e: Exception) {
+            android.util.Log.e("EventRepository", "Error marking events as ratable", e)
+            Result.failure(e)
+        }
+    }
+
 }

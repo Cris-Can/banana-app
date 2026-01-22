@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eventos.banana.data.repository.RatingRepository
 import com.eventos.banana.data.repository.UserRepository
-import com.eventos.banana.domain.model.Rating
+import com.eventos.banana.domain.model.EventType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -61,24 +61,33 @@ class RateUserViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            val rating = Rating(
-                fromUserId = currentUserId,
-                toUserId = targetUserId,
-                eventId = eventId,
-                score = score,
-                comment = comment
-            )
+            try {
+                // Use OTRO as default for legacy rating flow
+                // Event type will be properly set in new rating flow
+                val result = ratingRepository.submitRating(
+                    eventId = eventId,
+                    eventType = EventType.OTRO,
+                    fromUserId = currentUserId,
+                    toUserId = targetUserId,
+                    score = score.toDouble(),
+                    comment = if (comment.isBlank()) null else comment
+                )
 
-            val result = ratingRepository.submitRating(rating)
-
-            if (result.isSuccess) {
-                _uiState.value = _uiState.value.copy(isLoading = false, success = true)
-            } else {
+                if (result.isSuccess) {
+                    _uiState.value = _uiState.value.copy(isLoading = false, success = true)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = "Error al enviar: ${result.exceptionOrNull()?.message}"
+                    )
+                }
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = "Error al enviar: ${result.exceptionOrNull()?.message}"
+                    errorMessage = "Error: ${e.message}"
                 )
             }
         }
     }
 }
+

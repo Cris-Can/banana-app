@@ -175,6 +175,10 @@ class UserRepository(
         }
     }
 
+    suspend fun updateNotifyEventWall(uid: String, enabled: Boolean) {
+        users.document(uid).update("notifyEventWall", enabled).await()
+    }
+
 
     // =====================================================
     // 🎨 A20 — SOCIAL PROFILE

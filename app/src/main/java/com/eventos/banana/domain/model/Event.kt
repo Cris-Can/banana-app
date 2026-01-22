@@ -8,6 +8,7 @@ data class Event(
     val title: String = "",
     val description: String = "",
     val category: String = "",
+    val eventType: EventType = EventType.OTRO,
     val archivedAt: Long? = null,
 
     val country: String = "Chile",
@@ -49,5 +50,28 @@ data class Event(
 
     val approvedParticipants: List<String> = emptyList(),
     val pendingRequests: List<JoinRequest> = emptyList(),
-    val rejectedParticipants: List<String> = emptyList()
-)
+    val rejectedParticipants: List<String> = emptyList(),
+    
+    // ⭐ SISTEMA DE PUNTUACIÓN (Round 11)
+    val minimumScore: Double? = null,    // null = sin restricción, ej: 3.5
+    val ratingDeadline: Long? = null,    // eventTimestamp + 5 días
+    val canBeRated: Boolean = false      // true si ya finalizó y se puede puntuar
+) {
+    // Helper para verificar si un usuario puede unirse según su score
+    fun canUserJoin(userAverageRating: Double, userRatingCount: Int): Boolean {
+        // Si no hay restricción, todos pueden
+        if (minimumScore == null) return true
+        
+        // Usuarios sin rating pueden unirse (considerados neutrales)
+        if (userRatingCount == 0) return true
+        
+        // Verificar si cumple el mínimo
+        return userAverageRating >= minimumScore
+    }
+    
+    // Helper para verificar si aún está en plazo de puntuación
+    fun isRatingWindowOpen(): Boolean {
+        if (!canBeRated || ratingDeadline == null) return false
+        return System.currentTimeMillis() <= ratingDeadline
+    }
+}

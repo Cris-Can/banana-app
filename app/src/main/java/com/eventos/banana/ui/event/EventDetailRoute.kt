@@ -22,7 +22,9 @@ fun EventDetailRoute(
     onRemoveParticipant: (String) -> Unit,
     onDeleteEvent: () -> Unit,
     onRateUser: (String) -> Unit,
-    onUserClick: (String) -> Unit
+    onUserClick: (String) -> Unit,
+    onRateParticipants: (com.eventos.banana.domain.model.Event) -> Unit,
+    onConfirmEncounters: (com.eventos.banana.domain.model.Event) -> Unit
 ) {
     when (uiState) {
 
@@ -53,6 +55,8 @@ fun EventDetailRoute(
                 onDeleteEvent = onDeleteEvent,
                 onRateUser = onRateUser,
                 onUserClick = onUserClick,
+                onRateParticipants = onRateParticipants,
+                onConfirmEncounters = onConfirmEncounters,
                 eventState = uiState // Pass full state
             )
         }

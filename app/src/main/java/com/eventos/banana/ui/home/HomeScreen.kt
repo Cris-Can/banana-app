@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.eventos.banana.data.location.ChileLocationProvider
+import com.eventos.banana.data.ChileCommunesList
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventListUiState
 import com.eventos.banana.domain.model.EventStatus
@@ -38,12 +40,14 @@ fun HomeScreen(
     onEventClick: (String) -> Unit,
     onNotificationsClick: () -> Unit,
     onProfileClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onFriendsClick: () -> Unit,
     onMessagesClick: () -> Unit = {},
     unreadMessages: Int = 0, // Added based on user request
     eventListViewModel: EventListViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val locations = remember { ChileLocationProvider.getRegionsWithCommunes(context) }
+    val locations = remember { ChileCommunesList.getRegionsWithCommunes() }
     
     // Preferences for Guide
     val sharedPreferences = remember { context.getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE) }
@@ -53,6 +57,13 @@ fun HomeScreen(
         val seen = sharedPreferences.getBoolean("home_guide_seen", false)
         if (!seen) {
             showGuide = true
+        }
+        
+        // Round 11: Auto-mark finished events as ratable
+        try {
+            com.eventos.banana.data.repository.EventRepository().markFinishedEventsAsRatable()
+        } catch (e: Exception) {
+            android.util.Log.e("HomeScreen", "Failed to mark events", e)
         }
     }
 
@@ -108,6 +119,16 @@ fun HomeScreen(
                         }
                     },
                     actions = {
+                        // 🔍 SEARCH
+                        IconButton(onClick = onSearchClick) {
+                            Icon(Icons.Default.Search, contentDescription = "Buscar")
+                        }
+                        
+                        // 👥 FRIENDS
+                        IconButton(onClick = onFriendsClick) {
+                            Icon(Icons.Default.Person, contentDescription = "Amigos")
+                        }
+                        
                         // Help button
                         IconButton(onClick = { showGuide = true }) {
                             Icon(
@@ -139,7 +160,6 @@ fun HomeScreen(
                                 Icon(Icons.Default.Notifications, null)
                             }
                         }
-                        TextButton(onClick = { sessionViewModel.logout() }) { Text("Salir") }
                     }
                 )
             },
@@ -298,20 +318,47 @@ fun HomeScreen(
                                     }
                                     
                                     Column(Modifier.padding(16.dp)) {
-                                        Text(
-                                            event.title, 
-                                            style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        // Title + EventType
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                event.title, 
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text(
+                                                event.eventType.emoji,
+                                                style = MaterialTheme.typography.titleLarge
+                                            )
+                                        }
                                         Spacer(Modifier.height(4.dp))
                                         
-                                        // Creator Name
-                                        val creatorName = (uiState as EventListUiState.Success).creatorNicknames[event.creatorId] ?: "Usuario"
-                                        Text(
-                                            "Organizado por: $creatorName",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.tertiary
-                                        )
+                                        // Creator Name + Rating
+                                        val creatorProfile = (uiState as EventListUiState.Success).creatorProfiles[event.creatorId]
+                                        val creatorName = creatorProfile?.nickname ?: "Usuario"
+                                        val creatorRating = creatorProfile?.averageRating ?: 0.0
+                                        val creatorRatingCount = creatorProfile?.ratingCount ?: 0
+                                        
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                "Organizado por: $creatorName",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.tertiary
+                                            )
+                                            if (creatorRatingCount > 0) {
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(
+                                                    "⭐ ${String.format("%.1f", creatorRating)}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
                                         
                                         Spacer(Modifier.height(4.dp))
                                         

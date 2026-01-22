@@ -6,7 +6,7 @@ sealed interface EventListUiState {
 
     data class Success(
         val events: List<Event>,
-        val creatorNicknames: Map<String, String> = emptyMap()
+        val creatorProfiles: Map<String, UserProfile> = emptyMap() // Changed from nicknames to full profiles
     ) : EventListUiState
 
     data class Error(

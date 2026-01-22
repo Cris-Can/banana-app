@@ -10,11 +10,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.eventos.banana.data.location.ChileLocationProvider
+import com.eventos.banana.data.ChileCommunesList
 import com.eventos.banana.domain.model.CreateEventUiState
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.JoinQuestion
-import com.eventos.banana.location.LocationHelper
+import com.eventos.banana.util.LocationHelper
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -37,7 +37,7 @@ fun CreateEventScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val locations = remember {
-        ChileLocationProvider.getRegionsWithCommunes(context)
+        ChileCommunesList.getRegionsWithCommunes()
     }
 
     // ================= ESTADO (ViewModel) =================
@@ -63,8 +63,8 @@ fun CreateEventScreen(
     ) { isGranted: Boolean ->
         if (isGranted) {
             scope.launch {
-                val result = LocationHelper(context).getRegionAndCommune()
-                if (result.region != null && result.commune != null) {
+                val result = LocationHelper(context).detectLocationFull()
+                if (result != null) {
                     viewModel.updateLocationResult(
                         region = result.region,
                         commune = result.commune,
@@ -94,6 +94,14 @@ fun CreateEventScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Crear evento", style = MaterialTheme.typography.headlineSmall)
+
+        // Helper Text
+        Text(
+            "* Campos obligatorios",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
         // ---------- FOTO DE PORTADA ----------
         Card(
@@ -125,26 +133,147 @@ fun CreateEventScreen(
         }
 
         // ---------- DATOS BÁSICOS ----------
-        OutlinedTextField(formState.title, { viewModel.updateTitle(it) }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(formState.description, { viewModel.updateDescription(it) }, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(formState.category, { viewModel.updateCategory(it) }, label = { Text("Categoría") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(formState.title, { viewModel.updateTitle(it) }, label = { Text("Título *") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(formState.description, { viewModel.updateDescription(it) }, label = { Text("Descripción *") }, modifier = Modifier.fillMaxWidth())
 
-        // ---------- REGIÓN ----------
+        // ---------- TIPO DE EVENTO ----------
+        val eventTypeExpanded = remember { mutableStateOf(false) }
         ExposedDropdownMenuBox(
-            expanded = regionExpanded.value,
-            onExpandedChange = { regionExpanded.value = !regionExpanded.value }
+            expanded = eventTypeExpanded.value,
+            onExpandedChange = { eventTypeExpanded.value = !eventTypeExpanded.value }
         ) {
             OutlinedTextField(
-                value = formState.region,
+                value = "${formState.eventType.emoji} ${formState.eventType.displayName}",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Región") },
+                label = { Text("Tipo de Evento *") },
                 modifier = Modifier.menuAnchor().fillMaxWidth()
             )
 
             ExposedDropdownMenu(
+                expanded = eventTypeExpanded.value,
+                onDismissRequest = { eventTypeExpanded.value = false }
+            ) {
+                com.eventos.banana.domain.model.EventType.values().forEach { type ->
+                    DropdownMenuItem(
+                        text = { Text("${type.emoji} ${type.displayName}") },
+                        onClick = {
+                            viewModel.updateEventType(type)
+                            eventTypeExpanded.value = false
+                        }
+                    )
+                }
+            }
+        }
+
+        // Event Type Description
+        Text(
+            text = when (formState.eventType) {
+                com.eventos.banana.domain.model.EventType.DEPORTES -> "Actividades físicas y deportivas"
+                com.eventos.banana.domain.model.EventType.SOCIAL -> "Reuniones sociales y celebraciones"
+                com.eventos.banana.domain.model.EventType.CULTURAL -> "Arte, teatro, música, cine"
+                com.eventos.banana.domain.model.EventType.EDUCATIVO -> "Talleres, cursos, charlas"
+                com.eventos.banana.domain.model.EventType.JUEGOS -> "Videojuegos, juegos de mesa"
+                com.eventos.banana.domain.model.EventType.GASTRONOMIA -> "Comida, cocina, restaurantes"
+                com.eventos.banana.domain.model.EventType.AIRE_LIBRE -> "Camping, senderismo, naturaleza"
+                com.eventos.banana.domain.model.EventType.OTRO -> "Otros eventos"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+        )
+
+        // ---------- SCORE MÍNIMO (OPCIONAL) ----------
+        val scoreOptions = mapOf(
+            null to "Sin restricción",
+            3.0 to "⭐ 3.0+",
+            3.5 to "⭐ 3.5+",
+            4.0 to "🥇 4.0+",
+            4.5 to "🏆 4.5+"
+        )
+        val scoreExpanded = remember { mutableStateOf(false) }
+        
+        ExposedDropdownMenuBox(
+            expanded = scoreExpanded.value,
+            onExpandedChange = { scoreExpanded.value = !scoreExpanded.value }
+        ) {
+            OutlinedTextField(
+                value = scoreOptions[formState.minimumScore] ?: "Sin restricción",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Reputación Mínima (Opcional)") },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scoreExpanded.value) }
+            )
+
+            ExposedDropdownMenu(
+                expanded = scoreExpanded.value,
+                onDismissRequest = { scoreExpanded.value = false }
+            ) {
+                scoreOptions.forEach { (score, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            viewModel.updateMinimumScore(score)
+                            scoreExpanded.value = false
+                        }
+                    )
+                }
+            }
+        }
+        
+        Text(
+            text = if (formState.minimumScore != null) {
+                "⚠️ Solo usuarios con reputación ${formState.minimumScore}+ podrán unirse"
+            } else {
+                "Todos los usuarios podrán solicitar unirse"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (formState.minimumScore != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+        )
+
+        // ---------- REGIÓN ----------
+        // Validación de datos: Si la región seleccionada no existe en la lista (legacy data), resetear
+        LaunchedEffect(formState.region, locations) {
+            if (formState.region.isNotEmpty() && !locations.containsKey(formState.region)) {
+                viewModel.updateRegion("")
+                viewModel.updateCommune("")
+            }
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = regionExpanded.value,
+            onExpandedChange = { regionExpanded.value = !regionExpanded.value }
+        ) {
+            Box(Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = formState.region,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Región *") },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                )
+                // Overlay para capturar click en dispositivos mañosos (MIUI)
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clickable { regionExpanded.value = true }
+                )
+            }
+
+            ExposedDropdownMenu(
                 expanded = regionExpanded.value,
-                onDismissRequest = { regionExpanded.value = false }
+                onDismissRequest = { regionExpanded.value = false },
+                modifier = Modifier.heightIn(max = 250.dp) // Limitar altura para scroll
             ) {
                 locations.keys.forEach {
                     DropdownMenuItem(
@@ -166,18 +295,37 @@ fun CreateEventScreen(
                 if (communes.isNotEmpty()) communeExpanded.value = !communeExpanded.value
             }
         ) {
-            OutlinedTextField(
-                value = formState.commune,
-                onValueChange = {},
-                readOnly = true,
-                enabled = communes.isNotEmpty(),
-                label = { Text("Comuna") },
-                modifier = Modifier.menuAnchor().fillMaxWidth()
-            )
+            Box(Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = formState.commune,
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = communes.isNotEmpty(),
+                    label = { Text("Comuna * (${communes.size})") }, // Debug hint visual
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                )
+                // Overlay para capturar click
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clickable(enabled = communes.isNotEmpty()) { 
+                            communeExpanded.value = true 
+                        }
+                )
+            }
 
             ExposedDropdownMenu(
                 expanded = communeExpanded.value,
-                onDismissRequest = { communeExpanded.value = false }
+                onDismissRequest = { communeExpanded.value = false },
+                modifier = Modifier.heightIn(max = 250.dp)
             ) {
                 communes.forEach {
                     DropdownMenuItem(
@@ -205,7 +353,7 @@ fun CreateEventScreen(
         OutlinedTextField(
             value = formState.address,
             onValueChange = { viewModel.updateAddress(it) },
-            label = { Text("Dirección Exacta (Solo para aceptados)") },
+            label = { Text("Dirección Exacta (Solo para aceptados) *") },
             placeholder = { Text("Ej: Calle Falsa 123, Depto 401") },
             modifier = Modifier.fillMaxWidth(),
             supportingText = { Text("Esta información NO es pública.") }
@@ -232,7 +380,7 @@ fun CreateEventScreen(
         OutlinedTextField(
             value = formState.maxParticipants,
             onValueChange = { if (it.all(Char::isDigit)) viewModel.updateMaxParticipants(it) },
-            label = { Text("Cupos máximos") },
+            label = { Text("Cupos máximos *") },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -369,12 +517,12 @@ fun CreateEventScreen(
         // ---------- CREAR EVENTO ----------
         Button(
             enabled =
+                !uiState.isLoading &&
                 formState.startAt != null &&
                         formState.endAt != null &&
                         formState.startAt!! < formState.endAt!! &&
                         formState.title.isNotBlank() &&
                         formState.description.isNotBlank() &&
-                        formState.category.isNotBlank() &&
                         formState.region.isNotBlank() &&
                         formState.commune.isNotBlank() &&
                         formState.address.isNotBlank() &&
@@ -389,10 +537,11 @@ fun CreateEventScreen(
                             creatorId = creatorId,
                             title = formState.title,
                             description = formState.description,
-                            category = formState.category,
-                             region = formState.region,
-                             commune = formState.commune,
-                             address = formState.address,
+                            eventType = formState.eventType,
+                            minimumScore = formState.minimumScore,
+                            region = formState.region,
+                            commune = formState.commune,
+                            address = formState.address,
                              exactLatitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
                              exactLongitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
                              exactAddress = formState.exactLocation?.address ?: formState.address,
@@ -408,7 +557,15 @@ fun CreateEventScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Crear evento")
+            if (uiState.isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("Crear evento")
+            }
         }
 
         uiState.errorMessage?.let {

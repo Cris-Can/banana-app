@@ -238,9 +238,25 @@ class SessionViewModel(
     // =====================================================
     // REGISTER
     // =====================================================
-    fun register(email: String, password: String, nickname: String) {
+    fun register(
+        email: String, 
+        password: String, 
+        nickname: String,
+        birthDate: Long,
+        commune: String
+    ) {
         viewModelScope.launch {
             _registerUiState.value = RegisterUiState(isLoading = true)
+            
+            // Validar edad +18
+            val age = com.eventos.banana.util.AgeCalculator.calculateAge(birthDate)
+            if (age < 18) {
+                _registerUiState.value = RegisterUiState(
+                    isLoading = false,
+                    errorMessage = "❌ Debes ser mayor de 18 años para usar esta app"
+                )
+                return@launch
+            }
 
             val result = authRepository.register(email, password)
 
@@ -250,22 +266,29 @@ class SessionViewModel(
                 val profile = UserProfile(
                     uid = uid,
                     email = email,
-                    nickname = nickname
+                    nickname = nickname,
+                    birthDate = birthDate,
+                    age = age,
+                    commune = commune,
+                    region = com.eventos.banana.data.ChileCommunesList.getRegionForCommune(commune)
                 )
                 
-                android.util.Log.d("SessionViewModel", "Attempting to create profile: uid=$uid, nickname=$nickname, email=$email")
+                android.util.Log.d("SessionViewModel", "Creating profile: uid=$uid, nickname=$nickname, age=$age, commune=$commune")
 
                 try {
                     userRepository.createUserProfile(profile)
                     android.util.Log.d("SessionViewModel", "Profile created successfully for $uid")
                     
-                    _profileUiState.value = ProfileUiState(
-                        isLoading = false,
-                        profile = profile
-                    )
-                    
                     // 🆕 Send Verification Email Immediately
                     authRepository.sendEmailVerification()
+                    
+                    // ✅ Logout and mark as success (don't auto-authenticate)
+                    authRepository.logout()
+                    
+                    _registerUiState.value = RegisterUiState(
+                        isLoading = false,
+                        isSuccess = true
+                    )
                     
                 } catch (e: Exception) {
                     android.util.Log.e("SessionViewModel", "CRITICAL: Failed to create profile for $uid: ${e.message}", e)
@@ -276,10 +299,6 @@ class SessionViewModel(
                     )
                     return@launch
                 }
-
-                _registerUiState.value = RegisterUiState(isLoading = false)
-                _sessionState.value = SessionState.AUTHENTICATED
-                registerFcmToken()
 
             } else {
                 _registerUiState.value = RegisterUiState(

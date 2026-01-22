@@ -15,43 +15,44 @@ import androidx.compose.ui.platform.LocalContext
 
 // 🎨 ESQUEMAS DE COLOR
 
-// 1. BANANA (Dark Yellow/Black) - Default & Identidad
+// 1. BANANA (Alto Impacto - Dark Slate/Yellow)
 private val BananaScheme = darkColorScheme(
     primary = BananaYellow,
-    onPrimary = Color.Black,
-    primaryContainer = BananaYellowDark,
-    onPrimaryContainer = Color.Black,
-    secondary = BananaLeaf,
-    onSecondary = Color.White,
+    onPrimary = BananaCharcoal, // Contrast on yellow
+    primaryContainer = BananaYellow,
+    onPrimaryContainer = BananaCharcoal,
+    secondary = BananaOrange,   // For gradients/accents
+    onSecondary = Color.Black,
     tertiary = BananaCream,
-    background = DarkBackground,
-    surface = DarkSurface,
+    background = BananaCharcoal,
+    surface = BananaCharcoal,   // Match background for flat look or slightly lighter
+    onBackground = BananaWhite,
+    onSurface = BananaWhite,
+    error = ErrorRed
+)
+
+// 2. DARK (Standard OLED Black)
+private val DarkScheme = darkColorScheme(
+    primary = BananaYellow,     // Keep brand accent
+    onPrimary = Color.Black,
+    secondary = BananaOrange,
+    background = StandardDarkBackground, // #121212
+    surface = StandardDarkSurface,       // #1E1E1E
     onBackground = Color.White,
     onSurface = Color.White,
     error = ErrorRed
 )
 
-// 2. DARK (Standard Material Dark - Grey/Purple)
-private val DarkScheme = darkColorScheme(
-    primary = Color(0xFFD0BCFF), // Purple80
-    secondary = Color(0xFFCCC2DC),
-    tertiary = Color(0xFFEFB8C8),
-    background = Color(0xFF1C1B1F),
-    surface = Color(0xFF25232A), // Slightly lighter than background
-    onBackground = Color.White,
-    onSurface = Color.White
-)
-
-// 3. LIGHT (Clean White/Yellow Accents)
+// 3. LIGHT (Fresco - White/Orange/Black)
 private val LightScheme = lightColorScheme(
-    primary = BananaYellowDark, // Readable on white
+    primary = BananaOrange,
     onPrimary = Color.Black,
-    secondary = BananaLeaf,
-    tertiary = BananaYellow,
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F)
+    secondary = BananaYellow,
+    tertiary = BananaLeaf,
+    background = BananaLightBackground,
+    surface = BananaLightBackground,
+    onBackground = BananaBlack,
+    onSurface = BananaBlack
 )
 
 @Composable

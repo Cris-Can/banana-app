@@ -1,4 +1,4 @@
-package com.eventos.banana.ui.home
+package com.eventos.banana.ui.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,104 +12,86 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.tooling.preview.Preview
 
 @Composable
-fun HomeGuideOverlay(
+fun ProfileGuideOverlay(
     onDismiss: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.85f))
-            .clickable { onDismiss() } // Dimiss on tap anywhere
+            .clickable { onDismiss() }
     ) {
-        // 1. Profile (Top Left)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 16.dp, top = 60.dp) // Adjusted down
-        ) {
-            Text("⬆️", style = MaterialTheme.typography.displayMedium)
-            Text(
-                "Tu Perfil",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge
-            )
-        }
-
-        // 2. Actions (Top Right)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 16.dp, top = 60.dp),
-            horizontalAlignment = Alignment.End
-        ) {
-            Text("⬆️", style = MaterialTheme.typography.displayMedium)
-            Text(
-                "Acciones Rápidas",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge,
-                textAlign = TextAlign.End
-            )
-            Text(
-                "🔍 Buscar  👥 Amigos\n🔔 Alertas  ✉️ Chat",
-                color = Color.LightGray,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.End
-            )
-        }
-
-        // 3. Filters (Upper Center)
+        // 1. Header Info (Top Center)
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 170.dp), // Moved down to avoid overlap with TopBar actions
+                .padding(top = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("⬆️", style = MaterialTheme.typography.displayMedium) // Pointing up to filters
+            Text("⬆️", style = MaterialTheme.typography.displayMedium)
             Text(
-                "Filtros de Búsqueda",
+                "Tu Identidad",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleLarge
             )
             Text(
-                "Filtra por deporte, fiesta, cultura...\n¡Encuentra tu panorama!",
+                "Aquí ves tu foto y reputación.\nTus amigos te verán así.",
                 color = Color.LightGray,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
             )
         }
 
-        // 4. Create Event (Bottom Right)
+        // 2. Photos Grid (Center)
         Column(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 24.dp, bottom = 100.dp), // Above FAB
-            horizontalAlignment = Alignment.End
+                .align(Alignment.Center)
+                .padding(bottom = 0.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "¡Crea tu Evento!",
+                "Tus Fotos",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleLarge
             )
             Text(
-                "Toca el + para organizar\nun partido, junta o fiesta.",
+                "Sube hasta 6 fotos para\nque te conozcan mejor.",
                 color = Color.LightGray,
                 style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.End
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // 3. Logout (Bottom)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 120.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "Cerrar Sesión",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                "Si necesitas salir, el botón\nestá al final de la pantalla.",
+                color = Color.LightGray,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
             )
             Text("⬇️", style = MaterialTheme.typography.displayMedium)
         }
 
         // Dismiss Hint
         Text(
-            "Toca la pantalla para comenzar",
-            color = Color.White.copy(alpha = 0.5f),
+            "Toca para entendido",
+            color = Color.White.copy(alpha = 0.7f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 32.dp),

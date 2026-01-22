@@ -33,6 +33,8 @@ fun EventDetailScreen(
     onDeleteEvent: () -> Unit,
     onRateUser: (String) -> Unit,
     onUserClick: (String) -> Unit,
+    onRateParticipants: (Event) -> Unit,
+    onConfirmEncounters: (Event) -> Unit,
     eventState: com.eventos.banana.domain.model.EventDetailUiState // Pass full state to access nicknames
 ) {
     val context = LocalContext.current
@@ -42,9 +44,20 @@ fun EventDetailScreen(
     val isRejected = event.rejectedParticipants.contains(currentUserId)
     val canSeeFeed = isCreator || isApproved
 
+    // Guide State
+    val sharedPreferences = remember { context.getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE) }
+    var showGuide by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (!sharedPreferences.getBoolean("event_detail_guide_seen", false)) {
+            showGuide = true
+        }
+    }
+
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Detalles", "Muro")
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -337,6 +350,91 @@ fun EventDetailScreen(
                     }
                 }
 
+                // ========== CONFIRMAR ENCUENTROS NFC (Round 12) ==========
+                // Visible mientras el evento está activo (para confirmar encuentros durante el evento)
+                val nowForNFC = System.currentTimeMillis()
+                val eventActive = event.startAt <= nowForNFC && event.endAt > nowForNFC
+                val canConfirmEncounters = (isCreator || isApproved) && eventActive
+
+                if (canConfirmEncounters) {
+                    Spacer(Modifier.height(8.dp))
+                    
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        )
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                "📱 Confirmar Encuentros",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            
+                            Text(
+                                "Toca tu teléfono con otros participantes para confirmar que se conocieron físicamente",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            
+                            Spacer(Modifier.height(12.dp))
+                            
+                            Button(
+                                onClick = { onConfirmEncounters(event) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Activar NFC")
+                            }
+                        }
+                    }
+                }
+
+                // ========== CALIFICAR PARTICIPANTES (Round 11) ==========
+                // Visible para creador y participantes aprobados, solo si el evento terminó
+                val now = System.currentTimeMillis()
+                val eventEnded = event.endAt < now
+                val canRate = (isCreator || isApproved) && eventEnded
+                val ratingDeadline = event.ratingDeadline ?: (event.endAt + (5 * 24 * 60 * 60 * 1000)) // 5 días después
+                val withinRatingWindow = now <= ratingDeadline
+
+                if (canRate && withinRatingWindow) {
+                    Spacer(Modifier.height(8.dp))
+                    
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                "⭐ Calificar Participantes",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            
+                            val daysRemaining = ((ratingDeadline - now) / (24 * 60 * 60 * 1000)).toInt()
+                            Text(
+                                "Tienes $daysRemaining ${if (daysRemaining == 1) "día" else "días"} para calificar a los participantes",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            
+                            Spacer(Modifier.height(12.dp))
+                            
+                            Button(
+                                onClick = { onRateParticipants(event) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Calificar ahora")
+                            }
+                        }
+                    }
+                }
+
                 // SOLICITUDES PENDIENTES
                 if (isCreator && event.pendingRequests.isNotEmpty()) {
                     Divider()
@@ -404,7 +502,16 @@ fun EventDetailScreen(
                 }
             }
         }
+
+        // Guide Overlay
+        if (showGuide) {
+            EventDetailGuideOverlay(onDismiss = {
+                showGuide = false
+                sharedPreferences.edit().putBoolean("event_detail_guide_seen", true).apply()
+            })
+        }
     }
+}
 }
 
 @Composable

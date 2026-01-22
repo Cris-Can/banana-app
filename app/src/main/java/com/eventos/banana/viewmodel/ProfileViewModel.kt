@@ -60,13 +60,24 @@ class ProfileViewModel(
         }
     }
 
-    // 🔔 NUEVO: actualizar preferencia de notificación
     fun updateNotifyEventsByCommune(uid: String, enabled: Boolean, region: String?, commune: String?) {
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
             try {
                 userRepository.updateNotifyEventsByCommune(uid, enabled, region, commune)
                 _uiState.value = ProfileUiState.Success
+            } catch (e: Exception) {
+                _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
+            }
+        }
+    }
+
+    fun updateNotifyEventWall(uid: String, enabled: Boolean) {
+        viewModelScope.launch {
+            // Optimistic update mechanism could be better, but standard for now
+            try {
+                userRepository.updateNotifyEventWall(uid, enabled)
+                // Success - listener will update UI
             } catch (e: Exception) {
                 _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
             }

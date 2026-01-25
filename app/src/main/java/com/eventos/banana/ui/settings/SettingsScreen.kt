@@ -3,12 +3,13 @@ package com.eventos.banana.ui.settings
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +36,7 @@ fun SettingsScreen(
                 title = { Text("Ajustes de Notificaciones") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }
             )
@@ -88,6 +89,40 @@ fun SettingsScreen(
                     savePref("pref_notify_general", it)
                 }
             )
+
+            Spacer(Modifier.height(32.dp))
+            HorizontalDivider()
+            Text("Zona Admin (Debug)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            
+            val scope = rememberCoroutineScope()
+            var isRecalculating by remember { mutableStateOf(false) }
+            val userRepo = remember { com.eventos.banana.data.repository.UserRepository() }
+            
+            OutlinedButton(
+                onClick = {
+                    isRecalculating = true
+                    scope.launch {
+                        val result = userRepo.recalculateAllUserStats()
+                        if (result.isSuccess) {
+                            android.widget.Toast.makeText(context, result.getOrNull(), android.widget.Toast.LENGTH_LONG).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "Error: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                        isRecalculating = false
+                    }
+                },
+                enabled = !isRecalculating,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) {
+                if (isRecalculating) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Recalculando...")
+                } else {
+                    Text("Recalcular Historial (Fix)")
+                }
+            }
         }
     }
 }

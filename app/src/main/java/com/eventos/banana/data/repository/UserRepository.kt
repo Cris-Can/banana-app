@@ -57,6 +57,34 @@ class UserRepository(
         }
     }
 
+    // ⭐ BATCH FETCH USERS (Performance Fix)
+    suspend fun getUsers(uids: List<String>): List<UserProfile> {
+        if (uids.isEmpty()) return emptyList()
+
+        // Firestore restricts 'in' queries to 10 items. We must chunk.
+        val chunks = uids.distinct().chunked(10)
+        val allUsers = mutableListOf<UserProfile>()
+
+        try {
+            // We use coroutine scope to fetching parallel or just sequential loop. Sequential is safer for now.
+            for (chunk in chunks) {
+                val snapshot = users
+                    .whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
+                    .get()
+                    .await()
+                
+                val chunkUsers = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+                }
+                allUsers.addAll(chunkUsers)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error batch fetching users", e)
+        }
+        return allUsers
+    }
+
+
     // =====================================================
     // 🔔 A11.2 — FCM TOKEN
     // =====================================================
@@ -179,6 +207,28 @@ class UserRepository(
         users.document(uid).update("notifyEventWall", enabled).await()
     }
 
+    // =====================================================
+    // 🔔 A29 — SUSCRIPCIÓN A CATEGORÍAS
+    // =====================================================
+    suspend fun updateSubscribedCategories(uid: String, categories: List<String>) {
+        // 1. Get old list to compare (for subscribe/unsubscribe)
+        val oldProfile = getUserProfile(uid)
+        val oldCategories = oldProfile?.subscribedCategories ?: emptyList()
+
+        // 2. Update Firestore
+        users.document(uid).update("subscribedCategories", categories).await()
+
+        // 3. Sync FCM Topics
+        // Subscribe to new ones
+        categories.filter { !oldCategories.contains(it) }.forEach { topic ->
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic(topic).await()
+        }
+        // Unsubscribe from removed ones
+        oldCategories.filter { !categories.contains(it) }.forEach { topic ->
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().unsubscribeFromTopic(topic).await()
+        }
+    }
+
 
     // =====================================================
     // 🎨 A20 — SOCIAL PROFILE
@@ -200,6 +250,86 @@ class UserRepository(
 
     suspend fun updateAppTheme(uid: String, theme: String) {
         users.document(uid).update("appTheme", theme).await()
+    }
+
+    // 📊 ESTADÍSTICAS DE ASISTENCIA (Round 14)
+    suspend fun incrementEventsRequested(uid: String) {
+        users.document(uid).update("eventsRequestedCount", com.google.firebase.firestore.FieldValue.increment(1)).await()
+    }
+
+    suspend fun incrementEventsAttended(uid: String) {
+        users.document(uid).update("eventsAttendedCount", com.google.firebase.firestore.FieldValue.increment(1)).await()
+    }
+
+    // 🔧 PARA DEBUG / ADMIN: Recalcular historiales
+    suspend fun recalculateAllUserStats(): Result<String> {
+        return try {
+            val statsMap = mutableMapOf<String, Pair<Int, Int>>() // UserId -> (Requested, Attended)
+
+            // 1. Scan Events for Requests
+            val eventsSnapshot = firestore.collection("events").get().await()
+            for (doc in eventsSnapshot) {
+                // Parse manual to avoid full object issues if fields change
+                val creatorId = doc.getString("creatorId")
+                val pendingRequests = doc.get("pendingRequests") as? List<HashMap<String, Any>> ?: emptyList()
+                val approvedParticipants = doc.get("approvedParticipants") as? List<String> ?: emptyList()
+                val rejectedParticipants = doc.get("rejectedParticipants") as? List<String> ?: emptyList()
+
+                val requesters = mutableSetOf<String>()
+                // Extract userIds from pendingRequests maps
+                pendingRequests.forEach { req ->
+                    (req["userId"] as? String)?.let { requesters.add(it) }
+                }
+                requesters.addAll(approvedParticipants)
+                requesters.addAll(rejectedParticipants)
+                
+                // Exclude creator from "requests" metric
+                if (creatorId != null) {
+                    requesters.remove(creatorId)
+                }
+                
+                requesters.forEach { uid ->
+                    val current = statsMap.getOrDefault(uid, 0 to 0)
+                    statsMap[uid] = (current.first + 1) to current.second
+                }
+            }
+
+            // 2. Scan Check-ins for Attendance
+            val checkinsSnapshot = firestore.collection("event_checkins").get().await()
+            for (doc in checkinsSnapshot) {
+                val uid = doc.getString("userId")
+                if (uid != null) {
+                    val current = statsMap.getOrDefault(uid, 0 to 0)
+                    statsMap[uid] = current.first to (current.second + 1)
+                }
+            }
+            
+            // 3. Update Users (Batched)
+            val batch = firestore.batch()
+            var count = 0
+            
+            statsMap.forEach { (uid, stats) ->
+                val (req, att) = stats
+                val userRef = users.document(uid)
+                batch.update(userRef, mapOf(
+                    "eventsRequestedCount" to req,
+                    "eventsAttendedCount" to att
+                ))
+                count++
+                 if (count % 400 == 0) { // Safety limit
+                    batch.commit().await()
+                }
+            }
+            
+            if (count > 0) {
+                batch.commit().await()
+            }
+            
+            Result.success("Recalculado para $count usuarios")
+        } catch (e: Exception) {
+             android.util.Log.e("UserRepository", "Error recalculating stats", e)
+             Result.failure(e)
+        }
     }
 
     suspend fun uploadProfilePhoto(uid: String, imageBytes: ByteArray?, isProfilePicture: Boolean): Result<Unit> {
@@ -368,5 +498,35 @@ class UserRepository(
         batch.update(requesterRef, "friendRequestsSent", com.google.firebase.firestore.FieldValue.arrayRemove(currentUid))
 
         batch.commit().await()
+    }
+
+    // =====================================================
+    // 🔍 SEARCH & SUGGESTIONS
+    // =====================================================
+    suspend fun getUsersByRegion(region: String, excludeUid: String): List<UserProfile> {
+        return try {
+            val snapshot = users
+                .whereEqualTo("region", region)
+                .limit(50) // Reasonable limit
+                .get()
+                .await()
+            
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+            }
+                .filter { it.uid != excludeUid }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    // 💾 SAVED EVENTS (A30)
+    suspend fun toggleEventSaved(uid: String, eventId: String, isSaved: Boolean) {
+        val update = if (isSaved) {
+            com.google.firebase.firestore.FieldValue.arrayUnion(eventId)
+        } else {
+            com.google.firebase.firestore.FieldValue.arrayRemove(eventId)
+        }
+        users.document(uid).update("savedEventIds", update).await()
     }
 }

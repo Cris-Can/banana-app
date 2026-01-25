@@ -39,11 +39,21 @@ data class UserProfile(
     val friendRequestsReceived: List<String> = emptyList(), // UIDs de solicitudes entrantes
     val friendRequestsSent: List<String> = emptyList(),     // UIDs de solicitudes enviadas
     
+    // 💾 SAVED EVENTS (A30)
+    val savedEventIds: List<String> = emptyList(),
+    
     // 💎 SUSCRIPCIÓN & LÍMITES (A28)
     var subscriptionType: SubscriptionType = SubscriptionType.PREMIUM, // Default PREMIUM for early adopters
     var currentCycleStartDate: Long = System.currentTimeMillis(),
     var eventsCreatedInCycle: Int = 0,
     var joinRequestsInCycle: Int = 0,
+    
+    // 🔔 A29 NOTIFICATIONS (Round 35)
+    val subscribedCategories: List<String> = emptyList(), // Topics: "events_DEPORTES", etc.
+
+    // 📊 ESTADÍSTICAS DE ASISTENCIA (Round 14)
+    val eventsRequestedCount: Int = 0, // Eventos a los que pidió asistir
+    val eventsAttendedCount: Int = 0,  // Eventos a los que asistió realmente (Check-in/NFC)
 
     val createdAt: Long = System.currentTimeMillis()
 ) {
@@ -55,9 +65,16 @@ data class UserProfile(
             0.0
         }
     
+    // Helper para detectar Asistente Perfecto (Punto 5 sugerido)
+    fun isPerfectAttendee(): Boolean {
+        // Tolerancia 0: debe asistir a todo lo que pide, y tener historial (>5)
+        return eventsRequestedCount > 5 && eventsAttendedCount >= eventsRequestedCount
+    }
+
     // Helper para obtener badge según score
     fun getRatingBadge(): String {
         return when {
+            isPerfectAttendee() -> "💎" // Perfect Attendee
             ratingCount == 0 -> "🆕" // Nuevo Usuario
             averageRating >= 4.5 -> "🏆" // Top Banana
             averageRating >= 4.0 -> "🥇" // Confiable
@@ -68,6 +85,7 @@ data class UserProfile(
     
     fun getRatingBadgeText(): String {
         return when {
+            isPerfectAttendee() -> "Asistente Perfecto"
             ratingCount == 0 -> "Nuevo Usuario"
             averageRating >= 4.5 -> "Top Banana"
             averageRating >= 4.0 -> "Confiable"

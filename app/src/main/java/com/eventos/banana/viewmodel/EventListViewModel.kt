@@ -9,8 +9,11 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+
+import com.eventos.banana.domain.model.EventType
 
 class EventListViewModel(
     private val repository: EventRepository = EventRepository()
@@ -20,6 +23,29 @@ class EventListViewModel(
         MutableStateFlow<EventListUiState>(EventListUiState.Loading)
 
     val uiState: StateFlow<EventListUiState> = _uiState
+    
+    // Filtering State
+    private val _selectedCategory = MutableStateFlow<EventType?>(null)
+    val selectedCategory: StateFlow<EventType?> = _selectedCategory
+
+    fun selectCategory(type: EventType?) {
+        _selectedCategory.value = if (_selectedCategory.value == type) null else type
+    }
+
+    private val _selectedDateFilter = MutableStateFlow<com.eventos.banana.domain.model.DateFilter>(com.eventos.banana.domain.model.DateFilter.ALL)
+    val selectedDateFilter: StateFlow<com.eventos.banana.domain.model.DateFilter> = _selectedDateFilter.asStateFlow()
+
+    fun selectDateFilter(filter: com.eventos.banana.domain.model.DateFilter) {
+        _selectedDateFilter.value = filter
+    }
+
+    // Search State
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.value = query
+    }
 
     init {
         observeEvents()

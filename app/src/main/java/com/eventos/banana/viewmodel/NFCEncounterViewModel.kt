@@ -17,8 +17,8 @@ data class NFCEncounterUiState(
     val confirmedEncounters: Set<String> = emptySet(), // userIds
     val errorMessage: String? = null,
     val successMessage: String? = null,
-    val nfcAvailable: Boolean = true,
-    val nfcEnabled: Boolean = true
+    val nfcAvailable: Boolean = false,
+    val nfcEnabled: Boolean = false
 )
 
 class NFCEncounterViewModel(
@@ -93,6 +93,9 @@ class NFCEncounterViewModel(
             )
 
             if (result.isSuccess) {
+                // 📊 Analytics
+                com.eventos.banana.util.BananaAnalytics.logNfcEncounter(eventId, detectedUserId)
+
                 val newConfirmed = _uiState.value.confirmedEncounters + detectedUserId
                 _uiState.value = _uiState.value.copy(
                     confirmedEncounters = newConfirmed,

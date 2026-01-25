@@ -36,54 +36,42 @@ class EventDetailViewModel(
                 }
                 .collect { event ->
                     // 1. Emit event immediately
-                    val currentNicknames = (_uiState.value as? EventDetailUiState.Success)?.userNicknames ?: emptyMap()
-                    _uiState.value = EventDetailUiState.Success(event, userNicknames = currentNicknames)
+                    val currentProfiles = (_uiState.value as? EventDetailUiState.Success)?.userProfiles ?: emptyMap()
+                    _uiState.value = EventDetailUiState.Success(event, userProfiles = currentProfiles)
 
-                    // 2. Fetch nicknames for creator + participants + APPLICANTS
+                    // 2. Batch fetch profiles for creator + participants + APPLICANTS
                     val applicants = event.pendingRequests.map { it.userId }
-                    val userIdsToFetch = (event.approvedParticipants + event.creatorId + applicants).distinct()
-                    android.util.Log.d("EventDetailVM", "Fetching nicknames for users (incl. applicants): $userIdsToFetch")
-                    
-                    val newNicknames = currentNicknames.toMutableMap()
-                    var hasUpdates = false
+                    val userIdsToFetch = (event.approvedParticipants + listOf(event.creatorId) + applicants).distinct()
 
-                    userIdsToFetch.forEach { uid ->
-                        // 🔄 REFRESH: If nickname is missing OR is "Usuario" (ghost), try to fetch fresh data
-                        val needsRefresh = !newNicknames.containsKey(uid) || newNicknames[uid] == "Usuario"
-                        
-                        if (needsRefresh) {
-                            try {
-                                // ⚡ FORCE REFRESH: Ignore cache to get real nickname
-                                val profile = userRepository.getUserProfile(uid, forceRefresh = true)
-                                if (profile != null) {
-                                    newNicknames[uid] = profile.nickname
-                                    hasUpdates = true
-                                    android.util.Log.d("EventDetailVM", "Loaded/Refreshed nickname for $uid: ${profile.nickname}")
-                                } else {
-                                    // Only set fallback if we don't have one or if we are refreshing
-                                    if (!newNicknames.containsKey(uid)) {
-                                        newNicknames[uid] = "Usuario"
-                                        hasUpdates = true
-                                        android.util.Log.w("EventDetailVM", "Profile not found for $uid, using fallback")
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.e("EventDetailVM", "Failed to load nickname for $uid", e)
-                                if (!newNicknames.containsKey(uid)) {
-                                    newNicknames[uid] = "Usuario"
-                                    hasUpdates = true
+                    // Filter IDs that are missing or are just placeholders "Usuario"
+                    val missingIds = userIdsToFetch.filter { uid ->
+                        !currentProfiles.containsKey(uid) || currentProfiles[uid]?.nickname == "Usuario"
+                    }
+                    
+                    if (missingIds.isNotEmpty()) {
+                        android.util.Log.d("EventDetailVM", "Batch fetching ${missingIds.size} users: $missingIds")
+                        try {
+                            // ⚡ BATCH FETCH
+                            val fetchedList = userRepository.getUsers(missingIds)
+                            
+                            // Merge into map
+                            val newProfiles = currentProfiles.toMutableMap()
+                            newProfiles.putAll(fetchedList.associateBy { it.uid })
+                            
+                            // Better logic for fallback:
+                            missingIds.forEach { reqUid ->
+                                // If still missing or dummy (and not updated by fetch), set dummy
+                                val profile = newProfiles[reqUid]
+                                if (profile == null || (profile.nickname == "Usuario" && fetchedList.none { it.uid == reqUid })) {
+                                    newProfiles[reqUid] = com.eventos.banana.domain.model.UserProfile(uid = reqUid, nickname = "Usuario")
                                 }
                             }
-                        }
-                    }
 
-                    if (hasUpdates) {
-                        // ... same as before
-                        android.util.Log.d("EventDetailVM", "Updating state with nicknames: $newNicknames")
-                        _uiState.value = EventDetailUiState.Success(
-                            event = event,
-                            userNicknames = newNicknames
-                        )
+                            _uiState.value = EventDetailUiState.Success(event, userProfiles = newProfiles)
+                            
+                        } catch (e: Exception) {
+                            android.util.Log.e("EventDetailVM", "Failed batch fetch", e)
+                        }
                     }
                 }
         }
@@ -135,6 +123,10 @@ class EventDetailViewModel(
                 if (result.isSuccess) {
                     // Increment Usage
                     subscriptionRepository.incrementJoinCount(userId)
+                    
+                    // 📊 STATS (Round 14)
+                    userRepository.incrementEventsRequested(userId)
+                    
                     _joinSubmissionState.value = JoinSubmissionState.Success
                 } else {
                     _joinSubmissionState.value = JoinSubmissionState.Error(
@@ -173,6 +165,35 @@ class EventDetailViewModel(
     fun deleteEvent() {
         viewModelScope.launch {
             repository.deleteEvent(eventId)
+        }
+    }
+
+    // 💾 SAVE & ATTENDANCE (A30)
+    private val _isSaved = MutableStateFlow(false)
+    val isSaved: StateFlow<Boolean> = _isSaved
+
+    private val _hasAttended = MutableStateFlow(false)
+    val hasAttended: StateFlow<Boolean> = _hasAttended
+
+    fun loadUserInteractionState(userId: String) {
+        viewModelScope.launch {
+            // Saved State
+            val profile = userRepository.getUserProfile(userId)
+            _isSaved.value = profile?.savedEventIds?.contains(eventId) == true
+
+            // Attendance State
+            val encounterRepo = com.eventos.banana.data.repository.EncounterRepository()
+            // We only check technical participation (GPS/NFC) here. 
+            // Creator status is checked in UI or combined later.
+            _hasAttended.value = encounterRepo.hasAttended(eventId, userId, isCreator = false)
+        }
+    }
+
+    fun toggleSaveEvent(userId: String) {
+        val current = _isSaved.value
+        viewModelScope.launch {
+            userRepository.toggleEventSaved(userId, eventId, !current)
+            _isSaved.value = !current
         }
     }
 }

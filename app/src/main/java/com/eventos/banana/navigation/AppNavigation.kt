@@ -252,6 +252,12 @@ fun AppNavigation(startDestination: String = "splash") {
             )
 
             val uiState by vm.uiState.collectAsState()
+            val isSaved by vm.isSaved.collectAsState()
+            val hasAttended by vm.hasAttended.collectAsState()
+
+            LaunchedEffect(vm, sessionViewModel.currentUserId()) {
+                 vm.loadUserInteractionState(sessionViewModel.currentUserId())
+            }
 
             EventDetailRoute(
                 uiState = uiState,
@@ -298,7 +304,10 @@ fun AppNavigation(startDestination: String = "splash") {
                 onConfirmEncounters = { event ->
                     val participantIds = (event.approvedParticipants + event.creatorId).joinToString(",")
                     navController.navigate("nfc_encounters/${event.id}/$participantIds")
-                }
+                },
+                isSaved = isSaved,
+                onToggleSave = { vm.toggleSaveEvent(sessionViewModel.currentUserId()) },
+                hasAttended = hasAttended
             )
         }
 
@@ -480,7 +489,10 @@ fun AppNavigation(startDestination: String = "splash") {
             ProfileScreen(
                 sessionViewModel = sessionViewModel,
                 onBack = { navController.popBackStack() },
-                onFriendsClick = { navController.navigate("friends") }
+                onFriendsClick = { navController.navigate("friends") },
+                onEventClick = { eventId ->
+                    navController.navigate("event_detail/$eventId")
+                }
             )
         }
 

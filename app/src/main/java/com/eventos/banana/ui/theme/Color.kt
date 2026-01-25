@@ -2,25 +2,36 @@ package com.eventos.banana.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 🎨 BANANA BRAND COLORS
+// 🎨 BANANA BRAND COLORS (Harmonic Update)
 
-// Opción 1 - Alto Impacto (Dark Theme Base)
-val BananaCharcoal = Color(0xFF2C3E50) // Gris Oscuro Fondo
-val BananaYellow = Color(0xFFFFD93D)    // Amarillo Banana Acento
-val BananaWhite = Color(0xFFFFFFFF)     // Texto Blanco
+// Primary Brand
+val BananaYellow = Color(0xFFFFD600)    // Vivid Yellow (Material 700)
+val BananaYellowLight = Color(0xFFFFEA00) // Lighter accent
 
-// Opción 2 - Fresco y Luminoso (Light Theme Base)
+// Backgrounds (Clean Dark Mode)
+val BananaDarkBackground = Color(0xFF121212)
+val BananaDarkSurface = Color(0xFF1E1E1E)
+val BananaDarkSurfaceVariant = Color(0xFF2D2D2D)
+
+// Text
+val BananaWhite = Color(0xFFF5F5F5)    // High Emphasis
+val BananaGrey = Color(0xFFB0B0B0)     // Medium Emphasis (Subtitles)
+
+// Legacy / Accents
+val BananaOrange = Color(0xFFFFAB00)   // Secondary Accent
+val ErrorRed = Color(0xFFCF6679)
+val SuccessGreen = Color(0xFF4CAF50)
+
+// Legacy Support (Restore missing colors for LightScheme/Old configs)
+val BananaCharcoal = Color(0xFF2C3E50)
 val BananaLightBackground = Color(0xFFFFFFFF)
-val BananaBlack = Color(0xFF1A1A1A)     // Texto Negro
-val BananaOrange = Color(0xFFFFA500)    // Naranja Acento
-
-// Utility / Legacy
+val BananaBlack = Color(0xFF1A1A1A)
 val BananaCream = Color(0xFFFFF9C4) 
 val BananaLeaf = Color(0xFF558B2F)
-val ErrorRed = Color(0xFFCF6679)
 val VerifiedBlue = Color(0xFF1DA1F2)
 
-// Standard Dark Mode (OLED/Material)
-val StandardDarkBackground = Color(0xFF121212)
-val StandardDarkSurface = Color(0xFF1E1E1E)
-val StandardPrimary = Color(0xFFD0BCFF) // Purple80 equivalent or Yellow
+// Standard Dark Mode (OLED/Material) - Now aligned with BananaDark
+val StandardDarkBackground = BananaDarkBackground
+val StandardDarkSurface = BananaDarkSurface
+val StandardPrimary = BananaYellow
+// val StandardPrimary = Color(0xFFD0BCFF) // Purple80 equivalent or Yellow

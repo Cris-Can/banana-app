@@ -301,9 +301,25 @@ class SessionViewModel(
                 }
 
             } else {
+                val exception = result.exceptionOrNull()
+                // Map Firebase/Auth errors to friendly messages
+                val errorMessage = when {
+                    exception?.message?.contains("email address is already in use", ignoreCase = true) == true ->
+                        "⚠️ Este correo ya está registrado. Prueba iniciar sesión."
+                    exception?.message?.contains("WEAK_PASSWORD", ignoreCase = true) == true || 
+                    exception?.message?.contains("Password should be", ignoreCase = true) == true ->
+                        "⚠️ La contraseña es muy débil (usa al menos 6 caracteres)."
+                    exception?.message?.contains("badly formatted", ignoreCase = true) == true ->
+                        "⚠️ El formato del correo es inválido."
+                    exception?.message?.contains("network", ignoreCase = true) == true || 
+                    exception?.message?.contains("host", ignoreCase = true) == true ->
+                        "📡 Error de conexión. Verifica tu internet."
+                    else -> "❌ No se pudo crear la cuenta: ${exception?.localizedMessage ?: "Error desconocido"}"
+                }
+
                 _registerUiState.value = RegisterUiState(
                     isLoading = false,
-                    errorMessage = "No se pudo crear la cuenta"
+                    errorMessage = errorMessage
                 )
             }
         }

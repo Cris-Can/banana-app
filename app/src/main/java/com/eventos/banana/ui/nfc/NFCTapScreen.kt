@@ -23,6 +23,7 @@ import coil.compose.AsyncImage
 import com.eventos.banana.domain.model.UserProfile
 import com.eventos.banana.util.NFCManager
 import com.eventos.banana.viewmodel.NFCEncounterViewModel
+import com.eventos.banana.ui.components.ConfettiEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,20 +44,33 @@ fun NFCTapScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = remember(context) { context.findActivity() }
 
     // NFC Manager
-    val nfcManager = remember {
+    val nfcManager = remember(activity) {
         activity?.let { NFCManager(it) }
     }
 
-    // Check NFC status on init
-    LaunchedEffect(Unit) {
-        nfcManager?.let {
-            viewModel.setNfcStatus(
-                available = it.isNfcAvailable(),
-                enabled = it.isNfcEnabled()
-            )
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    // Check NFC status on init and RESUME
+    DisposableEffect(lifecycleOwner, nfcManager) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                 if (nfcManager != null) {
+                    viewModel.setNfcStatus(
+                        available = nfcManager.isNfcAvailable(),
+                        enabled = nfcManager.isNfcEnabled()
+                    )
+                } else {
+                     viewModel.setNfcStatus(available = false, enabled = false)
+                }
+             }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -73,99 +87,137 @@ fun NFCTapScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("📱 Confirmar Encuentros") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            // NFC Status Card
-            NFCStatusCard(
-                isNfcAvailable = uiState.nfcAvailable,
-                isNfcEnabled = uiState.nfcEnabled,
-                isNfcActive = uiState.isNfcActive,
-                onToggleNfc = { active ->
-                    viewModel.setNfcActive(active)
-                }
-            )
+    // State for Confetti
+    var showConfetti by remember { mutableStateOf(false) }
 
-            Spacer(Modifier.height(16.dp))
-
-            // Progress
-            val total = uiState.participants.size
-            val confirmed = uiState.confirmedEncounters.size
-            
-            Text(
-                "Confirmados: $confirmed/$total",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            if (total > 0) {
-                LinearProgressIndicator(
-                    progress = { confirmed.toFloat() / total },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Participants List
-            if (uiState.isLoading) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(uiState.participants) { participant ->
-                        ParticipantNFCCard(
-                            participant = participant,
-                            isConfirmed = participant.uid in uiState.confirmedEncounters,
-                            onDebugSimulate = {
-                                // 🐛 DEBUG: Simular encuentro
-                                viewModel.simulateNFCEncounter(participant.uid)
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Messages
-            uiState.errorMessage?.let { error ->
-                Snackbar(
-                    modifier = Modifier.padding(8.dp),
-                    action = {
-                        TextButton(onClick = { viewModel.clearMessages() }) {
-                            Text("OK")
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("📱 Confirmar Encuentros") },
+                    navigationIcon = {
+                        IconButton(onClick = onBackClick) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                         }
                     }
-                ) {
-                    Text(error)
-                }
+                )
             }
+        ) { padding ->
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                // NFC Status Card
+                NFCStatusCard(
+                    isNfcAvailable = uiState.nfcAvailable,
+                    isNfcEnabled = uiState.nfcEnabled,
+                    isNfcActive = uiState.isNfcActive,
+                    onToggleNfc = { active ->
+                        viewModel.setNfcActive(active)
+                    }
+                )
 
-            uiState.successMessage?.let { success ->
-                LaunchedEffect(success) {
-                    kotlinx.coroutines.delay(2000)
-                    viewModel.clearMessages()
+                Spacer(Modifier.height(16.dp))
+
+                // Progress
+                val total = uiState.participants.size
+                val confirmed = uiState.confirmedEncounters.size
+                
+                Text(
+                    "Confirmados: $confirmed/$total",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (total > 0) {
+                    LinearProgressIndicator(
+                        progress = { confirmed.toFloat() / total },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Participants List
+                if (uiState.isLoading) {
+                    Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.participants) { participant ->
+                            ParticipantNFCCard(
+                                participant = participant,
+                                isConfirmed = participant.uid in uiState.confirmedEncounters,
+                                onDebugSimulate = {
+                                    // 🐛 DEBUG: Simular encuentro
+                                    viewModel.simulateNFCEncounter(participant.uid)
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Messages
+                uiState.errorMessage?.let { error ->
+                    Snackbar(
+                        modifier = Modifier.padding(8.dp),
+                        action = {
+                            TextButton(onClick = { viewModel.clearMessages() }) {
+                                Text("OK")
+                            }
+                        }
+                    ) {
+                        Text(error)
+                    }
+                }
+
+                uiState.successMessage?.let { success ->
+                    LaunchedEffect(success) {
+                        showConfetti = true
+
+                        // Haptic Feedback / Vibration
+                        try {
+                            val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                val vibratorManager = context.getSystemService(android.os.VibratorManager::class.java)
+                                vibratorManager?.defaultVibrator
+                            } else {
+                                @Suppress("DEPRECATION")
+                                context.getSystemService(android.os.Vibrator::class.java)
+                            }
+
+                            if (vibrator?.hasVibrator() == true) {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                    vibrator.vibrate(
+                                        android.os.VibrationEffect.createOneShot(150, android.os.VibrationEffect.DEFAULT_AMPLITUDE)
+                                    )
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    vibrator.vibrate(150)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Ignore vibration errors
+                        }
+
+                        kotlinx.coroutines.delay(2000)
+                        viewModel.clearMessages()
+                    }
                 }
             }
+        }
+        
+        // 🎉 Confetti Overlay
+        if (showConfetti) {
+            ConfettiEffect(
+                onComplete = { showConfetti = false }
+            )
         }
     }
 }
@@ -227,10 +279,28 @@ fun NFCStatusCard(
                         "Activa NFC en la configuración",
                         style = MaterialTheme.typography.bodySmall
                     )
+                    Spacer(Modifier.height(8.dp))
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_NFC_SETTINGS)
+                                androidx.core.content.ContextCompat.startActivity(context, intent, null)
+                            } catch (e: Exception) {
+                                // Fallback for some devices
+                                try {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+                                    androidx.core.content.ContextCompat.startActivity(context, intent, null) 
+                                } catch (e2: Exception) {}
+                            }
+                        }
+                    ) {
+                        Text("Ir a Configuración")
+                    }
                 }
                 isNfcActive -> {
                     Text(
-                        "🟢 NFC Activado",
+                        "🟢 Escaneo Activo",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -242,12 +312,12 @@ fun NFCStatusCard(
                 }
                 else -> {
                     Text(
-                        "⚪ NFC Listo",
+                        "⚪ Escaneo en Pausa",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Presiona el botón para activar",
+                        "Presiona para comenzar a leer etiquetas",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -260,7 +330,7 @@ fun NFCStatusCard(
                     onClick = { onToggleNfc(!isNfcActive) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (isNfcActive) "Desactivar NFC" else "Activar NFC")
+                    Text(if (isNfcActive) "Detener Escaneo" else "Iniciar Escaneo")
                 }
             }
         }
@@ -348,4 +418,13 @@ fun ParticipantNFCCard(
             }
         }
     }
+}
+
+fun android.content.Context.findActivity(): android.app.Activity? {
+    var context = this
+    while (context is android.content.ContextWrapper) {
+        if (context is android.app.Activity) return context
+        context = context.baseContext
+    }
+    return null
 }

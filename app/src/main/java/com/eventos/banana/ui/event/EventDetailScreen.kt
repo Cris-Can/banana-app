@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -14,6 +15,17 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import java.util.Locale
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
 import coil.compose.AsyncImage
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventStatus
@@ -35,7 +47,10 @@ fun EventDetailScreen(
     onUserClick: (String) -> Unit,
     onRateParticipants: (Event) -> Unit,
     onConfirmEncounters: (Event) -> Unit,
-    eventState: com.eventos.banana.domain.model.EventDetailUiState // Pass full state to access nicknames
+    eventState: com.eventos.banana.domain.model.EventDetailUiState, // Pass full state to access nicknames
+    isSaved: Boolean = false,
+    onToggleSave: () -> Unit = {},
+    hasAttended: Boolean = false
 ) {
     val context = LocalContext.current
     val isCreator = event.creatorId == currentUserId
@@ -66,7 +81,36 @@ fun EventDetailScreen(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(event.title, style = MaterialTheme.typography.headlineMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = event.title, 
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                // ACTIONS ROW
+                Row {
+                    IconButton(onClick = onToggleSave) {
+                         Icon(
+                            imageVector = if (isSaved) androidx.compose.material.icons.Icons.Filled.Star else androidx.compose.material.icons.Icons.Filled.Add,
+                            contentDescription = "Guardar evento",
+                            tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    val shareHelper = remember { com.eventos.banana.util.ShareHelper(context) }
+                    IconButton(onClick = { shareHelper.shareEvent(event) }) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartir evento",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
             Text("${event.region} • ${event.commune}")
         }
 
@@ -91,16 +135,98 @@ fun EventDetailScreen(
             ) {
                 // ========== FOTO DEL EVENTO ==========
                 if (!event.imageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = event.imageUrl,
-                        contentDescription = "Foto del evento",
-                        modifier = Modifier
+                    var showImageDialog by remember { mutableStateOf(false) }
+
+                    Box(
+                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(250.dp)
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(Modifier.height(16.dp))
+                            .height(300.dp) // Taller header
+                    ) {
+                        AsyncImage(
+                            model = event.imageUrl,
+                            contentDescription = "Foto del evento",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable { showImageDialog = true },
+                            contentScale = ContentScale.Crop
+                        )
+                        
+                        // Gradient Overlay for text readability
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
+                                        startY = 100f
+                                    )
+                                )
+                        )
+
+                        // 🏷️ Category Badge (Top End)
+                        Surface(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .align(Alignment.TopEnd),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ) {
+                            Text(
+                                text = "${event.eventType.emoji} ${event.eventType.displayName}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+
+                    if (showImageDialog) {
+                        androidx.compose.ui.window.Dialog(
+                            onDismissRequest = { showImageDialog = false },
+                            properties = androidx.compose.ui.window.DialogProperties(
+                                usePlatformDefaultWidth = false 
+                            )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(androidx.compose.ui.graphics.Color.Black)
+                            ) {
+                                AsyncImage(
+                                    model = event.imageUrl,
+                                    contentDescription = "Foto completa",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clickable { showImageDialog = false },
+                                    contentScale = ContentScale.Fit
+                                )
+                                IconButton(
+                                    onClick = { showImageDialog = false },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(16.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Cerrar",
+                                        tint = androidx.compose.ui.graphics.Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                     // Placeholder Header if no image
+                     Box(
+                         modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                         contentAlignment = Alignment.Center
+                    ) {
+                        Text("🍌", style = MaterialTheme.typography.displayLarge)
+                    }
                 }
 
                 // Contenido con padding
@@ -108,40 +234,64 @@ fun EventDetailScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // ========== CREADOR ==========
+                    // Title (moved here if image covered it, or redundant)
+                    // Let's keep title big here
+                    
+                    // Date & Time
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.DateRange, null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        val dateFormat = java.text.SimpleDateFormat("EEEE d 'de' MMMM, HH:mm", Locale("es", "ES"))
+                        val dateStr = dateFormat.format(java.util.Date(event.startAt))
+                            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+                        Text(dateStr, style = MaterialTheme.typography.bodyLarge)
+                    }
+
+                    // Location
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${event.commune}, ${event.region}", 
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    // Creator Card (Refined)
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().clickable { onUserClick(event.creatorId) },
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
                         ),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                        // elevation = CardDefaults.cardElevation(2.dp)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "👑 Organizador:",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                                "Organizado por:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.width(8.dp))
-                            TextButton(
-                                onClick = { onUserClick(event.creatorId) }
-                            ) {
-                                val creatorNickname = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
-                                    ?.userNicknames?.get(event.creatorId) ?: event.creatorId
-
-                                Text(
-                                    creatorNickname,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                            
+                            val creatorNickname = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
+                                    ?.userProfiles?.get(event.creatorId)?.nickname ?: "Cargando..."
+                            
+                            Text(
+                                creatorNickname,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
+
 
                     // ========== PARTICIPANTES ==========
                     if (event.approvedParticipants.isNotEmpty()) {
@@ -194,7 +344,7 @@ fun EventDetailScreen(
                                         event.approvedParticipants.forEach { userId ->
                                             // Nickname lookup inside Dialog
                                             val nickname = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
-                                                ?.userNicknames?.get(userId) ?: userId
+                                                ?.userProfiles?.get(userId)?.nickname ?: "Usuario"
 
                                             Row(
                                                 modifier = Modifier
@@ -223,6 +373,187 @@ fun EventDetailScreen(
                                     }
                                 }
                             )
+                        }
+                    }
+
+                    // ========== ENCUENTROS & PUNTUACIÓN (Round 12) ==========
+                    if (event.status == EventStatus.OPEN || event.status == EventStatus.CLOSED) {
+                        val canValidate = isCreator || isApproved
+                        if (canValidate) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                ),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                            ) {
+                                Column(Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "📱 Encuentros & Puntuación",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        "Para puntuar a otros asistentes, primero debes confirmar que estuviste ahí.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+
+                                    // BOTÓN 1: CHECK-IN GPS
+                                    val coroutineScope = rememberCoroutineScope()
+                                    val geofenceManager = remember { com.eventos.banana.util.EventGeofenceManager(context) }
+                                    val encounterRepo = remember { com.eventos.banana.data.repository.EncounterRepository() }
+                                    var isCheckingIn by remember { mutableStateOf(false) }
+                                    var currentDistance by remember { mutableStateOf<Int?>(null) }
+
+                                    // Auto-check distance on load
+                                    LaunchedEffect(Unit) {
+                                         if (com.eventos.banana.util.LocationHelper.hasLocationPermissions(context) && 
+                                             com.eventos.banana.util.LocationHelper.isLocationEnabled(context)) {
+                                             currentDistance = geofenceManager.getDistanceToEvent(event)
+                                         }
+                                    }
+                                    
+                                    // Distance Indicator
+                                    if (currentDistance != null) {
+                                        val isCloseEnough = currentDistance!! <= 100
+                                        Text(
+                                            text = "📍 Distancia actual: $currentDistance m",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = if (isCloseEnough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (!isCloseEnough) {
+                                            Text(
+                                               "Acércate a menos de 100m",
+                                               style = MaterialTheme.typography.labelSmall,
+                                               color = MaterialTheme.colorScheme.outline
+                                            )
+                                        } else {
+                                            // "Compartir ubicación" (Punto 3)
+                                            TextButton(
+                                                onClick = {
+                                                    val lat = event.exactLatitude ?: 0.0
+                                                    val lng = event.exactLongitude ?: 0.0
+                                                    val mapUrl = "https://maps.google.com/?q=$lat,$lng"
+                                                    val shareText = "¡Estoy en ${event.title}! 🍌📍 Caen? $mapUrl"
+                                                    
+                                                    val sendIntent = android.content.Intent().apply {
+                                                        action = android.content.Intent.ACTION_SEND
+                                                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                                        type = "text/plain"
+                                                    }
+                                                    try {
+                                                        context.startActivity(android.content.Intent.createChooser(sendIntent, "Compartir ubicación"))
+                                                    } catch (e: Exception) {
+                                                        // Ignore
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Compartir que estoy aquí")
+                                            }
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { 
+                                            // Check Permissions first
+                                            if (!com.eventos.banana.util.LocationHelper.hasLocationPermissions(context)) {
+                                                android.widget.Toast.makeText(context, "⚠️ Permiso de ubicación requerido", android.widget.Toast.LENGTH_LONG).show()
+                                                // TODO: Request permissions properly (out of scope for quick fix, assume user granted it via profile)
+                                                return@OutlinedButton
+                                            }
+                                            
+                                            // TIME VALIDATION (Punto 2)
+                                            val now = System.currentTimeMillis()
+                                            val oneHour = 3600000L
+                                            
+                                            if (event.startAt > 0 && now < (event.startAt - oneHour)) {
+                                                android.widget.Toast.makeText(context, "🕒 Muy temprano para el Check-in (espera al inicio)", android.widget.Toast.LENGTH_LONG).show()
+                                                return@OutlinedButton
+                                            }
+                                            
+                                            if (event.endAt > 0 && now > (event.endAt + oneHour)) {
+                                                android.widget.Toast.makeText(context, "🕒 El evento ya finalizó", android.widget.Toast.LENGTH_LONG).show()
+                                                return@OutlinedButton
+                                            }
+
+                                            // Check GPS Enabled
+                                            if (!com.eventos.banana.util.LocationHelper.isLocationEnabled(context)) {
+                                                android.widget.Toast.makeText(context, "⚠️ Enciende tu GPS para verificar ubicación", android.widget.Toast.LENGTH_LONG).show()
+                                                try {
+                                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                                                } catch (e: Exception) {
+                                                    // Fallback if settings cannot be opened
+                                                }
+                                                return@OutlinedButton
+                                            }
+
+                                            isCheckingIn = true
+                                            coroutineScope.launch {
+                                                try {
+                                                    // Update distance for feedback
+                                                    currentDistance = geofenceManager.getDistanceToEvent(event)
+                                                    
+                                                    val isAtEvent = geofenceManager.isUserAtEvent(event)
+                                                    if (isAtEvent) {
+                                                        val result = encounterRepo.recordCheckIn(event.id, currentUserId)
+                                                        if (result.isSuccess) {
+                                                            android.widget.Toast.makeText(context, "✅ Check-in GPS exitoso!", android.widget.Toast.LENGTH_LONG).show()
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "Error al registrar: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "❌ Debes estar a 100m del evento", android.widget.Toast.LENGTH_LONG).show()
+                                                    }
+                                                } catch (e: SecurityException) {
+                                                    android.widget.Toast.makeText(context, "⚠️ Error de permisos: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                                } catch (e: Exception) {
+                                                    android.widget.Toast.makeText(context, "⚠️ Error inesperado: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                } finally {
+                                                    isCheckingIn = false
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.primary
+                                        ),
+                                        enabled = !isCheckingIn
+                                    ) {
+                                        if (isCheckingIn) {
+                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Verificando ubicación...")
+                                        } else {
+                                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Check-in GPS (Estoy aquí)")
+                                        }
+                                    }
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // BOTÓN 2: NFC CONFIRM
+                                    Button(
+                                        onClick = { onConfirmEncounters(event) }, // Navega a NFCTapScreen
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    ) {
+                                        Text("Confirmar con NFC (Tap)")
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -394,7 +725,7 @@ fun EventDetailScreen(
                 // ========== CALIFICAR PARTICIPANTES (Round 11) ==========
                 // Visible para creador y participantes aprobados, solo si el evento terminó
                 val now = System.currentTimeMillis()
-                val eventEnded = event.endAt < now
+                val eventEnded = event.endAt < now || event.status == EventStatus.CLOSED
                 val canRate = (isCreator || isApproved) && eventEnded
                 val ratingDeadline = event.ratingDeadline ?: (event.endAt + (5 * 24 * 60 * 60 * 1000)) // 5 días después
                 val withinRatingWindow = now <= ratingDeadline
@@ -402,34 +733,48 @@ fun EventDetailScreen(
                 if (canRate && withinRatingWindow) {
                     Spacer(Modifier.height(8.dp))
                     
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text(
-                                "⭐ Calificar Participantes",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                    // 🔒 VALIDACIÓN DE ASISTENCIA (New Logic)
+                    // Si no es creador y no ha asistido (GPS/NFC) -> Bloquear o Advertir
+                    if (!isCreator && !hasAttended) {
+                         Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text("⚠️ Asistencia no verificada", fontWeight = FontWeight.Bold)
+                                Text("Para calificar, debiste confirmar tu asistencia con GPS o NFC.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
                             )
-                            Spacer(Modifier.height(4.dp))
-                            
-                            val daysRemaining = ((ratingDeadline - now) / (24 * 60 * 60 * 1000)).toInt()
-                            Text(
-                                "Tienes $daysRemaining ${if (daysRemaining == 1) "día" else "días"} para calificar a los participantes",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            
-                            Spacer(Modifier.height(12.dp))
-                            
-                            Button(
-                                onClick = { onRateParticipants(event) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Calificar ahora")
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "⭐ Calificar Participantes",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                
+                                val daysRemaining = ((ratingDeadline - now) / (24 * 60 * 60 * 1000)).toInt()
+                                Text(
+                                    "Tienes $daysRemaining ${if (daysRemaining == 1) "día" else "días"} para calificar.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                
+                                Spacer(Modifier.height(12.dp))
+                                
+                                Button(
+                                    onClick = { onRateParticipants(event) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Calificar ahora")
+                                }
                             }
                         }
                     }
@@ -444,10 +789,52 @@ fun EventDetailScreen(
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
 
-                                val requesterNickname = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
-                                    ?.userNicknames?.get(request.userId) ?: request.userId
+                                val requesterProfile = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
+                                    ?.userProfiles?.get(request.userId)
+                                val requesterName = requesterProfile?.nickname ?: "Usuario"
+                                val badge = requesterProfile?.getRatingBadge() ?: ""
 
-                                Text("Usuario: $requesterNickname")
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "$requesterName $badge",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                
+                                // Stats (Punto 5)
+                                if (requesterProfile != null) {
+                                    val attended = requesterProfile.eventsAttendedCount
+                                    val requested = requesterProfile.eventsRequestedCount
+                                    val reliability = if (requested > 0) (attended * 100 / requested) else 0
+                                    
+                                    Spacer(Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "📊 $attended/$requested asignados ($reliability%)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        
+                                        if (requested >= 5 && reliability < 50) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                "⚠️ Fantasma",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                        
+                                        if (requesterProfile.isPerfectAttendee()) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                "💎 Perfecto",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
                                 Spacer(Modifier.height(8.dp))
 
                                 request.answers.forEach { (_, answer) ->

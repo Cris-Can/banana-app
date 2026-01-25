@@ -108,6 +108,39 @@ fun PublicProfileScreen(
                             }
                         }
 
+                        // 📊 ASISTENCIA (Round 14)
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                        Text(profile.eventsRequestedCount.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                        Text("Solicitudes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                    }
+                                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                        Text(profile.eventsAttendedCount.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                        Text("Asistencias", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                    }
+                                }
+                                
+                                if (profile.eventsRequestedCount > 0) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val reliability = (profile.eventsAttendedCount.toFloat() / profile.eventsRequestedCount.toFloat() * 100).toInt()
+                                    Text(
+                                        "Tasa de compromiso: $reliability%",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (reliability >= 80) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally)
+                                    )
+                                }
+                            }
+                        }
+                        
                         // Friend Action Button & Messaging
                         when (uiState.friendStatus) {
                             FriendStatus.NONE -> {

@@ -26,7 +26,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && (request.auth.uid == userId || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendRequestsReceived', 'friends', 'friendRequestsSent', 'isVerified']));
+      allow update: if isSignedIn() && (request.auth.uid == userId || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendRequestsReceived', 'friends', 'friendRequestsSent']));
     }
     match /notifications/{id} {
       allow read: if isSignedIn() && request.auth.uid == resource.data.userId;

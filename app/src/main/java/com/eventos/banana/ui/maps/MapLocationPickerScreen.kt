@@ -2,7 +2,7 @@ package com.eventos.banana.ui.maps
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,7 +53,7 @@ fun MapLocationPickerScreen(
                 title = { Text("Seleccionar Ubicación Exacta") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                     }
                 },
                 actions = {

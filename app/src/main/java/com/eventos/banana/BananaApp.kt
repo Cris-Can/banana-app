@@ -14,5 +14,7 @@ class BananaApp : Application() {
             .build()
 
         FirebaseFirestore.getInstance().firestoreSettings = settings
+        
+        com.eventos.banana.util.BananaAnalytics.init(this)
     }
 }

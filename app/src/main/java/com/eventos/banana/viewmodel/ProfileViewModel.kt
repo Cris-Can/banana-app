@@ -84,6 +84,28 @@ class ProfileViewModel(
         }
     }
 
+    // 🔔 A29 — CATEGORY SUBSCRIPTION
+    fun toggleCategorySubscription(uid: String, categoryTopic: String, isEnabled: Boolean) {
+        viewModelScope.launch { 
+            val currentProfile = (userRepository.getUserProfile(uid) ?: return@launch)
+            val currentSubscriptions = currentProfile.subscribedCategories.toMutableList()
+            
+            if (isEnabled) {
+                if (!currentSubscriptions.contains(categoryTopic)) {
+                    currentSubscriptions.add(categoryTopic)
+                }
+            } else {
+                currentSubscriptions.remove(categoryTopic)
+            }
+            
+            try {
+                userRepository.updateSubscribedCategories(uid, currentSubscriptions)
+            } catch (e: Exception) {
+                 _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
+            }
+        }
+    }
+
     fun updateLocationFromDevice(
         uid: String,
         region: String,
@@ -200,6 +222,54 @@ class ProfileViewModel(
             } else {
                 val error = result.exceptionOrNull()
                 _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(error))
+            }
+        }
+    }
+
+    // 💾 HISTORY & SAVED EVENTS
+    private val _historyEvents = MutableStateFlow<List<com.eventos.banana.domain.model.Event>>(emptyList())
+    val historyEvents: StateFlow<List<com.eventos.banana.domain.model.Event>> = _historyEvents
+
+    private val _savedEvents = MutableStateFlow<List<com.eventos.banana.domain.model.Event>>(emptyList())
+    val savedEvents: StateFlow<List<com.eventos.banana.domain.model.Event>> = _savedEvents
+
+    fun loadUserEvents(uid: String, savedEventIds: List<String>) {
+        viewModelScope.launch {
+            try {
+                val eventRepo = com.eventos.banana.data.repository.EventRepository()
+                val result = eventRepo.getEvents()
+                if (result.isSuccess) {
+                    val allEvents = result.getOrNull() ?: emptyList()
+                    val now = System.currentTimeMillis()
+                    val oneWeekMillis = 7 * 24 * 60 * 60 * 1000L
+
+                    // HISTORY: Past events (attended/created) within 1 week retention
+                    _historyEvents.value = allEvents.filter { event ->
+                        val isAttended = event.creatorId == uid || event.approvedParticipants.contains(uid)
+                        val isPast = event.endAt < now || event.status == com.eventos.banana.domain.model.EventStatus.CLOSED || event.status == com.eventos.banana.domain.model.EventStatus.CANCELLED
+                        val isRecent = (event.endAt + oneWeekMillis) > now
+                        
+                        isAttended && isPast && isRecent
+                    }
+
+                    // SAVED: Events in user's saved list (No time limit)
+                    _savedEvents.value = allEvents.filter { event ->
+                        savedEventIds.contains(event.id)
+                    }
+                }
+            } catch (e: Exception) {
+                // Fail silently for history
+            }
+        }
+    }
+
+    fun toggleSaveEvent(uid: String, eventId: String, currentSavedIds: List<String>) {
+        val isSaved = currentSavedIds.contains(eventId)
+        viewModelScope.launch {
+            try {
+                userRepository.toggleEventSaved(uid, eventId, !isSaved)
+            } catch (e: Exception) {
+                _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
             }
         }
     }

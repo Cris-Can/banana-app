@@ -16,18 +16,21 @@ import androidx.compose.ui.platform.LocalContext
 // 🎨 ESQUEMAS DE COLOR
 
 // 1. BANANA (Alto Impacto - Dark Slate/Yellow)
+// 1. BANANA (Harmonic Dark)
 private val BananaScheme = darkColorScheme(
     primary = BananaYellow,
-    onPrimary = BananaCharcoal, // Contrast on yellow
-    primaryContainer = BananaYellow,
-    onPrimaryContainer = BananaCharcoal,
-    secondary = BananaOrange,   // For gradients/accents
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF4A4000), // Darker yellow for containers
+    onPrimaryContainer = BananaYellowLight,
+    secondary = BananaOrange,
     onSecondary = Color.Black,
-    tertiary = BananaCream,
-    background = BananaCharcoal,
-    surface = BananaCharcoal,   // Match background for flat look or slightly lighter
+    tertiary = BananaYellowLight, // Use light yellow for special accents
+    background = BananaDarkBackground,
+    surface = BananaDarkSurface,
     onBackground = BananaWhite,
     onSurface = BananaWhite,
+    surfaceVariant = BananaDarkSurfaceVariant,
+    onSurfaceVariant = BananaGrey,
     error = ErrorRed
 )
 

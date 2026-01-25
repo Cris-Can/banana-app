@@ -28,11 +28,22 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+
+import androidx.compose.ui.draw.scale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,14 +51,25 @@ fun ProfileScreen(
     sessionViewModel: SessionViewModel,
     onBack: () -> Unit,
     onFriendsClick: () -> Unit,
+    onEventClick: (String) -> Unit = {},
     profileViewModel: ProfileViewModel = viewModel()
 ) {
     val profileUiState by sessionViewModel.profileUiState.collectAsState()
     val uiState by profileViewModel.uiState.collectAsState()
+    
+    val historyEvents by profileViewModel.historyEvents.collectAsState()
+    val savedEvents by profileViewModel.savedEvents.collectAsState()
+
     val profile = profileUiState.profile
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    
+    LaunchedEffect(profile?.savedEventIds, profile?.uid) {
+        if (profile != null) {
+            profileViewModel.loadUserEvents(profile.uid, profile.savedEventIds)
+        }
+    }
 
     // ================= ESTADO LOCAL =================
     var nickname by remember(profile?.nickname) {
@@ -92,6 +114,7 @@ fun ProfileScreen(
 
     // Config Section State
     var isConfigExpanded by remember { mutableStateOf(false) }
+    var isNotificationsExpanded by remember { mutableStateOf(false) }
 
     // ================= VALIDACIONES =================
     val canSaveNickname =
@@ -230,6 +253,7 @@ fun ProfileScreen(
                     Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = when {
+                            profile.isPerfectAttendee() -> MaterialTheme.colorScheme.tertiaryContainer
                             profile.ratingCount == 0 -> MaterialTheme.colorScheme.surfaceVariant
                             profile.averageRating >= 4.5 -> MaterialTheme.colorScheme.primaryContainer
                             profile.averageRating >= 4.0 -> MaterialTheme.colorScheme.secondaryContainer
@@ -281,190 +305,7 @@ fun ProfileScreen(
                     }
                 }
                 
-                // 2. CONFIGURATION (Expandable) ⚙️
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(Modifier.animateContentSize()) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { isConfigExpanded = !isConfigExpanded }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("⚙️ Configuración", style = MaterialTheme.typography.titleMedium)
-                            }
-                            Icon(
-                                imageVector = if (isConfigExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Expandir"
-                            )
-                        }
-
-                        if (isConfigExpanded) {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                Divider()
-                                Spacer(Modifier.height(16.dp))
-
-                                // THEME SELECTOR
-                                Text("Tema de la App", style = MaterialTheme.typography.labelLarge)
-                                Spacer(Modifier.height(8.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    val currentTheme = profile.appTheme
-                                    
-                                    FilterChip(
-                                        selected = currentTheme == "BANANA",
-                                        onClick = { 
-                                            val uid = sessionViewModel.currentUserId() ?: return@FilterChip
-                                            profileViewModel.updateAppTheme(uid, "BANANA") 
-                                        },
-                                        label = { Text("Banana 🍌") },
-                                        leadingIcon = { if (currentTheme == "BANANA") Icon(androidx.compose.material.icons.Icons.Default.Check, null) }
-                                    )
-                                    FilterChip(
-                                        selected = currentTheme == "DARK",
-                                        onClick = { 
-                                            val uid = sessionViewModel.currentUserId() ?: return@FilterChip
-                                            profileViewModel.updateAppTheme(uid, "DARK") 
-                                        },
-                                        label = { Text("Dark 🌑") },
-                                        leadingIcon = { if (currentTheme == "DARK") Icon(androidx.compose.material.icons.Icons.Default.Check, null) }
-                                    )
-                                    FilterChip(
-                                        selected = currentTheme == "LIGHT",
-                                        onClick = { 
-                                            val uid = sessionViewModel.currentUserId() ?: return@FilterChip
-                                            profileViewModel.updateAppTheme(uid, "LIGHT") 
-                                        },
-                                        label = { Text("Light ☀️") },
-                                        leadingIcon = { if (currentTheme == "LIGHT") Icon(androidx.compose.material.icons.Icons.Default.Check, null) }
-                                    )
-                                }
-
-                                Spacer(Modifier.height(16.dp))
-
-                                // PASSWORD CHANGE
-                                OutlinedButton(
-                                    onClick = { 
-                                        val email = profile.email.ifBlank { sessionViewModel.currentUserId() } 
-                                        profileViewModel.sendPasswordReset(if (profile.email.isNotBlank()) profile.email else "user@example.com") 
-                                        scope.launch { snackbarHostState.showSnackbar("Se enviará un correo para restablecer clave.") }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("🔑 Cambiar Contraseña")
-                                }
-                                
-                                Spacer(Modifier.height(16.dp))
-                                
-                                // EMAIL VERIFICATION
-                                if (!sessionViewModel.isEmailVerified) {
-                                    Button(
-                                        onClick = { sessionViewModel.sendEmailVerification() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("⚠️ Verificar Email")
-                                    }
-                                }
-                                
-                                Spacer(Modifier.height(8.dp))
-                            }
-                        }
-                    }
-                }
-
-                // 3. LOCATION & ALERTS
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Ubicación y Alertas", style = MaterialTheme.typography.titleMedium)
-                        
-                        val regionText = detectedRegion ?: profile.region.takeIf { !it.isNullOrBlank() } ?: "Región no definida"
-                        val communeText = detectedCommune ?: profile.commune.takeIf { !it.isNullOrBlank() } ?: "Comuna no definida"
-                        
-                        Text("$regionText • $communeText", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    scope.launch {
-                                        val result = LocationHelper(context).detectLocationFull()
-                                        if (result != null) {
-                                            detectedRegion = result.region
-                                            detectedCommune = result.commune
-                                        } else {
-                                            snackbarHostState.showSnackbar("No se pudo obtener ubicación")
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("📍 Detectar")
-                            }
-
-                            Button(
-                                onClick = {
-                                    val uid = sessionViewModel.currentUserId() ?: return@Button
-                                    profileViewModel.updateLocation(uid, detectedRegion!!, detectedCommune!!)
-                                },
-                                enabled = detectedRegion != null && (detectedRegion != profile.region || detectedCommune != profile.commune),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Guardar")
-                            }
-                        }
-
-                        Divider()
-                        
-                        Divider()
-                        
-                        Text("🔔 Configuración de Alertas", style = MaterialTheme.typography.titleMedium)
-                        
-                        // 1. Alertas por Comuna
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("Eventos en mi zona", style = MaterialTheme.typography.bodyLarge)
-                                Text("Avisos de nuevos eventos en ${detectedRegion ?: profile.region ?: "tu región"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = profile.notifyEventsByCommune,
-                                enabled = !profile.commune.isNullOrBlank(),
-                                onCheckedChange = { enabled ->
-                                    if (!profile.commune.isNullOrBlank()) {
-                                        val uid = sessionViewModel.currentUserId() ?: return@Switch
-                                        profileViewModel.updateNotifyEventsByCommune(uid, enabled, profile.region, profile.commune)
-                                    } else {
-                                        scope.launch { snackbarHostState.showSnackbar("Guarda tu ubicación primero") }
-                                    }
-                                }
-                            )
-                        }
-
-                        // 2. Alertas de Muro
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("Muro de Eventos", style = MaterialTheme.typography.bodyLarge)
-                                Text("Avisos cuando alguien comenta en eventos donde participas", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = profile.notifyEventWall,
-                                onCheckedChange = { enabled ->
-                                    val uid = sessionViewModel.currentUserId() ?: return@Switch
-                                    profileViewModel.updateNotifyEventWall(uid, enabled)
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // 4. SOCIAL PROFILE
+                // 3. SOCIAL PROFILE
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Perfil Social", style = MaterialTheme.typography.titleMedium)
@@ -529,7 +370,7 @@ fun ProfileScreen(
                     }
                 }
 
-                // 5. PHOTOS (Galeria)
+                // 4. PHOTOS (Galeria)
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
                         Text("Mis Fotos", style = MaterialTheme.typography.titleMedium)
@@ -590,6 +431,263 @@ fun ProfileScreen(
                                         )
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // 4.5 MIS EVENTOS (History & Saved)
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Mis Eventos", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+
+                        var selectedEventTab by remember { mutableIntStateOf(0) }
+                        TabRow(selectedTabIndex = selectedEventTab) {
+                            Tab(selected = selectedEventTab == 0, onClick = { selectedEventTab = 0 }, text = { Text("Historial") })
+                            Tab(selected = selectedEventTab == 1, onClick = { selectedEventTab = 1 }, text = { Text("Guardados") })
+                        }
+                        
+                        Spacer(Modifier.height(16.dp))
+                        
+                        val eventsToShow = if (selectedEventTab == 0) historyEvents else savedEvents
+                        
+                        if (eventsToShow.isEmpty()) {
+                            Text(
+                                text = if (selectedEventTab == 0) "No tienes eventos recientes" else "No tienes eventos guardados",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                eventsToShow.forEach { event ->
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        modifier = Modifier.fillMaxWidth().clickable { onEventClick(event.id) }
+                                    ) {
+                                        Row(
+                                            Modifier.padding(12.dp).fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(event.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                Text(
+                                                    java.text.SimpleDateFormat("dd MMM", java.util.Locale("es")).format(java.util.Date(event.startAt)), 
+                                                    style = MaterialTheme.typography.bodySmall
+                                                )
+                                            }
+                                            
+                                            // Save Toggle
+                                            val isSaved = profile.savedEventIds.contains(event.id)
+                                            IconButton(onClick = { 
+                                                profileViewModel.toggleSaveEvent(profile.uid, event.id, profile.savedEventIds) 
+                                            }) {
+                                                Icon(
+                                                    imageVector = if (isSaved) androidx.compose.material.icons.Icons.Filled.Star else androidx.compose.material.icons.Icons.Filled.Add,
+                                                    contentDescription = "Guardar",
+                                                    tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                // 5. CONFIGURATION
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.animateContentSize()) {
+                        // Main Header
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { isConfigExpanded = !isConfigExpanded }
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("⚙️ Configuración", style = MaterialTheme.typography.titleMedium)
+                            Icon(
+                                imageVector = if (isConfigExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Expandir"
+                            )
+                        }
+
+                        if (isConfigExpanded) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                Divider()
+                                Spacer(Modifier.height(16.dp))
+
+                                // --- THEME ---
+                                Text("Tema de la App", style = MaterialTheme.typography.labelLarge)
+                                Spacer(Modifier.height(8.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    val currentTheme = profile.appTheme
+                                    listOf("BANANA" to "Banana 🍌", "DARK" to "Dark 🌑", "LIGHT" to "Light ☀️").forEach { (code, label) ->
+                                        FilterChip(
+                                            selected = currentTheme == code,
+                                            onClick = { 
+                                                val uid = sessionViewModel.currentUserId() ?: return@FilterChip
+                                                profileViewModel.updateAppTheme(uid, code) 
+                                            },
+                                            label = { Text(label) },
+                                            leadingIcon = { if (currentTheme == code) Icon(androidx.compose.material.icons.Icons.Default.Check, null) }
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+
+                                // --- PASSWORD ---
+                                OutlinedButton(
+                                    onClick = { 
+                                        val email = profile.email.ifBlank { sessionViewModel.currentUserId() } 
+                                        profileViewModel.sendPasswordReset(if (profile.email.isNotBlank()) profile.email else "user@example.com") 
+                                        scope.launch { snackbarHostState.showSnackbar("Se enviará un correo para restablecer clave.") }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("🔑 Cambiar Contraseña")
+                                }
+                                
+                                Spacer(Modifier.height(16.dp))
+                                
+                                // --- EMAIL ---
+                                if (!sessionViewModel.isEmailVerified) {
+                                    Button(
+                                        onClick = { sessionViewModel.sendEmailVerification() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("⚠️ Verificar Email")
+                                    }
+                                    Spacer(Modifier.height(16.dp))
+                                }
+
+                                HorizontalDivider()
+
+                                // --- NESTED NOTIFICATIONS ---
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable { isNotificationsExpanded = !isNotificationsExpanded }
+                                        .padding(vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("🔔 Alertas y Notificaciones", style = MaterialTheme.typography.titleMedium)
+                                    Icon(
+                                        imageVector = if (isNotificationsExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Expandir"
+                                    )
+                                }
+                                AnimatedVisibility(
+                                    visible = isNotificationsExpanded,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    Column(Modifier.padding(start = 8.dp)) {
+                                        Text("Eventos en mi zona", style = MaterialTheme.typography.bodyLarge)
+                                        Text("Recibe avisos de eventos en tu comuna", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        // Location Logic
+                                        val regionText = detectedRegion ?: profile.region.takeIf { !it.isNullOrBlank() } ?: "Región no definida"
+                                        val communeText = detectedCommune ?: profile.commune.takeIf { !it.isNullOrBlank() } ?: "Comuna no definida"
+                                        Text("$regionText • $communeText", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(vertical = 4.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        val result = LocationHelper(context).detectLocationFull()
+                                                        if (result != null) {
+                                                            detectedRegion = result.region
+                                                            detectedCommune = result.commune
+                                                        } else {
+                                                            snackbarHostState.showSnackbar("No se pudo obtener ubicación")
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            ) { Text("📍 Detectar") }
+                                            Button(
+                                                onClick = {
+                                                    val uid = sessionViewModel.currentUserId() ?: return@Button
+                                                    profileViewModel.updateLocation(uid, detectedRegion!!, detectedCommune!!)
+                                                },
+                                                enabled = detectedRegion != null && (detectedRegion != profile.region || detectedCommune != profile.commune),
+                                                modifier = Modifier.weight(1f)
+                                            ) { Text("Guardar") }
+                                        }
+                                        Switch(
+                                            checked = profile.notifyEventsByCommune,
+                                            enabled = !profile.commune.isNullOrBlank(),
+                                            onCheckedChange = { enabled ->
+                                                if (!profile.commune.isNullOrBlank()) {
+                                                    val uid = sessionViewModel.currentUserId() ?: return@Switch
+                                                    profileViewModel.updateNotifyEventsByCommune(uid, enabled, profile.region, profile.commune)
+                                                } else {
+                                                    scope.launch { snackbarHostState.showSnackbar("Guarda tu ubicación primero") }
+                                                }
+                                            },
+                                            modifier = Modifier.scale(0.8f).semantics { contentDescription = if (profile.notifyEventsByCommune) "Notificaciones por comuna activadas" else "Notificaciones por comuna desactivadas" }
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        HorizontalDivider()
+                                        Spacer(Modifier.height(8.dp))
+                                        Text("Categorías de Interés", style = MaterialTheme.typography.bodyLarge)
+                                        com.eventos.banana.domain.model.EventType.values().forEach { type ->
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                            ) {
+                                                Text(text = "${type.emoji} ${type.displayName}", style = MaterialTheme.typography.bodyMedium)
+                                                val topicName = "events_${type.name}"
+                                                val isSubscribed = profile.subscribedCategories.contains(topicName)
+                                                Switch(
+                                                    checked = isSubscribed,
+                                                    onCheckedChange = { isEnabled ->
+                                                        val uid = sessionViewModel.currentUserId() ?: return@Switch
+                                                        profileViewModel.toggleCategorySubscription(uid, topicName, isEnabled)
+                                                    },
+                                                    modifier = Modifier.scale(0.8f).semantics { contentDescription = if (isSubscribed) "Suscrito a ${type.displayName}" else "No suscrito a ${type.displayName}" }
+                                                )
+                                            }
+                                        }
+                                        // Global notification toggle for highlighted events
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                        ) {
+                                            Text(text = "Eventos destacados", style = MaterialTheme.typography.bodyMedium)
+                                            val isHighlightedEnabled = profile.notifyEventWall // assume field exists
+                                            Switch(
+                                                checked = isHighlightedEnabled,
+                                                onCheckedChange = { enabled ->
+                                                    val uid = sessionViewModel.currentUserId() ?: return@Switch
+                                                    profileViewModel.updateNotifyEventWall(uid, enabled)
+                                                },
+                                                modifier = Modifier.scale(0.8f).semantics { contentDescription = if (isHighlightedEnabled) "Notificaciones de eventos destacados activadas" else "Notificaciones de eventos destacados desactivadas" }
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(Modifier.height(8.dp))
                             }
                         }
                     }

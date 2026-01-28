@@ -233,3 +233,133 @@ export const onRatingCreated = onDocumentCreated(
     }
   }
 );
+
+
+/**
+ * =====================================================
+ * 🔔 A39 — WALL POST NOTIFICATIONS (SERVER-SIDE)
+ * Trigger: When a post is created in events/{eventId}/feed/{postId}
+ * Action: Notify all participants (except author)
+ * =====================================================
+ */
+export const onFeedPostCreated = onDocumentCreated(
+  "events/{eventId}/feed/{postId}",
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const post = snapshot.data();
+    const eventId = event.params.eventId;
+
+    // Data from Post
+    const authorId = post.userId;
+    const authorNickname = post.userNickname || "Alguien";
+    const content = post.content || "Nueva foto";
+
+    console.log(`New post by ${authorId} in event ${eventId}`);
+
+    const db = admin.firestore();
+
+    try {
+      // 1. Get Event Data (Title & Participants)
+      const eventDoc = await db.collection("events").doc(eventId).get();
+      if (!eventDoc.exists) {
+        console.log("Event not found");
+        return;
+      }
+
+      const eventData = eventDoc.data();
+      const eventTitle = eventData?.title || "Evento";
+      const creatorId = eventData?.creatorId;
+      const approvedParticipants = eventData?.approvedParticipants || [];
+
+      // Target Audience: Creator + Approved Participants
+      const recipients = new Set<string>([...approvedParticipants]);
+      if (creatorId) recipients.add(creatorId);
+
+      // Remove Author
+      recipients.delete(authorId);
+
+      if (recipients.size === 0) {
+        console.log("No recipients for this post.");
+        return;
+      }
+
+      console.log(`Targeting ${recipients.size} users for notification.`);
+
+      // 2. Batch Create Notifications
+      // We must fetch users to check "notifyEventWall" preference AND fcmToken
+      // Optimization: Split into chunks of 10 or fetch individually...
+      // Firestore 'in' query supports up to 10? 30?
+      // Since maxParticipants is low (e.g. 50), we can iterate.
+
+      // Let's iterate and create notifications.
+      // Ideally we should use multicast FCM, but we stick to the project pattern:
+      // Create 'notifications' document -> Trigger 'onNotificationCreated' -> FCM
+      // OR direct FCM if we want speed and less DB writes? 
+      // The project uses "onNotificationCreated" trigger as the central hub (see top of file).
+      // So we just create docs in "notifications" collection.
+
+      const batch = db.batch();
+      let count = 0;
+
+      // Fetch user preferences in parallel?
+      // For scalability, we shouldn't fetch 50 documents one by one.
+      // But for <50 participants, it's acceptable for now.
+
+      // Let's check 'notifyEventWall' (default true in model, but we need to check DB).
+      // The onEventCreatedNotifyCommune fetch users by query. Here we have IDs.
+      // We'll trust the Client to have updated 'onNotificationCreated' logic,
+      // but actually 'onNotificationCreated' sends the push.
+      // So we just insert documents.
+
+      // WAIT! If we blindly insert, we might spam users who disabled it.
+      // We SHOULD check the preference.
+
+      // Option A: Fetch all user docs (costly).
+      // Option B: Query users where uid IN [...] AND notifyEventWall == true (limit 30).
+
+      const recipientArray = Array.from(recipients);
+      const chunkSize = 10; // 'in' query limit is 30, keep safe.
+
+      for (let i = 0; i < recipientArray.length; i += chunkSize) {
+        const chunk = recipientArray.slice(i, i + chunkSize);
+
+        const usersSnap = await db.collection("users")
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+          .get();
+
+        usersSnap.forEach(userDoc => {
+          const userData = userDoc.data();
+          // Check Preference
+          if (userData.notifyEventWall !== false) { // Default is true if undefined
+            const notifRef = db.collection("notifications").doc();
+
+            const shortContent = content.length > 30 ? content.substring(0, 30) + "..." : content;
+
+            batch.set(notifRef, {
+              userId: userDoc.id,
+              title: `Nuevo mensaje en ${eventTitle}`,
+              message: `${authorNickname}: ${shortContent}`,
+              eventId: eventId,
+              type: "EVENT_UPDATE", // as per plan
+              createdAt: Date.now(),
+              read: false
+            });
+            count++;
+          }
+        });
+      }
+
+      if (count > 0) {
+        await batch.commit();
+        console.log(`Created ${count} notifications for wall post.`);
+      } else {
+        console.log("No notifications created (prefs disabled or error).");
+      }
+
+    } catch (error) {
+      console.error("Error sending wall notifications:", error);
+    }
+  }
+);

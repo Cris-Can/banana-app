@@ -23,15 +23,4 @@ object BananaAnalytics {
         // We will make logEvent take context or rely on a stored instance (ApplicationContext safe).
         firebaseAnalytics?.logEvent(eventName, params)
     }
-
-    fun logNfcEncounter(eventId: String, otherUserId: String) {
-        val analytics = firebaseAnalytics ?: return
-        
-        val bundle = Bundle().apply {
-            putString("event_id", eventId)
-            putString("partner_user_id", otherUserId)
-            putString("interaction_type", "nfc_tap")
-        }
-        analytics.logEvent("nfc_encounter_success", bundle)
-    }
 }

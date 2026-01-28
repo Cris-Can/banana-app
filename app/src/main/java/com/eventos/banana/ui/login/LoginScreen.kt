@@ -143,21 +143,20 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     
-                    // 🎂 FECHA DE NACIMIENTO
-                    OutlinedButton(
-                        onClick = { showDatePicker = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (birthDate != null) {
-                                val calendar = java.util.Calendar.getInstance()
-                                calendar.timeInMillis = birthDate!!
-                                "📅 ${calendar.get(java.util.Calendar.DAY_OF_MONTH)}/${calendar.get(java.util.Calendar.MONTH) + 1}/${calendar.get(java.util.Calendar.YEAR)}"
-                            } else {
-                                "📅 Seleccionar Fecha de Nacimiento"
-                            }
-                        )
+                // 🎂 FECHA DE NACIMIENTO
+                    val dateText = if (birthDate != null) {
+                        val calendar = java.util.Calendar.getInstance()
+                        calendar.timeInMillis = birthDate!!
+                        "📅 ${calendar.get(java.util.Calendar.DAY_OF_MONTH)}/${calendar.get(java.util.Calendar.MONTH) + 1}/${calendar.get(java.util.Calendar.YEAR)}"
+                    } else {
+                        "📅 Seleccionar Fecha de Nacimiento"
                     }
+                    
+                    com.eventos.banana.ui.components.BananaOutlinedButton(
+                        onClick = { showDatePicker = true },
+                        text = dateText,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     
                     if (ageError != null) {
                         Text(
@@ -252,14 +251,13 @@ fun LoginScreen(
                                 }
                                 
                                 // Footer button
-                                TextButton(
+                                com.eventos.banana.ui.components.BananaTextButton(
                                     onClick = { communeExpanded = false },
+                                    text = "Cerrar",
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(8.dp)
-                                ) {
-                                    Text("Cerrar")
-                                }
+                                )
                             }
                         }
                     }
@@ -298,18 +296,18 @@ fun LoginScreen(
                     }
                 }
 
-                Button(
+                com.eventos.banana.ui.components.BananaButton(
                     onClick = { 
                         if (validateEmail(email)) {
                             if (isRegistering) {
                                 // Validación final de edad
                                 if (birthDate == null) {
                                     ageError = "Debes seleccionar tu fecha de nacimiento"
-                                    return@Button
+                                    return@BananaButton
                                 }
                                 if (!com.eventos.banana.util.AgeCalculator.isAdult(birthDate!!)) {
                                     ageError = "❌ Debes ser mayor de 18 años"
-                                    return@Button
+                                    return@BananaButton
                                 }
                                 onRegister(email, password, nickname, birthDate!!, commune)
                             } else {
@@ -317,32 +315,21 @@ fun LoginScreen(
                             }
                         }
                     },
+                    text = if (isRegistering) "Registrarse" else "Entrar",
                     enabled = !isLoading && email.isNotBlank() && password.isNotBlank() && 
                               emailError == null && passwordError == null && ageError == null &&
                               (!isRegistering || (nickname.isNotBlank() && birthDate != null && commune.isNotBlank())),
+                    isLoading = isLoading,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Text(if (isRegistering) "Registrarse" else "Entrar")
-                    }
-                }
+                )
                 
                 // Toggle Button
-                TextButton(
+                com.eventos.banana.ui.components.BananaTextButton(
                     onClick = { isRegistering = !isRegistering },
+                    text = if (isRegistering) "¿Ya tienes cuenta? Inicia Sesión" 
+                           else "¿No tienes cuenta? Regístrate aquí",
                     enabled = !isLoading
-                ) {
-                    Text(
-                        if (isRegistering) "¿Ya tienes cuenta? Inicia Sesión" 
-                        else "¿No tienes cuenta? Regístrate aquí"
-                    )
-                }
+                )
             }
         }
     }

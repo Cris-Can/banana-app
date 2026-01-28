@@ -45,7 +45,7 @@ fun FriendListScreen(
                              value = searchQuery,
                              onValueChange = { 
                                  searchQuery = it
-                                 viewModel.searchUsers(it)
+                                 viewModel.searchUsers(it, currentUserId)
                              },
                              placeholder = { Text("Buscar personas...") },
                              singleLine = true,
@@ -62,7 +62,7 @@ fun FriendListScreen(
                         IconButton(onClick = { 
                             isSearchActive = false
                             searchQuery = ""
-                            viewModel.searchUsers("")
+                            viewModel.searchUsers("", currentUserId)
                         }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
                         }
@@ -71,7 +71,7 @@ fun FriendListScreen(
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { 
                                 searchQuery = ""
-                                viewModel.searchUsers("")
+                                viewModel.searchUsers("", currentUserId)
                             }) {
                                 Icon(Icons.Default.Close, "Borrar")
                             }
@@ -97,62 +97,116 @@ fun FriendListScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             
-            // Tab for Requests vs Friends vs Suggestions
-            var selectedTab by remember { mutableIntStateOf(0) }
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Amigos") })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Solicitudes") })
-                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Sugerencias") })
-            }
-
-            if (uiState.isLoading) {
-                Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-            } else {
+            if (isSearchActive && searchQuery.isNotEmpty()) {
+                // 🔍 SEARCH RESULTS VIEW
                 LazyColumn(contentPadding = PaddingValues(16.dp)) {
-                    when (selectedTab) {
-                        0 -> { // Friends
-                            items(uiState.friends) { friend ->
-                                FriendItem(user = friend, onClick = { onUserClick(friend.uid) }, action = null)
-                            }
-                            if (uiState.friends.isEmpty()) {
-                                item { Text("No tienes amigos confirmados aún.", modifier = Modifier.padding(16.dp)) }
-                            }
+                    item { 
+                        Text(
+                            "Resultados de búsqueda", 
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) 
+                    }
+                    
+                    // 1. Found within Friends
+                    if (uiState.friends.isNotEmpty()) {
+                        item { Text("Tus amigos", color = MaterialTheme.colorScheme.primary) }
+                        items(uiState.friends) { friend ->
+                            FriendItem(user = friend, onClick = { onUserClick(friend.uid) }, action = null)
                         }
-                        1 -> { // Requests
-                             items(uiState.requests) { request ->
-                                FriendItem(
-                                    user = request,
-                                    onClick = { onUserClick(request.uid) },
-                                    action = {
-                                        Button(onClick = { viewModel.acceptRequest(currentUserId, request.uid) }) {
-                                            Text("Aceptar")
-                                        }
-                                    }
-                                )
-                            }
-                             if (uiState.requests.isEmpty()) {
-                                item { Text("No tienes solicitudes pendientes.", modifier = Modifier.padding(16.dp)) }
-                            }
+                    }
+
+                    // 2. Global Results
+                    if (uiState.searchResults.isNotEmpty()) {
+                        item { Spacer(Modifier.height(16.dp)) }
+                        item { Text("Comunidad", color = MaterialTheme.colorScheme.primary) }
+                        items(uiState.searchResults) { user ->
+                            FriendItem(
+                                user = user,
+                                onClick = { onUserClick(user.uid) },
+                                action = {
+                                    com.eventos.banana.ui.components.BananaButton(
+                                        onClick = { viewModel.sendFriendRequest(currentUserId, user.uid) },
+                                        text = "Agregar",
+                                        modifier = Modifier.width(100.dp)
+                                    )
+                                }
+                            )
                         }
-                        2 -> { // Suggestions
-                             items(uiState.suggestions) { suggestion ->
-                                FriendItem(
-                                    user = suggestion,
-                                    onClick = { onUserClick(suggestion.uid) },
-                                    action = {
-                                        Button(
-                                            onClick = { viewModel.sendFriendRequest(currentUserId, suggestion.uid) },
-                                        ) {
-                                            Text("Agregar")
-                                        }
-                                    }
-                                )
+                    }
+                    
+                    if (uiState.friends.isEmpty() && uiState.searchResults.isEmpty() && !uiState.isLoading) {
+                        item { 
+                            Text(
+                                "No se encontraron usuarios.",
+                                modifier = Modifier.padding(top = 24.dp).fillMaxWidth(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            ) 
+                        }
+                    }
+                }
+
+            } else {
+                // 📋 TABS VIEW (Friends / Requests / Suggestions)
+                var selectedTab by remember { mutableIntStateOf(0) }
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Amigos") })
+                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Solicitudes") })
+                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Sugerencias") })
+                }
+    
+                if (uiState.isLoading) {
+                    Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+                } else {
+                    LazyColumn(contentPadding = PaddingValues(16.dp)) {
+                        when (selectedTab) {
+                            0 -> { // Friends
+                                items(uiState.friends) { friend ->
+                                    FriendItem(user = friend, onClick = { onUserClick(friend.uid) }, action = null)
+                                }
+                                if (uiState.friends.isEmpty()) {
+                                    item { Text("No tienes amigos confirmados aún.", modifier = Modifier.padding(16.dp)) }
+                                }
                             }
-                             if (uiState.suggestions.isEmpty()) {
-                                item { 
-                                    Column(Modifier.padding(16.dp)) {
-                                        Text("No hay sugerencias en tu región por ahora.")
-                                        Text("Invita más gente a usar Banana!", style = MaterialTheme.typography.bodySmall)
+                            1 -> { // Requests
+                                 items(uiState.requests) { request ->
+                                    FriendItem(
+                                        user = request,
+                                        onClick = { onUserClick(request.uid) },
+                                        action = {
+                                            com.eventos.banana.ui.components.BananaButton(
+                                                onClick = { viewModel.acceptRequest(currentUserId, request.uid) },
+                                                text = "Aceptar",
+                                                modifier = Modifier.width(100.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                                 if (uiState.requests.isEmpty()) {
+                                    item { Text("No tienes solicitudes pendientes.", modifier = Modifier.padding(16.dp)) }
+                                }
+                            }
+                            2 -> { // Suggestions
+                                 items(uiState.suggestions) { suggestion ->
+                                    FriendItem(
+                                        user = suggestion,
+                                        onClick = { onUserClick(suggestion.uid) },
+                                        action = {
+                                            com.eventos.banana.ui.components.BananaButton(
+                                                onClick = { viewModel.sendFriendRequest(currentUserId, suggestion.uid) },
+                                                text = "Agregar",
+                                                modifier = Modifier.width(100.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                                 if (uiState.suggestions.isEmpty()) {
+                                    item {
+                                        Column(Modifier.padding(16.dp)) {
+                                            Text("No hay sugerencias en tu región por ahora.")
+                                            Text("Invita más gente a usar Banana!", style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
                                 }
                             }

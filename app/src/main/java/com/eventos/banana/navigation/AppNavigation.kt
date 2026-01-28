@@ -254,6 +254,7 @@ fun AppNavigation(startDestination: String = "splash") {
             val uiState by vm.uiState.collectAsState()
             val isSaved by vm.isSaved.collectAsState()
             val hasAttended by vm.hasAttended.collectAsState()
+            val checkInState by vm.checkInState.collectAsState()
 
             LaunchedEffect(vm, sessionViewModel.currentUserId()) {
                  vm.loadUserInteractionState(sessionViewModel.currentUserId())
@@ -301,13 +302,12 @@ fun AppNavigation(startDestination: String = "splash") {
                     val participantIds = (event.approvedParticipants + event.creatorId).joinToString(",")
                     navController.navigate("rate_participants/${event.id}/${event.eventType.name}/$participantIds")
                 },
-                onConfirmEncounters = { event ->
-                    val participantIds = (event.approvedParticipants + event.creatorId).joinToString(",")
-                    navController.navigate("nfc_encounters/${event.id}/$participantIds")
-                },
                 isSaved = isSaved,
                 onToggleSave = { vm.toggleSaveEvent(sessionViewModel.currentUserId()) },
-                hasAttended = hasAttended
+                hasAttended = hasAttended,
+                checkInState = checkInState,
+                onCheckInClick = { vm.performCheckIn(sessionViewModel.currentUserId()) },
+                onResetCheckInState = vm::resetCheckInState
             )
         }
 
@@ -386,31 +386,6 @@ fun AppNavigation(startDestination: String = "splash") {
             com.eventos.banana.ui.rating.RateParticipantsScreen(
                 eventId = eventId,
                 eventType = eventType,
-                currentUserId = sessionViewModel.currentUserId(),
-                participantIds = participantIds,
-                onBackClick = { navController.popBackStack() }
-            )
-        }
-
-        // ---------- NFC ENCOUNTERS (Round 12) ----------
-        composable(
-            route = "nfc_encounters/{eventId}/{participantIds}",
-            arguments = listOf(
-                navArgument("eventId") { type = NavType.StringType },
-                navArgument("participantIds") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
-            val participantIdsStr = backStackEntry.arguments?.getString("participantIds") ?: ""
-            
-            val participantIds = if (participantIdsStr.isNotBlank()) {
-                participantIdsStr.split(",")
-            } else {
-                emptyList()
-            }
-
-            com.eventos.banana.ui.nfc.NFCTapScreen(
-                eventId = eventId,
                 currentUserId = sessionViewModel.currentUserId(),
                 participantIds = participantIds,
                 onBackClick = { navController.popBackStack() }

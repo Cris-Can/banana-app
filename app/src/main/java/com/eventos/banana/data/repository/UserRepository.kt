@@ -261,71 +261,50 @@ class UserRepository(
         users.document(uid).update("eventsAttendedCount", com.google.firebase.firestore.FieldValue.increment(1)).await()
     }
 
-    // 🔧 PARA DEBUG / ADMIN: Recalcular historiales
-    suspend fun recalculateAllUserStats(): Result<String> {
+    // 🔧 PARA DEBUG / ADMIN: Recalcular historiales (Solo usuario actual)
+    suspend fun recalculateUserStats(uid: String): Result<String> {
         return try {
-            val statsMap = mutableMapOf<String, Pair<Int, Int>>() // UserId -> (Requested, Attended)
-
-            // 1. Scan Events for Requests
-            val eventsSnapshot = firestore.collection("events").get().await()
-            for (doc in eventsSnapshot) {
-                // Parse manual to avoid full object issues if fields change
-                val creatorId = doc.getString("creatorId")
-                val pendingRequests = doc.get("pendingRequests") as? List<HashMap<String, Any>> ?: emptyList()
-                val approvedParticipants = doc.get("approvedParticipants") as? List<String> ?: emptyList()
-                val rejectedParticipants = doc.get("rejectedParticipants") as? List<String> ?: emptyList()
-
-                val requesters = mutableSetOf<String>()
-                // Extract userIds from pendingRequests maps
-                pendingRequests.forEach { req ->
-                    (req["userId"] as? String)?.let { requesters.add(it) }
-                }
-                requesters.addAll(approvedParticipants)
-                requesters.addAll(rejectedParticipants)
-                
-                // Exclude creator from "requests" metric
-                if (creatorId != null) {
-                    requesters.remove(creatorId)
-                }
-                
-                requesters.forEach { uid ->
-                    val current = statsMap.getOrDefault(uid, 0 to 0)
-                    statsMap[uid] = (current.first + 1) to current.second
-                }
-            }
-
-            // 2. Scan Check-ins for Attendance
-            val checkinsSnapshot = firestore.collection("event_checkins").get().await()
-            for (doc in checkinsSnapshot) {
-                val uid = doc.getString("userId")
-                if (uid != null) {
-                    val current = statsMap.getOrDefault(uid, 0 to 0)
-                    statsMap[uid] = current.first to (current.second + 1)
-                }
-            }
-            
-            // 3. Update Users (Batched)
             val batch = firestore.batch()
-            var count = 0
+            val userRef = users.document(uid)
+            val updateData = mutableMapOf<String, Any>()
+
+            // 1. Scan Check-ins for Attendance (My Checkins)
+            val checkinsCount = firestore.collection("event_checkins")
+                .whereEqualTo("userId", uid)
+                .get()
+                .await()
+                .size()
             
-            statsMap.forEach { (uid, stats) ->
-                val (req, att) = stats
-                val userRef = users.document(uid)
-                batch.update(userRef, mapOf(
-                    "eventsRequestedCount" to req,
-                    "eventsAttendedCount" to att
-                ))
-                count++
-                 if (count % 400 == 0) { // Safety limit
-                    batch.commit().await()
-                }
-            }
+            updateData["eventsAttendedCount"] = checkinsCount
+
+            // 2. Scan Ratings (Ratings received by me)
+            val ratingsSnapshot = firestore.collection("ratings")
+                .whereEqualTo("toUserId", uid)
+                .get()
+                .await()
             
-            if (count > 0) {
-                batch.commit().await()
-            }
+            val scores = ratingsSnapshot.documents.mapNotNull { it.getDouble("score") }
+            updateData["ratingSum"] = scores.sum()
+            updateData["ratingCount"] = scores.size
             
-            Result.success("Recalculado para $count usuarios")
+            // 3. Scan Requests (Events I requested/joined) - Optional/Approximate
+            // Retrieving 'eventsRequestedCount' accurately is hard without an index or 'my_requests' subcollection.
+            // We will skip recalculating 'eventsRequestedCount' to avoid query errors. 
+            // Or we could try querying events where 'approvedParticipants' contains uid
+            
+            val attendedEventsSnapshot = firestore.collection("events")
+                .whereArrayContains("approvedParticipants", uid)
+                .get()
+                .await()
+            
+            // This is "Events I am approved in", which is close to "Attended" but distinct from "Requested".
+            // Let's assume 'eventsRequestedCount' is critical? If not, skip.
+            // Let's just update ratings and attendance since that's what's broken.
+            
+            batch.update(userRef, updateData)
+            batch.commit().await()
+            
+            Result.success("Perfil actualizado: ${scores.size} votos, $checkinsCount eventos.")
         } catch (e: Exception) {
              android.util.Log.e("UserRepository", "Error recalculating stats", e)
              Result.failure(e)
@@ -503,6 +482,26 @@ class UserRepository(
     // =====================================================
     // 🔍 SEARCH & SUGGESTIONS
     // =====================================================
+    suspend fun searchUsers(query: String): List<UserProfile> {
+        if (query.isBlank()) return emptyList()
+        return try {
+            val snapshot = users
+                .orderBy("nickname")
+                .startAt(query)
+                .endAt(query + "\uf8ff")
+                .limit(20)
+                .get()
+                .await()
+            
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error searching users", e)
+            emptyList()
+        }
+    }
+
     suspend fun getUsersByRegion(region: String, excludeUid: String): List<UserProfile> {
         return try {
             val snapshot = users

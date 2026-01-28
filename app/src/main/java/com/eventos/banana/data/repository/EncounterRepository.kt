@@ -69,7 +69,6 @@ class EncounterRepository {
             // Note: Optimally we check if they already 'attended' this event via check-in.
             // For simplicity in this task, we rely on recordCheckIn primarily for the stat, 
             // OR we could check here. But let's stick to recordCheckIn for the "Official Attendance".
-            // If they use NFC they likely checked in or will check in. 
             // Actually, let's auto-record check-in for both? 
             // User requested "cuantos asiste de verdad". Interacting is attending.
             // Let's call recordCheckIn() for both users here safely.

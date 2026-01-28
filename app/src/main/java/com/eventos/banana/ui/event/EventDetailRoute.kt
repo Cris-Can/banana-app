@@ -46,6 +46,46 @@ fun EventDetailRoute(
         }
 
         is EventDetailUiState.Success -> {
+            
+            // ⏰ SCHEDULE REMINDER (A39)
+            val event = uiState.event
+            val isApproved = event.approvedParticipants.contains(currentUserId) || event.creatorId == currentUserId
+            
+            if (isApproved && event.startAt > System.currentTimeMillis()) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                androidx.compose.runtime.LaunchedEffect(event.id) {
+                    val timeDiff = event.startAt - System.currentTimeMillis()
+                    val oneHour = 60 * 60 * 1000L
+                    
+                    // Notify 1 hour before, or immediately if less than 1 hour left (but still future)
+                    // If timeDiff > 1 hour, delay = timeDiff - 1 hour
+                    // If timeDiff < 1 hour, delay = 0 (immediate) - actually better to notify "Starts soon"
+                    
+                    val delay = if (timeDiff > oneHour) timeDiff - oneHour else 0L
+                    
+                    val workManager = androidx.work.WorkManager.getInstance(context)
+                    
+                    val data = androidx.work.workDataOf(
+                        "eventId" to event.id,
+                        "eventTitle" to event.title
+                    )
+                    
+                    val request = androidx.work.OneTimeWorkRequestBuilder<com.eventos.banana.workers.EventReminderWorker>()
+                        .setInitialDelay(delay, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        .setInputData(data)
+                        .addTag("reminder_${event.id}")
+                        .build()
+                        
+                    workManager.enqueueUniqueWork(
+                        "reminder_${event.id}",
+                        androidx.work.ExistingWorkPolicy.KEEP, // Use KEEP to avoid rescheduling if already scheduled
+                        request
+                    )
+                    
+                    android.util.Log.d("EventDetailRoute", "Scheduled reminder for ${event.title} in ${delay/1000}s")
+                }
+            }
+
             EventDetailScreen(
                 event = uiState.event,
                 currentUserId = currentUserId,

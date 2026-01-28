@@ -105,40 +105,8 @@ class FeedViewModel(
                 _uiState.value = _uiState.value.copy(isUploading = false, error = null)
                 
                 // 🔔 NOTIFICAR A PARTICIPANTES
-                try {
-                    val eventResult = eventRepository.getEventById(eventId)
-                    if (eventResult.isSuccess) {
-                        val event = eventResult.getOrNull()!!
-                        
-                        // Lista de destinatarios: Creador + Participantes - AutorDelPost
-                        val recipients = (event.approvedParticipants + event.creatorId)
-                            .distinct()
-                            .filter { it != userId }
-                        
-                        android.util.Log.d("FeedViewModel", "Notifying ${recipients.size} users about new wall post")
-                        
-                        val notifRepository = com.eventos.banana.data.repository.NotificationRepository()
-                        val userRepository = com.eventos.banana.data.repository.UserRepository()
-                        
-                        recipients.forEach { recipientUid ->
-                            // Check preference (fetch profile mostly cached)
-                            val profile = userRepository.getUserProfile(recipientUid)
-                            if (profile?.notifyEventWall == true) {
-                                val notification = com.eventos.banana.domain.model.AppNotification(
-                                    userId = recipientUid,
-                                    title = "Nuevo mensaje en ${event.title}",
-                                    message = "$nickname: ${(if(content.length > 30) content.take(30)+"..." else content)}",
-                                    type = com.eventos.banana.domain.model.NotificationType.EVENT_UPDATE, // Reuse type for simplicity or add WALL_POST
-                                    eventId = eventId,
-                                    read = false
-                                )
-                                notifRepository.sendNotification(notification)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("FeedViewModel", "Failed to send notifications", e)
-                }
+                // Ahora manejado por Cloud Functions (Backend) para mayor eficiencia y ahorro de batería.
+                android.util.Log.d("FeedViewModel", "Post created. Notifications delegated to Cloud Function.")
             }
         }
     }

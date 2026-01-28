@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ArrowForward
 import coil.compose.AsyncImage
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventStatus
@@ -46,11 +48,13 @@ fun EventDetailScreen(
     onRateUser: (String) -> Unit,
     onUserClick: (String) -> Unit,
     onRateParticipants: (Event) -> Unit,
-    onConfirmEncounters: (Event) -> Unit,
     eventState: com.eventos.banana.domain.model.EventDetailUiState, // Pass full state to access nicknames
     isSaved: Boolean = false,
     onToggleSave: () -> Unit = {},
-    hasAttended: Boolean = false
+    hasAttended: Boolean = false,
+    checkInState: com.eventos.banana.viewmodel.CheckInState = com.eventos.banana.viewmodel.CheckInState.Idle,
+    onCheckInClick: () -> Unit = {},
+    onResetCheckInState: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isCreator = event.creatorId == currentUserId
@@ -397,161 +401,130 @@ fun EventDetailScreen(
                                         )
                                     }
                                     Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        "Para puntuar a otros asistentes, primero debes confirmar que estuviste ahí.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-
-                                    // BOTÓN 1: CHECK-IN GPS
-                                    val coroutineScope = rememberCoroutineScope()
-                                    val geofenceManager = remember { com.eventos.banana.util.EventGeofenceManager(context) }
-                                    val encounterRepo = remember { com.eventos.banana.data.repository.EncounterRepository() }
-                                    var isCheckingIn by remember { mutableStateOf(false) }
-                                    var currentDistance by remember { mutableStateOf<Int?>(null) }
-
-                                    // Auto-check distance on load
-                                    LaunchedEffect(Unit) {
-                                         if (com.eventos.banana.util.LocationHelper.hasLocationPermissions(context) && 
-                                             com.eventos.banana.util.LocationHelper.isLocationEnabled(context)) {
-                                             currentDistance = geofenceManager.getDistanceToEvent(event)
-                                         }
-                                    }
-                                    
-                                    // Distance Indicator
-                                    if (currentDistance != null) {
-                                        val isCloseEnough = currentDistance!! <= 100
-                                        Text(
-                                            text = "📍 Distancia actual: $currentDistance m",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = if (isCloseEnough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        if (!isCloseEnough) {
-                                            Text(
-                                               "Acércate a menos de 100m",
-                                               style = MaterialTheme.typography.labelSmall,
-                                               color = MaterialTheme.colorScheme.outline
-                                            )
-                                        } else {
-                                            // "Compartir ubicación" (Punto 3)
-                                            TextButton(
-                                                onClick = {
-                                                    val lat = event.exactLatitude ?: 0.0
-                                                    val lng = event.exactLongitude ?: 0.0
-                                                    val mapUrl = "https://maps.google.com/?q=$lat,$lng"
-                                                    val shareText = "¡Estoy en ${event.title}! 🍌📍 Caen? $mapUrl"
-                                                    
-                                                    val sendIntent = android.content.Intent().apply {
-                                                        action = android.content.Intent.ACTION_SEND
-                                                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                                        type = "text/plain"
-                                                    }
-                                                    try {
-                                                        context.startActivity(android.content.Intent.createChooser(sendIntent, "Compartir ubicación"))
-                                                    } catch (e: Exception) {
-                                                        // Ignore
-                                                    }
-                                                }
+                                    if (hasAttended || isCreator) {
+                                        // ✅ COMPACT SUCCESS UI (Static - Visual Confirmation)
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                            ),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
                                             ) {
-                                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary)
                                                 Spacer(Modifier.width(8.dp))
-                                                Text("Compartir que estoy aquí")
+                                                Text(
+                                                    "✅ Check-in Realizado",
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
                                             }
                                         }
+                                    } else {
+                                        // 🔘 ORIGINAL BUTTONS (GPS Check-In)
+                                        // Only show explanatory text if NOT checked in
+                                        Text(
+                                            "Para puntuar a otros asistentes, primero debes confirmar que estuviste ahí.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        // 🔘 ORIGINAL BUTTONS (GPS Check-In)
+                                        val coroutineScope = rememberCoroutineScope()
+                                        val geofenceManager = remember { com.eventos.banana.util.EventGeofenceManager(context) }
+                                        var isVerifyingLocation by remember { mutableStateOf(false) }
+                                        var currentDistance by remember { mutableStateOf<Int?>(null) }
+                                        
+                                        // Auto-check distance on load
+                                        LaunchedEffect(Unit) {
+                                             if (com.eventos.banana.util.LocationHelper.hasLocationPermissions(context) && 
+                                                 com.eventos.banana.util.LocationHelper.isLocationEnabled(context)) {
+                                                 currentDistance = geofenceManager.getDistanceToEvent(event)
+                                             }
+                                        }
+                                        
+                                        // Distance Indicator
+                                        if (currentDistance != null) {
+                                            val isCloseEnough = currentDistance!! <= 100
+                                            Text(
+                                                text = "📍 Distancia actual: $currentDistance m",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = if (isCloseEnough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        
+                                        Spacer(Modifier.height(8.dp))
+
+                                        OutlinedButton(
+                                            onClick = { 
+                                                // Check Permissions
+                                                if (!com.eventos.banana.util.LocationHelper.hasLocationPermissions(context)) {
+                                                    android.widget.Toast.makeText(context, "⚠️ Permiso de ubicación requerido", android.widget.Toast.LENGTH_LONG).show()
+                                                    return@OutlinedButton
+                                                }
+                                                // Time Validation
+                                                val now = System.currentTimeMillis()
+                                                val oneHour = 3600000L
+                                                if (event.startAt > 0 && now < (event.startAt - oneHour)) {
+                                                    android.widget.Toast.makeText(context, "🕒 Muy temprano (espera al inicio)", android.widget.Toast.LENGTH_LONG).show()
+                                                    return@OutlinedButton
+                                                }
+                                                if (event.endAt > 0 && now > (event.endAt + oneHour)) {
+                                                    android.widget.Toast.makeText(context, "🕒 El evento ya finalizó", android.widget.Toast.LENGTH_LONG).show()
+                                                    return@OutlinedButton
+                                                }
+                                                // GPS Enabled
+                                                if (!com.eventos.banana.util.LocationHelper.isLocationEnabled(context)) {
+                                                    android.widget.Toast.makeText(context, "⚠️ Enciende tu GPS", android.widget.Toast.LENGTH_LONG).show()
+                                                    return@OutlinedButton
+                                                }
+
+                                                isVerifyingLocation = true
+                                                coroutineScope.launch {
+                                                    try {
+                                                        // Update distance
+                                                        currentDistance = geofenceManager.getDistanceToEvent(event)
+                                                        val isAtEvent = geofenceManager.isUserAtEvent(event)
+                                                        
+                                                        if (isAtEvent) {
+                                                            // Calls PARAMETER callback
+                                                            onCheckInClick()
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "❌ Debes estar a 100m del evento", android.widget.Toast.LENGTH_LONG).show()
+                                                        }
+                                                    } finally {
+                                                        isVerifyingLocation = false
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = ButtonDefaults.outlinedButtonColors(
+                                                contentColor = MaterialTheme.colorScheme.primary
+                                            ),
+                                            enabled = !isVerifyingLocation && checkInState !is com.eventos.banana.viewmodel.CheckInState.Loading
+                                        ) {
+                                            if (isVerifyingLocation || checkInState is com.eventos.banana.viewmodel.CheckInState.Loading) {
+                                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Verificando...")
+                                            } else {
+                                                Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Check-in GPS (Estoy aquí)")
+                                            }
+                                        }
+                                        
                                         Spacer(Modifier.height(8.dp))
                                     }
 
-                                    OutlinedButton(
-                                        onClick = { 
-                                            // Check Permissions first
-                                            if (!com.eventos.banana.util.LocationHelper.hasLocationPermissions(context)) {
-                                                android.widget.Toast.makeText(context, "⚠️ Permiso de ubicación requerido", android.widget.Toast.LENGTH_LONG).show()
-                                                // TODO: Request permissions properly (out of scope for quick fix, assume user granted it via profile)
-                                                return@OutlinedButton
-                                            }
-                                            
-                                            // TIME VALIDATION (Punto 2)
-                                            val now = System.currentTimeMillis()
-                                            val oneHour = 3600000L
-                                            
-                                            if (event.startAt > 0 && now < (event.startAt - oneHour)) {
-                                                android.widget.Toast.makeText(context, "🕒 Muy temprano para el Check-in (espera al inicio)", android.widget.Toast.LENGTH_LONG).show()
-                                                return@OutlinedButton
-                                            }
-                                            
-                                            if (event.endAt > 0 && now > (event.endAt + oneHour)) {
-                                                android.widget.Toast.makeText(context, "🕒 El evento ya finalizó", android.widget.Toast.LENGTH_LONG).show()
-                                                return@OutlinedButton
-                                            }
-
-                                            // Check GPS Enabled
-                                            if (!com.eventos.banana.util.LocationHelper.isLocationEnabled(context)) {
-                                                android.widget.Toast.makeText(context, "⚠️ Enciende tu GPS para verificar ubicación", android.widget.Toast.LENGTH_LONG).show()
-                                                try {
-                                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                                                } catch (e: Exception) {
-                                                    // Fallback if settings cannot be opened
-                                                }
-                                                return@OutlinedButton
-                                            }
-
-                                            isCheckingIn = true
-                                            coroutineScope.launch {
-                                                try {
-                                                    // Update distance for feedback
-                                                    currentDistance = geofenceManager.getDistanceToEvent(event)
-                                                    
-                                                    val isAtEvent = geofenceManager.isUserAtEvent(event)
-                                                    if (isAtEvent) {
-                                                        val result = encounterRepo.recordCheckIn(event.id, currentUserId)
-                                                        if (result.isSuccess) {
-                                                            android.widget.Toast.makeText(context, "✅ Check-in GPS exitoso!", android.widget.Toast.LENGTH_LONG).show()
-                                                        } else {
-                                                            android.widget.Toast.makeText(context, "Error al registrar: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    } else {
-                                                        android.widget.Toast.makeText(context, "❌ Debes estar a 100m del evento", android.widget.Toast.LENGTH_LONG).show()
-                                                    }
-                                                } catch (e: SecurityException) {
-                                                    android.widget.Toast.makeText(context, "⚠️ Error de permisos: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                                                } catch (e: Exception) {
-                                                    android.widget.Toast.makeText(context, "⚠️ Error inesperado: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                                } finally {
-                                                    isCheckingIn = false
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = MaterialTheme.colorScheme.primary
-                                        ),
-                                        enabled = !isCheckingIn
-                                    ) {
-                                        if (isCheckingIn) {
-                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("Verificando ubicación...")
-                                        } else {
-                                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("Check-in GPS (Estoy aquí)")
-                                        }
-                                    }
-
-                                    Spacer(Modifier.height(8.dp))
-
-                                    // BOTÓN 2: NFC CONFIRM
-                                    Button(
-                                        onClick = { onConfirmEncounters(event) }, // Navega a NFCTapScreen
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary
-                                        )
-                                    ) {
-                                        Text("Confirmar con NFC (Tap)")
-                                    }
+                                    // STANDALONE NFC BUTTON REMOVED
                                 }
                             }
                         }
@@ -681,46 +654,9 @@ fun EventDetailScreen(
                     }
                 }
 
-                // ========== CONFIRMAR ENCUENTROS NFC (Round 12) ==========
-                // Visible mientras el evento está activo (para confirmar encuentros durante el evento)
-                val nowForNFC = System.currentTimeMillis()
-                val eventActive = event.startAt <= nowForNFC && event.endAt > nowForNFC
-                val canConfirmEncounters = (isCreator || isApproved) && eventActive
+                // ========== CONFIRMAR ENCUENTROS NFC (REMOVED - DUPLICATE) ==========
+                // Logic moved to "Encuentros & Puntuación" section above
 
-                if (canConfirmEncounters) {
-                    Spacer(Modifier.height(8.dp))
-                    
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                        )
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text(
-                                "📱 Confirmar Encuentros",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            
-                            Text(
-                                "Toca tu teléfono con otros participantes para confirmar que se conocieron físicamente",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            
-                            Spacer(Modifier.height(12.dp))
-                            
-                            Button(
-                                onClick = { onConfirmEncounters(event) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Activar NFC")
-                            }
-                        }
-                    }
-                }
 
                 // ========== CALIFICAR PARTICIPANTES (Round 11) ==========
                 // Visible para creador y participantes aprobados, solo si el evento terminó
@@ -742,7 +678,7 @@ fun EventDetailScreen(
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 Text("⚠️ Asistencia no verificada", fontWeight = FontWeight.Bold)
-                                Text("Para calificar, debiste confirmar tu asistencia con GPS o NFC.", style = MaterialTheme.typography.bodySmall)
+                                Text("Para calificar, debiste confirmar tu asistencia con GPS.", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     } else {

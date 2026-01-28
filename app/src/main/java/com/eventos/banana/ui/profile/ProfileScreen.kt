@@ -166,9 +166,9 @@ fun ProfileScreen(
                 }
 
                 // 1. HEADER (Avatar + Nickname + Friends)
-                Card(Modifier.fillMaxWidth()) {
+                com.eventos.banana.ui.components.BananaCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        Modifier.padding(24.dp).fillMaxWidth(),
+                        Modifier.fillMaxWidth(), // Removed padding(24) as it is close to BananaCard's 16. If 24 is vital I can override contentPadding
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -234,37 +234,32 @@ fun ProfileScreen(
                             )
                             
                             if (canSaveNickname) {
-                                Button(
+                                com.eventos.banana.ui.components.BananaButton(
                                     onClick = { 
-                                        val uid = sessionViewModel.currentUserId() ?: return@Button
+                                        val uid = sessionViewModel.currentUserId() ?: return@BananaButton
                                         profileViewModel.updateNickname(uid, nickname) 
                                     },
+                                    text = "Guardar Nickname",
                                     modifier = Modifier.padding(top = 8.dp)
-                                ) {
-                                    Text("Guardar Nickname")
-                                }
+                                )
                             }
                         }
                     }
                 }
                 
                 // 1.5 REPUTACIÓN BADGE (Round 11)
-                Card(
-                    Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = when {
+                com.eventos.banana.ui.components.BananaCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = when {
                             profile.isPerfectAttendee() -> MaterialTheme.colorScheme.tertiaryContainer
                             profile.ratingCount == 0 -> MaterialTheme.colorScheme.surfaceVariant
                             profile.averageRating >= 4.5 -> MaterialTheme.colorScheme.primaryContainer
                             profile.averageRating >= 4.0 -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.surface
                         }
-                    )
                 ) {
                     Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        Modifier.fillMaxWidth(), // Removed padding(16.dp)
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -306,8 +301,9 @@ fun ProfileScreen(
                 }
                 
                 // 3. SOCIAL PROFILE
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                com.eventos.banana.ui.components.BananaCard(modifier = Modifier.fillMaxWidth()) {
+                     // Removed manual padding of 16.dp since BananaCard provides it
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Perfil Social", style = MaterialTheme.typography.titleMedium)
 
                         var aboutMe by remember(profile.aboutMe) { mutableStateOf(profile.aboutMe) }
@@ -357,22 +353,21 @@ fun ProfileScreen(
                             }
                         }
                         
-                         Button(
+                         com.eventos.banana.ui.components.BananaButton(
                             onClick = {
-                                val uid = sessionViewModel.currentUserId() ?: return@Button
+                                val uid = sessionViewModel.currentUserId() ?: return@BananaButton
                                 profileViewModel.updateSocialProfile(uid, aboutMe, interests)
                             },
+                            text = "Actualizar Social",
                             enabled = aboutMe != profile.aboutMe || interests != profile.interests,
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Actualizar Social")
-                        }
+                        )
                     }
                 }
 
                 // 4. PHOTOS (Galeria)
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
+                com.eventos.banana.ui.components.BananaCard(modifier = Modifier.fillMaxWidth()) {
+                    Column { // Removed manual padding
                         Text("Mis Fotos", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
 
@@ -437,8 +432,8 @@ fun ProfileScreen(
                 }
 
                 // 4.5 MIS EVENTOS (History & Saved)
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
+                com.eventos.banana.ui.components.BananaCard(modifier = Modifier.fillMaxWidth()) {
+                    Column { // Removed padding(16.dp)
                         Text("Mis Eventos", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
 
@@ -462,19 +457,21 @@ fun ProfileScreen(
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 eventsToShow.forEach { event ->
-                                    Card(
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                        modifier = Modifier.fillMaxWidth().clickable { onEventClick(event.id) }
+                                    com.eventos.banana.ui.components.BananaCard(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = { onEventClick(event.id) },
+                                        contentPadding = 12.dp // Using 12.dp to match original inner padding preference
                                     ) {
                                         Row(
-                                            Modifier.padding(12.dp).fillMaxWidth(),
+                                            Modifier.fillMaxWidth(), // Removed padding(12.dp)
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Column(Modifier.weight(1f)) {
                                                 Text(event.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                                 Text(
-                                                    java.text.SimpleDateFormat("dd MMM", java.util.Locale("es")).format(java.util.Date(event.startAt)), 
+                                                    java.text.SimpleDateFormat("dd MMM", java.util.Locale.forLanguageTag("es")).format(java.util.Date(event.startAt)), 
                                                     style = MaterialTheme.typography.bodySmall
                                                 )
                                             }
@@ -501,13 +498,10 @@ fun ProfileScreen(
                 Spacer(Modifier.height(24.dp))
 
                 // 5. CONFIGURATION
-                Card(
+                com.eventos.banana.ui.components.BananaCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentPadding = 0.dp // Config card controls its own padding for expandability
                 ) {
                     Column(Modifier.animateContentSize()) {
                         // Main Header
@@ -528,7 +522,7 @@ fun ProfileScreen(
 
                         if (isConfigExpanded) {
                             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                Divider()
+                                HorizontalDivider()
                                 Spacer(Modifier.height(16.dp))
 
                                 // --- THEME ---
@@ -552,28 +546,25 @@ fun ProfileScreen(
                                 Spacer(Modifier.height(16.dp))
 
                                 // --- PASSWORD ---
-                                OutlinedButton(
+                                com.eventos.banana.ui.components.BananaOutlinedButton(
                                     onClick = { 
                                         val email = profile.email.ifBlank { sessionViewModel.currentUserId() } 
                                         profileViewModel.sendPasswordReset(if (profile.email.isNotBlank()) profile.email else "user@example.com") 
                                         scope.launch { snackbarHostState.showSnackbar("Se enviará un correo para restablecer clave.") }
                                     },
+                                    text = "🔑 Cambiar Contraseña",
                                     modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("🔑 Cambiar Contraseña")
-                                }
+                                )
                                 
                                 Spacer(Modifier.height(16.dp))
                                 
                                 // --- EMAIL ---
                                 if (!sessionViewModel.isEmailVerified) {
-                                    Button(
+                                    com.eventos.banana.ui.components.BananaButton(
                                         onClick = { sessionViewModel.sendEmailVerification() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                        text = "⚠️ Verificar Email",
                                         modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("⚠️ Verificar Email")
-                                    }
+                                    )
                                     Spacer(Modifier.height(16.dp))
                                 }
 
@@ -607,7 +598,7 @@ fun ProfileScreen(
                                         val communeText = detectedCommune ?: profile.commune.takeIf { !it.isNullOrBlank() } ?: "Comuna no definida"
                                         Text("$regionText • $communeText", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(vertical = 4.dp))
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                                            OutlinedButton(
+                                            com.eventos.banana.ui.components.BananaOutlinedButton(
                                                 onClick = {
                                                     scope.launch {
                                                         val result = LocationHelper(context).detectLocationFull()
@@ -619,16 +610,18 @@ fun ProfileScreen(
                                                         }
                                                     }
                                                 },
+                                                text = "📍 Detectar",
                                                 modifier = Modifier.weight(1f)
-                                            ) { Text("📍 Detectar") }
-                                            Button(
+                                            )
+                                            com.eventos.banana.ui.components.BananaButton(
                                                 onClick = {
-                                                    val uid = sessionViewModel.currentUserId() ?: return@Button
+                                                    val uid = sessionViewModel.currentUserId() ?: return@BananaButton
                                                     profileViewModel.updateLocation(uid, detectedRegion!!, detectedCommune!!)
                                                 },
+                                                text = "Guardar",
                                                 enabled = detectedRegion != null && (detectedRegion != profile.region || detectedCommune != profile.commune),
                                                 modifier = Modifier.weight(1f)
-                                            ) { Text("Guardar") }
+                                            )
                                         }
                                         Switch(
                                             checked = profile.notifyEventsByCommune,
@@ -687,7 +680,45 @@ fun ProfileScreen(
                                     }
                                 }
                                 
+
                                 Spacer(Modifier.height(8.dp))
+                                HorizontalDivider()
+                                
+                                // Reset Onboarding
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                TextButton(
+                                    onClick = { 
+                                        // Reset param and navigate
+                                        context.getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE)
+                                            .edit()
+                                            .putBoolean("onboarding_seen_v2", false)
+                                            .apply()
+                                            
+                                        // Force restart navigation logic (hacky but works) OR direct nav
+                                        // Since we are in Profile, we can just navigate to Onboarding
+                                        // But ProfileScreen doesn't usually have full NavController exposed directly
+                                        // Wait, onBack and friendsClick are callbacks.
+                                        // I should add an onGuideClick callback? 
+                                        // The file signature is: ProfileScreen(sessionViewModel, onBack, onFriendsClick, onEventClick)
+                                        // I'd need to change the signature to do it properly.
+                                        
+                                        // Alternative: Show a Toast saying "Reinicia la app para ver el tutorial de nuevo"? 
+                                        // Or just launch intent?
+                                        
+                                        // Let's use a simpler approach for now to avoid signature refactor:
+                                        // Just reset the pref and show a message to restart app, OR
+                                        // use a direct intent to MainActivity (which restarts navigation).
+                                        
+                                        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                        context.startActivity(intent)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("📖 Ver Tutorial de Bienvenida")
+                                }
+
+
                             }
                         }
                     }
@@ -696,14 +727,74 @@ fun ProfileScreen(
                 // LOGOUT BUTTON (at the bottom)
                 Spacer(Modifier.height(24.dp))
                 
-                OutlinedButton(
+                com.eventos.banana.ui.components.BananaOutlinedButton(
                     onClick = { sessionViewModel.logout() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    text = "🚪 Cerrar Sesión",
+                    contentColor = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Spacer(Modifier.height(16.dp))
+                
+                // DELETE ACCOUNT
+                var showDeleteConfirm by remember { mutableStateOf(false) }
+                val deleteStatus by sessionViewModel.deleteAccountStatus.collectAsState()
+
+                // Handle Delete Status Changes
+                LaunchedEffect(deleteStatus) {
+                    if (deleteStatus == "SUCCESS") {
+                        // Logout is already triggered by ViewModel
+                    } else if (deleteStatus != null && deleteStatus != "LOADING") {
+                        snackbarHostState.showSnackbar(deleteStatus!!)
+                        sessionViewModel.resetDeleteAccountStatus()
+                        showDeleteConfirm = false 
+                    }
+                }
+                
+                if (showDeleteConfirm) {
+                    if (deleteStatus == "LOADING") {
+                         AlertDialog(
+                            onDismissRequest = { },
+                            title = { Text("Eliminando...") },
+                            text = { 
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                    CircularProgressIndicator()
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Borrando tu rastro de la matrix...")
+                                }
+                            },
+                            confirmButton = { }
+                        )
+                    } else {
+                        AlertDialog(
+                            onDismissRequest = { showDeleteConfirm = false },
+                            title = { Text("¿Eliminar cuenta?") },
+                            text = { Text("Esta acción es irreversible. Perderás todo tu historial y rango.") },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = { 
+                                        sessionViewModel.deleteAccount() 
+                                        // Dialog stays open until loading starts or error returns
+                                    },
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Eliminar definitivamente")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showDeleteConfirm = false }) {
+                                    Text("Cancelar")
+                                }
+                            }
+                        )
+                    }
+                }
+                
+                TextButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("🚪 Cerrar Sesión")
+                    Text("🗑️ Eliminar mi cuenta", color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
                 }
                 
                 Spacer(Modifier.height(24.dp))

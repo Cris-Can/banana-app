@@ -24,10 +24,12 @@ fun EventDetailRoute(
     onRateUser: (String) -> Unit,
     onUserClick: (String) -> Unit,
     onRateParticipants: (com.eventos.banana.domain.model.Event) -> Unit,
-    onConfirmEncounters: (com.eventos.banana.domain.model.Event) -> Unit,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
-    hasAttended: Boolean
+    hasAttended: Boolean,
+    checkInState: com.eventos.banana.viewmodel.CheckInState,
+    onCheckInClick: () -> Unit,
+    onResetCheckInState: () -> Unit
 ) {
     when (uiState) {
 
@@ -59,11 +61,13 @@ fun EventDetailRoute(
                 onRateUser = onRateUser,
                 onUserClick = onUserClick,
                 onRateParticipants = onRateParticipants,
-                onConfirmEncounters = onConfirmEncounters,
                 eventState = uiState, // Pass full state
                 isSaved = isSaved,
                 onToggleSave = onToggleSave,
-                hasAttended = hasAttended
+                hasAttended = hasAttended,
+                checkInState = checkInState,
+                onCheckInClick = onCheckInClick,
+                onResetCheckInState = onResetCheckInState
             )
         }
     }

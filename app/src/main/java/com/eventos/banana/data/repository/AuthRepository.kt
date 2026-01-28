@@ -80,4 +80,13 @@ class AuthRepository(
     fun logout() {
         firebaseAuth.signOut()
     }
+    
+    suspend fun deleteAccount(): Result<Unit> {
+        return try {
+            firebaseAuth.currentUser?.delete()?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

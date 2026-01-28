@@ -175,6 +175,10 @@ class EventDetailViewModel(
     private val _hasAttended = MutableStateFlow(false)
     val hasAttended: StateFlow<Boolean> = _hasAttended
 
+    // 🆕 Check-in State for UI loading/error
+    private val _checkInState = MutableStateFlow<CheckInState>(CheckInState.Idle)
+    val checkInState: StateFlow<CheckInState> = _checkInState
+
     fun loadUserInteractionState(userId: String) {
         viewModelScope.launch {
             // Saved State
@@ -183,7 +187,7 @@ class EventDetailViewModel(
 
             // Attendance State
             val encounterRepo = com.eventos.banana.data.repository.EncounterRepository()
-            // We only check technical participation (GPS/NFC) here. 
+            // We only check technical participation (GPS) here. 
             // Creator status is checked in UI or combined later.
             _hasAttended.value = encounterRepo.hasAttended(eventId, userId, isCreator = false)
         }
@@ -196,6 +200,29 @@ class EventDetailViewModel(
             _isSaved.value = !current
         }
     }
+
+    fun performCheckIn(userId: String) {
+        viewModelScope.launch {
+            _checkInState.value = CheckInState.Loading
+            try {
+                val encounterRepo = com.eventos.banana.data.repository.EncounterRepository()
+                val result = encounterRepo.recordCheckIn(eventId, userId)
+                
+                if (result.isSuccess) {
+                    _hasAttended.value = true
+                    _checkInState.value = CheckInState.Success
+                } else {
+                    _checkInState.value = CheckInState.Error(result.exceptionOrNull()?.message ?: "Error desconocido")
+                }
+            } catch (e: Exception) {
+                _checkInState.value = CheckInState.Error(e.message ?: "Error inesperado")
+            }
+        }
+    }
+    
+    fun resetCheckInState() {
+        _checkInState.value = CheckInState.Idle
+    }
 }
 
 sealed interface JoinSubmissionState {
@@ -203,4 +230,11 @@ sealed interface JoinSubmissionState {
     object Loading : JoinSubmissionState
     object Success : JoinSubmissionState
     data class Error(val message: String) : JoinSubmissionState
+}
+
+sealed interface CheckInState {
+    object Idle : CheckInState
+    object Loading : CheckInState
+    object Success : CheckInState
+    data class Error(val message: String) : CheckInState
 }

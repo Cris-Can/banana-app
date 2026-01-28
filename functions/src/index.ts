@@ -1,4 +1,6 @@
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+
+
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
@@ -171,3 +173,63 @@ export const onEventUpdatedNotifyModeration = onDocumentCreated(
   }
 );
 
+
+/**
+ * =====================================================
+ * 🔔 A31 — RATING AGGREGATION (AUTO-UPDATE)
+ * Trigger: When a rating is created
+ * Action: Recalculate average score for the target user
+ * =====================================================
+ */
+export const onRatingCreated = onDocumentCreated(
+  "ratings/{ratingId}",
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const ratingData = snapshot.data();
+    const toUserId = ratingData.toUserId;
+    const score = ratingData.score;
+
+    if (!toUserId || score === undefined) {
+      console.log("Invalid rating data:", event.params.ratingId);
+      return;
+    }
+
+    console.log(`New rating for user ${toUserId}. Recalculating...`);
+
+    const db = admin.firestore();
+
+    try {
+      // 1. Fetch ALL ratings for this user (ensure accuracy)
+      // (Alternative: Increment logic, but full recalc is safer)
+      const ratingsSnapshot = await db
+        .collection("ratings")
+        .where("toUserId", "==", toUserId)
+        .get();
+
+      let sum = 0;
+      let count = 0;
+
+      ratingsSnapshot.forEach((doc) => {
+        const s = doc.data().score;
+        if (typeof s === "number") {
+          sum += s;
+          count++;
+        }
+      });
+
+      console.log(`Stats for ${toUserId}: Sum=${sum}, Count=${count}`);
+
+      // 2. Update User Profile
+      await db.collection("users").doc(toUserId).update({
+        ratingSum: sum,
+        ratingCount: count,
+      });
+
+      console.log(`Profile updated for ${toUserId}`);
+    } catch (error) {
+      console.error("Error updating user rating stats:", error);
+    }
+  }
+);

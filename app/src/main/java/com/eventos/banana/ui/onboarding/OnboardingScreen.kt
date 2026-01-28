@@ -34,18 +34,18 @@ fun OnboardingScreen(
     // 3 Slides: Events, Security, Ratings
     val pages = listOf(
         OnboardingPage(
-            title = "Descubre Eventos Exclusivos",
-            description = "Encuentra y únete a los mejores eventos cerca de ti. Desde fiestas hasta reuniones sociales.",
+            title = "Eventos Exclusivos",
+            description = "Descubre panoramas únicos cerca de ti o crea los tuyos en segundos. ¡Sin complicaciones!",
             icon = Icons.Filled.DateRange
         ),
         OnboardingPage(
-            title = "Comunidad Segura y Real",
-            description = "Interactúa solo con personas verificadas. Tu seguridad es nuestra prioridad.",
+            title = "Comunidad Real",
+            description = "Solo perfiles verdaderos. Tu seguridad es nuestra prioridad para que disfrutes con tranquilidad.",
             icon = Icons.Filled.CheckCircle
         ),
         OnboardingPage(
-            title = "Gana Reputación",
-            description = "Participa y recibe calificaciones. Construye tu perfil de confianza en la comunidad.",
+            title = "Tu Reputación Vale",
+            description = "Sé un buen asistente, recibe calificaciones y destaca como un 'Top Banana' en tu ciudad.",
             icon = Icons.Filled.Star
         )
     )
@@ -123,7 +123,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Button
-            Button(
+            com.eventos.banana.ui.components.BananaButton(
                 onClick = {
                     if (pagerState.currentPage < pages.size - 1) {
                         scope.launch {
@@ -133,12 +133,8 @@ fun OnboardingScreen(
                         onFinish(dontShowAgain)
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Text(
-                    text = if (pagerState.currentPage == pages.size - 1) "Comenzar" else "Siguiente"
-                )
-            }
+                text = if (pagerState.currentPage == pages.size - 1) "Comenzar" else "Siguiente"
+            )
             
             Spacer(modifier = Modifier.height(16.dp))
         }

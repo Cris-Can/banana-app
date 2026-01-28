@@ -3,6 +3,10 @@ package com.eventos.banana.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eventos.banana.data.repository.UserRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -233,32 +237,142 @@ class ProfileViewModel(
     private val _savedEvents = MutableStateFlow<List<com.eventos.banana.domain.model.Event>>(emptyList())
     val savedEvents: StateFlow<List<com.eventos.banana.domain.model.Event>> = _savedEvents
 
+    private val _debugStatus = MutableStateFlow<String>("Esperando carga...")
+    val debugStatus: StateFlow<String> = _debugStatus
+
     fun loadUserEvents(uid: String, savedEventIds: List<String>) {
         viewModelScope.launch {
+            // Obtener email para debug
+            val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            val authEmail = currentUser?.email ?: "No Auth Email"
+            var firestoreProfile = com.eventos.banana.data.repository.UserRepository().getUserProfile(uid)
+            val firestoreEmail = firestoreProfile?.email ?: "No FS Profile"
+            
+            // 🔧 AUTO-REPAIR MECHANISM
+            if (firestoreProfile == null && currentUser != null) {
+                 _debugStatus.value = "⚠️ Perfil corrupto. Intentando autoreparación..."
+                 
+                 // 📊 ANALYTICS: Log Attempt (using Crashlytics for stability monitoring)
+                 com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().log("Auto-Repair: Attempting to repair missing profile for UID: $uid")
+                 
+                 try {
+                     val repairedProfile = com.eventos.banana.domain.model.UserProfile(
+                        uid = uid,
+                        email = authEmail,
+                        nickname = authEmail.substringBefore('@'),
+                        createdAt = System.currentTimeMillis() // Reset creation date
+                     )
+                     com.eventos.banana.data.repository.UserRepository().createUserProfile(repairedProfile)
+                     _debugStatus.value = "✅ Perfil reparado. Recargando..."
+                     
+                     // 📊 ANALYTICS: Log Success
+                     com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().log("Auto-Repair: SUCCESS for UID: $uid")
+                     com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().setCustomKey("repaired_profile", true)
+
+                     // Reload local variable
+                     firestoreProfile = repairedProfile
+                 } catch (e: Exception) {
+                     _debugStatus.value = "❌ Error reparando: ${e.message}"
+                     
+                     // 📊 ANALYTICS: Log Failure
+                     com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().recordException(
+                        Exception("Auto-Repair Failed for $uid: ${e.message}")
+                     )
+                 }
+            } else {
+                 _debugStatus.value = "Cargando... \nUID: $uid\nAuth: $authEmail\nFS: $firestoreEmail"
+            }
+
             try {
-                val eventRepo = com.eventos.banana.data.repository.EventRepository()
-                val result = eventRepo.getEvents()
-                if (result.isSuccess) {
-                    val allEvents = result.getOrNull() ?: emptyList()
-                    val now = System.currentTimeMillis()
-                    val oneWeekMillis = 7 * 24 * 60 * 60 * 1000L
-
-                    // HISTORY: Past events (attended/created) within 1 week retention
-                    _historyEvents.value = allEvents.filter { event ->
-                        val isAttended = event.creatorId == uid || event.approvedParticipants.contains(uid)
-                        val isPast = event.endAt < now || event.status == com.eventos.banana.domain.model.EventStatus.CLOSED || event.status == com.eventos.banana.domain.model.EventStatus.CANCELLED
-                        val isRecent = (event.endAt + oneWeekMillis) > now
-                        
-                        isAttended && isPast && isRecent
-                    }
-
-                    // SAVED: Events in user's saved list (No time limit)
-                    _savedEvents.value = allEvents.filter { event ->
-                        savedEventIds.contains(event.id)
+                // OPTIMIZATION: Force SERVER to bypass any stuck local cache
+                val source = com.google.firebase.firestore.Source.SERVER
+                
+                // PARALLEL FETCH
+                val createdEventsJob = async {
+                    try {
+                        val res = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("events")
+                            .whereEqualTo("creatorId", uid)
+                            .get(source).await()
+                        res.toObjects(com.eventos.banana.domain.model.Event::class.java)
+                    } catch (e: Exception) { 
+                        _debugStatus.value = "Error Created: ${e.message}"
+                        emptyList<com.eventos.banana.domain.model.Event>() 
                     }
                 }
+                
+                val participatedEventsJob = async {
+                    try {
+                        val res = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("events")
+                            .whereArrayContains("approvedParticipants", uid)
+                            .get(source).await()
+                        res.toObjects(com.eventos.banana.domain.model.Event::class.java)
+                    } catch (e: Exception) { 
+                        _debugStatus.value = "Error Participated: ${e.message}"
+                        emptyList<com.eventos.banana.domain.model.Event>() 
+                    }
+                }
+
+                val savedEventsJob = async {
+                     if (savedEventIds.isNotEmpty()) {
+                        try {
+                            if (savedEventIds.size <= 30) {
+                                val chunks = savedEventIds.chunked(10)
+                                val results = mutableListOf<com.eventos.banana.domain.model.Event>()
+                                chunks.forEach { chunk ->
+                                     val snapshot = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        .collection("events")
+                                        .whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
+                                        .get(source).await()
+                                     results.addAll(snapshot.toObjects(com.eventos.banana.domain.model.Event::class.java))
+                                }
+                                results
+                            } else {
+                                emptyList<com.eventos.banana.domain.model.Event>() 
+                            }
+                        } catch (e: Exception) { 
+                            emptyList<com.eventos.banana.domain.model.Event>() 
+                        }
+                     } else {
+                         emptyList<com.eventos.banana.domain.model.Event>()
+                     }
+                }
+
+                val created: List<com.eventos.banana.domain.model.Event> = createdEventsJob.await()
+                val participated: List<com.eventos.banana.domain.model.Event> = participatedEventsJob.await()
+                
+                val saved: List<com.eventos.banana.domain.model.Event> = savedEventsJob.await()
+                
+                // Merge History (Created + Participated)
+                val allHistoryCandidates = (created + participated).distinctBy { it.id }
+                
+                val now = System.currentTimeMillis()
+                // val oneWeekMillis = 7 * 24 * 60 * 60 * 1000L
+                
+                // HISTORY FILTER: DISABLED RETENTION LIMIT (DEBUG)
+                val finalEvents = allHistoryCandidates.filter { event ->
+                    // Mostramos TODO lo pasado, sin límite de 7 días, para probar si aparecen
+                    val effectiveEndAt = if (event.endAt > 0) event.endAt else (event.startAt + 14400000L)
+                    val isPast = effectiveEndAt < now || event.status == com.eventos.banana.domain.model.EventStatus.CLOSED || event.status == com.eventos.banana.domain.model.EventStatus.CANCELLED
+                    
+                    isPast
+                }.sortedByDescending { it.endAt }
+
+                _historyEvents.value = finalEvents
+                
+                val warning = if (finalEvents.isEmpty() && firestoreEmail == "No FS Profile") 
+                    "\n⚠️ CUENTA RECREADA. Historial antiguo perdido (nuevo UID)." 
+                    else ""
+                
+                _debugStatus.value = "UID: $uid\nAuth: $authEmail\nFS: ${firestoreProfile?.email ?: "Recién Creado"}\nEvts: ${finalEvents.size}$warning"
+
+                // SAVED FILTER
+                _savedEvents.value = saved.sortedBy { it.startAt } // Upcoming first
+
             } catch (e: Exception) {
-                // Fail silently for history
+                _debugStatus.value = "Error Fatal: ${e.message}"
+                android.util.Log.e("ProfileViewModel", "Error loading user events", e)
             }
         }
     }

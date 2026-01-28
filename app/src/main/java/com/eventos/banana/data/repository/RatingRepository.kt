@@ -66,8 +66,9 @@ class RatingRepository(
                 .set(rating.toMap())
                 .await()
 
-            // Actualizar el score del usuario que recibió la puntuación
-            updateUserScore(toUserId)
+            // La actualización del score ahora se maneja automáticamente via Cloud Functions (Backend)
+            // updateUserScore(toUserId) -> REMOVIDO para evitar error de permisos en cliente
+
 
             Log.d(TAG, "Rating submitted: $fromUserId -> $toUserId = $score")
             Result.success(ratingId)

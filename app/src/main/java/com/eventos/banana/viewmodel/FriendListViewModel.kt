@@ -42,11 +42,11 @@ class FriendListViewModel(
 
                 // 2. Fetch Friends
                 val friendIds = currentUser.friends
-                val friendsList = friendIds.mapNotNull { userRepository.getUserProfile(it) }
+                val friendsList = userRepository.getUsers(friendIds)
 
                 // 3. Fetch Requests (Received)
                 val requestIds = currentUser.friendRequestsReceived
-                val requestsList = requestIds.mapNotNull { userRepository.getUserProfile(it) }
+                val requestsList = userRepository.getUsers(requestIds)
 
                 // 4. Fetch Suggestions (Same Region, Exclude Friends/Requests)
                 val region = currentUser.region ?: ""
@@ -55,7 +55,8 @@ class FriendListViewModel(
                         .filter { user ->
                             user.uid !in friendIds && 
                             user.uid !in requestIds &&
-                            user.uid !in currentUser.friendRequestsSent // Don't suggest if already requested
+                            user.uid !in currentUser.friendRequestsSent && // Don't suggest if already requested
+                            user.uid != currentUserId // Double check exclusion
                         }
                 } else {
                     emptyList()
@@ -78,7 +79,7 @@ class FriendListViewModel(
         }
     }
 
-    fun searchUsers(query: String) {
+    fun searchUsers(query: String, currentUserId: String) {
         if (query.isBlank()) {
             // Restore full lists
             _uiState.value = _uiState.value.copy(
@@ -90,18 +91,34 @@ class FriendListViewModel(
             return
         }
 
-        // Local search filter
+        // 1. Local search (Friends/Requests)
         val filteredFriends = allFriends.filter { it.nickname.contains(query, ignoreCase = true) }
         val filteredRequests = allRequests.filter { it.nickname.contains(query, ignoreCase = true) }
-        val filteredSuggestions = allSuggestions.filter { it.nickname.contains(query, ignoreCase = true) }
         
-        // TODO: Could also implement global search here if needed
-        
-        _uiState.value = _uiState.value.copy(
-            friends = filteredFriends,
-            requests = filteredRequests,
-            suggestions = filteredSuggestions
-        )
+        // 2. Global Search (Async)
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+                
+                val globalResults = userRepository.searchUsers(query)
+                
+                // Filter out self and existing friends from search results to avoid duplicates
+                val finalSearchResults = globalResults.filter { user ->
+                    user.uid != currentUserId &&
+                    allFriends.none { it.uid == user.uid } &&
+                    allRequests.none { it.uid == user.uid }
+                }
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    friends = filteredFriends,
+                    requests = filteredRequests,
+                    searchResults = finalSearchResults
+                )
+            } catch (e: Exception) {
+                 _uiState.value = _uiState.value.copy(isLoading = false)
+            }
+        }
     }
 
     fun acceptRequest(currentUserId: String, requesterUid: String) {

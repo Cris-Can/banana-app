@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,9 +45,10 @@ fun SettingsScreen(
     ) { padding ->
         Column(
             modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .fillMaxSize(),
+                .padding(padding) 
+                .fillMaxSize()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             Text(
@@ -90,39 +92,7 @@ fun SettingsScreen(
                 }
             )
 
-            Spacer(Modifier.height(32.dp))
-            HorizontalDivider()
-            Text("Zona Admin (Debug)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-            
-            val scope = rememberCoroutineScope()
-            var isRecalculating by remember { mutableStateOf(false) }
-            val userRepo = remember { com.eventos.banana.data.repository.UserRepository() }
-            
-            OutlinedButton(
-                onClick = {
-                    isRecalculating = true
-                    scope.launch {
-                        val result = userRepo.recalculateAllUserStats()
-                        if (result.isSuccess) {
-                            android.widget.Toast.makeText(context, result.getOrNull(), android.widget.Toast.LENGTH_LONG).show()
-                        } else {
-                            android.widget.Toast.makeText(context, "Error: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
-                        }
-                        isRecalculating = false
-                    }
-                },
-                enabled = !isRecalculating,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-            ) {
-                if (isRecalculating) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Recalculando...")
-                } else {
-                    Text("Recalcular Historial (Fix)")
-                }
-            }
+
         }
     }
 }

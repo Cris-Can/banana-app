@@ -347,6 +347,41 @@ class SessionViewModel(
         _sessionState.value = SessionState.NOT_AUTHENTICATED
     }
 
+    // State for Delete Account UI Feedback
+    private val _deleteAccountStatus = MutableStateFlow<String?>(null) // null = idle, "LOADING", "SUCCESS", or error message
+    val deleteAccountStatus: StateFlow<String?> = _deleteAccountStatus
+
+    fun resetDeleteAccountStatus() {
+        _deleteAccountStatus.value = null
+    }
+
+    fun deleteAccount() {
+        viewModelScope.launch {
+            _deleteAccountStatus.value = "LOADING"
+            try {
+                // First delete auth account
+                val result = authRepository.deleteAccount()
+                if (result.isSuccess) {
+                    _deleteAccountStatus.value = "SUCCESS"
+                    // Then cleanup local session
+                    logout()
+                } else {
+                    val error = result.exceptionOrNull()?.message ?: "Error desconocido"
+                    android.util.Log.e("SessionViewModel", "Error deleting account: $error")
+                    
+                    if (error.contains("recent-login", ignoreCase = true) || error.contains("requires-recent-login", ignoreCase = true)) {
+                        _deleteAccountStatus.value = "⚠️ Por seguridad, debes cerrar sesión y volver a entrar para eliminar tu cuenta."
+                    } else {
+                        _deleteAccountStatus.value = "❌ Error: $error"
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("SessionViewModel", "Error deleting account exception", e)
+                _deleteAccountStatus.value = "❌ Error crítico: ${e.message}"
+            }
+        }
+    }
+
 
     private fun observeNotifications() {
         val uid = authRepository.currentUid() ?: return

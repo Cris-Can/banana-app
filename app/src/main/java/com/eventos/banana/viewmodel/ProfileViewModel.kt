@@ -9,6 +9,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 sealed class ProfileUiState {
@@ -113,12 +114,15 @@ class ProfileViewModel(
     fun updateLocationFromDevice(
         uid: String,
         region: String,
-        commune: String
+        commune: String,
+        lat: Double,
+        lng: Double
     ) {
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
             try {
-                userRepository.updateLocation(uid, region, commune)
+                val geohash = com.eventos.banana.util.GeohashUtils.encode(lat, lng, 9)
+                userRepository.updateLocation(uid, region, commune, lat, lng, geohash)
                 _uiState.value = ProfileUiState.Success
             } catch (e: Exception) {
                 _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
@@ -134,7 +138,39 @@ class ProfileViewModel(
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
             try {
+                // 1. Calculate Auto-Subscriptions based on Interests
+                // Logic: If user selects "Gym" (subcategory of DEPORTES), auto-subscribe to "events_DEPORTES"
+                val allEventTypes = com.eventos.banana.domain.model.EventType.values()
+                val detectedCategories = mutableSetOf<String>()
+                
+                // Get current profile to merge, not overwrite existing manually enabled subscriptions if possible
+                // For MVP, we'll calculate fresh from interests + existing
+                val currentProfile = userRepository.getUserProfile(uid)
+                val currentSubscriptions = currentProfile?.subscribedCategories?.toMutableSet() ?: mutableSetOf()
+                
+                allEventTypes.forEach { type ->
+                    // Check if ANY of the user's interests matches a subcategory of this type
+                    // Case-insensitive check recommended
+                    val matches = type.subcategories.any { sub -> 
+                        interests.any { it.equals(sub, ignoreCase = true) }
+                    }
+                    
+                    if (matches) {
+                         detectedCategories.add("events_${type.name}")
+                    }
+                }
+                
+                // Merge: Add detected ones to existing
+                currentSubscriptions.addAll(detectedCategories)
+                
+                // 2. Update Profile (Social Info)
                 userRepository.updateSocialProfile(uid, aboutMe, interests)
+                
+                // 3. Update Subscriptions (If changed)
+                if (currentSubscriptions.isNotEmpty()) {
+                    userRepository.updateSubscribedCategories(uid, currentSubscriptions.toList())
+                }
+                
                 _uiState.value = ProfileUiState.Success
             } catch (e: Exception) {
                 _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
@@ -156,20 +192,20 @@ class ProfileViewModel(
         }
     }
 
-    fun uploadPhoto(uid: String, imageBytes: ByteArray?, isProfilePicture: Boolean = false) {
+    fun uploadPhoto(uid: String, imageBytes: ByteArray?, isProfilePicture: Boolean = false, isCoverPhoto: Boolean = false) {
         if (imageBytes == null) return
         
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
             try {
-                if (!isProfilePicture) {
+                if (!isProfilePicture && !isCoverPhoto) {
                     val profile = userRepository.getUserProfile(uid)
                     if (profile != null && profile.photos.size >= 6) {
                         _uiState.value = ProfileUiState.Error("Límite de 6 fotos alcanzado (máx. 6)")
                         return@launch
                     }
                 }
-                userRepository.uploadProfilePhoto(uid, imageBytes, isProfilePicture)
+                userRepository.uploadProfilePhoto(uid, imageBytes, isProfilePicture, isCoverPhoto)
                 _uiState.value = ProfileUiState.Success
             } catch (e: Exception) {
                 _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
@@ -348,15 +384,19 @@ class ProfileViewModel(
                 val allHistoryCandidates = (created + participated).distinctBy { it.id }
                 
                 val now = System.currentTimeMillis()
-                // val oneWeekMillis = 7 * 24 * 60 * 60 * 1000L
+                val oneWeekMillis = 7 * 24 * 60 * 60 * 1000L
+                val oneWeekAgo = now - oneWeekMillis
                 
-                // HISTORY FILTER: DISABLED RETENTION LIMIT (DEBUG)
+                // HISTORY FILTER: Retention Limit (1 Week) unless Saved
                 val finalEvents = allHistoryCandidates.filter { event ->
-                    // Mostramos TODO lo pasado, sin límite de 7 días, para probar si aparecen
                     val effectiveEndAt = if (event.endAt > 0) event.endAt else (event.startAt + 14400000L)
                     val isPast = effectiveEndAt < now || event.status == com.eventos.banana.domain.model.EventStatus.CLOSED || event.status == com.eventos.banana.domain.model.EventStatus.CANCELLED
                     
-                    isPast
+                    val isRecent = effectiveEndAt > oneWeekAgo
+                    val isSaved = savedEventIds.contains(event.id)
+                    
+                    // Show if Past AND (Recent OR Saved)
+                    isPast && (isRecent || isSaved)
                 }.sortedByDescending { it.endAt }
 
                 _historyEvents.value = finalEvents
@@ -388,6 +428,19 @@ class ProfileViewModel(
         }
     }
 
+    fun recalculateStats(uid: String) {
+        viewModelScope.launch {
+            _uiState.value = ProfileUiState.Loading
+            try {
+                userRepository.recalculateUserStats(uid)
+                _uiState.value = ProfileUiState.Success
+            } catch (e: Exception) {
+                _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
+                android.util.Log.e("ProfileViewModel", "Recalculate stats failed", e)
+            }
+        }
+    }
+
     private fun getFriendlyErrorMessage(e: Throwable?): String {
         if (e == null) return "Error desconocido"
         val msg = e.message ?: ""
@@ -402,4 +455,65 @@ class ProfileViewModel(
             else -> "Error: ${msg.take(50)}..."
         }
     }
+
+    // 👁️ WHO VIEWED MY PROFILE (Round 48)
+    data class ProfileViewItem(
+        val user: com.eventos.banana.domain.model.UserProfile,
+        val timestamp: Long
+    )
+
+    private val _profileViews = MutableStateFlow<List<ProfileViewItem>>(emptyList())
+    val profileViews: StateFlow<List<ProfileViewItem>> = _profileViews
+
+    fun loadProfileViews(uid: String) {
+        viewModelScope.launch {
+            _uiState.value = ProfileUiState.Loading
+            try {
+                val rawViews = userRepository.getProfileViews(uid)
+                if (rawViews.isEmpty()) {
+                    _profileViews.value = emptyList()
+                    _uiState.value = ProfileUiState.Success
+                    return@launch
+                }
+
+                val userIds = rawViews.map { it.visitorUid }
+                val users = userRepository.getUsers(userIds)
+                
+                val items = rawViews.mapNotNull { view ->
+                    users.find { it.uid == view.visitorUid }?.let { user ->
+                        ProfileViewItem(user, view.timestamp)
+                    }
+                }
+                
+                _profileViews.value = items
+                _uiState.value = ProfileUiState.Success
+            } catch (e: Exception) {
+                _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
+            }
+        }
+    }
+
+    // =========================================================
+    // MIGRATION TOOL (A29)
+    // =========================================================
+    private val _migrationStatus = MutableStateFlow<String?>(null)
+    val migrationStatus: StateFlow<String?> = _migrationStatus.asStateFlow()
+
+    fun runMigration() {
+        viewModelScope.launch {
+            _migrationStatus.value = "⏳ Migrando eventos..."
+            val result = com.eventos.banana.data.repository.EventRepository().migrateEventsToGeohash()
+            
+            result.onSuccess { count ->
+                _migrationStatus.value = "✅ Éxito: $count eventos actualizados con Geohash."
+            }.onFailure { e ->
+                _migrationStatus.value = "❌ Error: ${e.message}"
+            }
+            
+            // Clear status after 5 seconds
+            kotlinx.coroutines.delay(5000)
+            _migrationStatus.value = null
+        }
+    }
 }
+

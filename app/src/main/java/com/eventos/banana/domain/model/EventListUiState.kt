@@ -6,7 +6,8 @@ sealed interface EventListUiState {
 
     data class Success(
         val events: List<Event>,
-        val creatorProfiles: Map<String, UserProfile> = emptyMap() // Changed from nicknames to full profiles
+        val creatorProfiles: Map<String, UserProfile> = emptyMap(),
+        val currentUserLocation: com.eventos.banana.domain.model.ExactLocation? = null
     ) : EventListUiState
 
     data class Error(

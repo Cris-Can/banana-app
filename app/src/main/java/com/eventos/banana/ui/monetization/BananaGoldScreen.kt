@@ -1,0 +1,180 @@
+package com.eventos.banana.ui.monetization
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.eventos.banana.ui.theme.BananaGold
+import com.eventos.banana.viewmodel.BillingViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BananaGoldScreen(
+    billingViewModel: BillingViewModel,
+    onDismiss: () -> Unit,
+    onNavigateToIcons: () -> Unit
+) {
+    val productDetails by billingViewModel.productDetails.collectAsState()
+    val goldProduct = productDetails["banana_plus_monthly"]
+    
+    // Fallback price if loading or offline
+    val priceText = goldProduct?.subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice ?: "$2.990 / mes"
+
+    Scaffold(
+        containerColor = Color.Black,
+        topBar = {
+            TopAppBar(
+                title = {},
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            
+            // 👑 ICON
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(BananaGold, Color(0xFFC5A000))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🍌", fontSize = 48.sp)
+            }
+            
+            Spacer(Modifier.height(24.dp))
+            
+            // TITLE
+            Text(
+                "Banana Gold",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = BananaGold
+                )
+            )
+            
+            Spacer(Modifier.height(8.dp))
+            
+            Text(
+                "La experiencia definitiva.",
+                style = MaterialTheme.typography.titleMedium.copy(color = Color.Gray)
+            )
+            
+            Spacer(Modifier.height(40.dp))
+            
+            // BENEFITS
+            BenefitItem("🚀", "Fast Pass (Prioridad)", "Tus solicitudes aparecen primero.")
+            Spacer(Modifier.height(16.dp))
+            BenefitItem("👀", "¿Quién vio mi perfil?", "Descubre quién te está stalkeando.")
+            Spacer(Modifier.height(16.dp))
+            BenefitItem(
+                "🎨", 
+                "Iconos Exclusivos", 
+                "Personaliza el icono de tu App.",
+                onClick = onNavigateToIcons
+            )
+            Spacer(Modifier.height(16.dp))
+            BenefitItem("💬", "Temas de Chat", "Fondos exclusivos para tus mensajes.")
+            
+            Spacer(Modifier.weight(1f))
+            
+            // PRICE
+            Text(
+                priceText,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            )
+            
+            Text(
+                "Cancela cuando quieras.",
+                style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
+            )
+            
+            Spacer(Modifier.height(24.dp))
+            
+            // CTA
+            val context = androidx.compose.ui.platform.LocalContext.current
+            Button(
+                onClick = { 
+                    val activity = context as? android.app.Activity
+                    if (activity != null) {
+                        billingViewModel.buyGold(activity)
+                    } else {
+                        android.util.Log.e("BananaGold", "Activity context not found")
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BananaGold,
+                    contentColor = Color.Black
+                ),
+                enabled = goldProduct != null 
+            ) {
+                Text(
+                    "OBTENER GOLD",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+            
+            if (goldProduct == null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Cargando precios de Google Play...",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BenefitItem(icon: String, title: String, subtitle: String, onClick: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(icon, fontSize = 24.sp)
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray))
+        }
+    }
+}

@@ -13,6 +13,10 @@ data class UserProfile(
     
     val region: String? = null,
     val commune: String? = null,
+    val latitude: Double? = null, // 🌍 Global Expansion
+    val longitude: Double? = null, // 🌍 Global Expansion
+    val geohash: String? = null, // 🌍 Geohashing (Round 52)
+    val searchRadiusKm: Int = 20, // 🌍 Radius Search (Default 20km)
     val notifyEventsByCommune: Boolean = false,
     val notifyEventWall: Boolean = true, // 🔔 Avisa nuevos mensajes en Muro
     val fcmToken: String? = null,
@@ -26,12 +30,15 @@ data class UserProfile(
     val ratingCount: Int = 0,
     
     // 💎 PREMIUM FLAG (Round 11)
-    val isPremium: Boolean = false, // Se obtiene de subscriptionType, pero cache para queries
+    @PropertyName("isGold") val isGoldStored: Boolean = false,
+    @PropertyName("premium") val isPremiumStored: Boolean = false,
+    @PropertyName("isFounder") val isFounder: Boolean = false, // 🚀 Early Adopter Badge
     
     // 🎨 SOCIAL (A20)
     val aboutMe: String = "",
     val interests: List<String> = emptyList(),
     val profilePictureUrl: String? = null, // Foto de perfil principal
+    val coverPhotoUrl: String? = null, // 🖼️ Foto de portada (Facebook style)
     val photos: List<String> = emptyList(), // URLs de fotos (galería)
 
     // 🤝 AMIGOS (A20)
@@ -39,14 +46,23 @@ data class UserProfile(
     val friendRequestsReceived: List<String> = emptyList(), // UIDs de solicitudes entrantes
     val friendRequestsSent: List<String> = emptyList(),     // UIDs de solicitudes enviadas
     
+    // 🛡️ TRUST & SAFETY (Round 49)
+    val blockedUsers: List<String> = emptyList(),     // UIDs de usuarios bloqueados
+    
     // 💾 SAVED EVENTS (A30)
     val savedEventIds: List<String> = emptyList(),
     
     // 💎 SUSCRIPCIÓN & LÍMITES (A28)
-    var subscriptionType: SubscriptionType = SubscriptionType.PREMIUM, // Default PREMIUM for early adopters
+    var subscriptionType: String = "FREE", // Changed to String for Firestore compatibility
+    val subscriptionExpiry: Long = 0, // 0 = Lifetime or Expired
+    
     var currentCycleStartDate: Long = System.currentTimeMillis(),
     var eventsCreatedInCycle: Int = 0,
     var joinRequestsInCycle: Int = 0,
+
+    // 📺 ADS MONETIZATION (Round 43)
+    val adEventsUnlocked: Int = 0, // Number of extra events unlocked this cycle
+    val adsWatchedProgress: Int = 0, // Progress towards next unlock (0, 1) - resets to 0 after unlock
     
     // 🔔 A29 NOTIFICATIONS (Round 35)
     val subscribedCategories: List<String> = emptyList(), // Topics: "events_DEPORTES", etc.
@@ -54,6 +70,7 @@ data class UserProfile(
     // 📊 ESTADÍSTICAS DE ASISTENCIA (Round 14)
     val eventsRequestedCount: Int = 0, // Eventos a los que pidió asistir
     val eventsAttendedCount: Int = 0,  // Eventos a los que asistió realmente (Check-in/NFC)
+    val eventsCreatedLifetime: Int = 0, // 🆕 Total eventos organizados (separado de ciclo)
 
     val createdAt: Long = System.currentTimeMillis()
 ) {
@@ -65,6 +82,13 @@ data class UserProfile(
             0.0
         }
     
+    // 💎 Helpers for Subscription (Computed, not stored)
+    val isGold: Boolean
+        get() = isGoldStored || subscriptionType == "GOLD" || subscriptionType == "PREMIUM" || isFounder // 🚀 Founder = Automatic Gold
+
+    val isPremium: Boolean
+        get() = isPremiumStored || subscriptionType == "PREMIUM" || subscriptionType == "GOLD" || isFounder // 🚀 Founder = Automatic Premium
+
     // Helper para detectar Asistente Perfecto (Punto 5 sugerido)
     fun isPerfectAttendee(): Boolean {
         // Tolerancia 0: debe asistir a todo lo que pide, y tener historial (>5)
@@ -94,8 +118,5 @@ data class UserProfile(
         }
     }
 }
+// Enum removed to simplify Firestore mapping
 
-enum class SubscriptionType {
-    FREE,
-    PREMIUM
-}

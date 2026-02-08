@@ -1,6 +1,5 @@
 package com.eventos.banana.data.repository
 
-import com.eventos.banana.domain.model.SubscriptionType
 import com.eventos.banana.domain.model.UserProfile
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -15,6 +14,13 @@ class SubscriptionRepository {
         const val FREE_LIMIT_CREATE_EVENT = 1
         const val FREE_LIMIT_JOIN_REQUEST = 3
     }
+
+    data class UserLimitStats(
+        val subscriptionType: String,
+        val eventsCreated: Int,
+        val adsUnlocked: Int,
+        val limit: Int
+    )
 
     /**
      * Checks if the user can create an event.
@@ -32,15 +38,17 @@ class SubscriptionRepository {
 
             val updatedUser = checkAndResetCycle(user)
 
-            if (updatedUser.subscriptionType == SubscriptionType.PREMIUM) {
-                android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (PREMIUM)")
+            if (updatedUser.subscriptionType == "PREMIUM" || updatedUser.subscriptionType == "GOLD" || updatedUser.isFounder) {
+                android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (PREMIUM/GOLD/FOUNDER)")
                 Result.success(true)
             } else {
-                if (updatedUser.eventsCreatedInCycle < FREE_LIMIT_CREATE_EVENT) {
-                    android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (${updatedUser.eventsCreatedInCycle} < $FREE_LIMIT_CREATE_EVENT)")
-                    Result.success(true) // 0 < 1 -> OK
+                val effectiveLimit = FREE_LIMIT_CREATE_EVENT + updatedUser.adEventsUnlocked
+                
+                if (updatedUser.eventsCreatedInCycle < effectiveLimit) {
+                    android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (${updatedUser.eventsCreatedInCycle} < $effectiveLimit)")
+                    Result.success(true)
                 } else {
-                    android.util.Log.e("SubscriptionRepo", ">> RESULT: BLOCKED (${updatedUser.eventsCreatedInCycle} >= $FREE_LIMIT_CREATE_EVENT)")
+                    android.util.Log.e("SubscriptionRepo", ">> RESULT: BLOCKED (${updatedUser.eventsCreatedInCycle} >= $effectiveLimit)")
                     Result.success(false)
                 }
             }
@@ -52,9 +60,9 @@ class SubscriptionRepository {
     
     // ... same for canJoinEvent ...
 
-    // --- Private Helpers ---
-
-    private suspend fun getUser(userId: String): UserProfile? {
+    // --- Private Helpers NO MORE ---
+    
+    suspend fun getUser(userId: String): UserProfile? {
         return try {
             // FORCE SERVER to avoid stale cache
             val snapshot = usersCollection.document(userId).get(com.google.firebase.firestore.Source.SERVER).await()
@@ -81,7 +89,7 @@ class SubscriptionRepository {
             val user = getUser(userId) ?: return Result.failure(Exception("User not found"))
             val updatedUser = checkAndResetCycle(user)
 
-            if (updatedUser.subscriptionType == SubscriptionType.PREMIUM) {
+            if (updatedUser.subscriptionType == "PREMIUM" || updatedUser.subscriptionType == "GOLD" || updatedUser.isFounder) {
                 Result.success(true)
             } else {
                 if (updatedUser.joinRequestsInCycle < FREE_LIMIT_JOIN_REQUEST) {
@@ -131,7 +139,9 @@ class SubscriptionRepository {
             val updates = mapOf(
                 "currentCycleStartDate" to now,
                 "eventsCreatedInCycle" to 0,
-                "joinRequestsInCycle" to 0
+                "joinRequestsInCycle" to 0,
+                "adEventsUnlocked" to 0,
+                "adsWatchedProgress" to 0
             )
             usersCollection.document(user.uid).update(updates).await()
             
@@ -144,22 +154,79 @@ class SubscriptionRepository {
         return user
     }
 
+    suspend fun getUserLimitStats(userId: String): UserLimitStats? {
+        return try {
+            val user = getUser(userId) ?: return null
+            val refreshed = checkAndResetCycle(user)
+            UserLimitStats(
+                subscriptionType = refreshed.subscriptionType,
+                eventsCreated = refreshed.eventsCreatedInCycle,
+                adsUnlocked = refreshed.adEventsUnlocked,
+                limit = FREE_LIMIT_CREATE_EVENT // The base limit, UI calculates effective
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun getDebugStats(userId: String): String {
         return try {
             val user = getUser(userId) ?: return "User Not Found"
             // Reset just in case to show real "effective" stats
             val refreshed = checkAndResetCycle(user) 
-            "Tipo: ${refreshed.subscriptionType}\n\nCreados: ${refreshed.eventsCreatedInCycle} / $FREE_LIMIT_CREATE_EVENT\n\nInicio Ciclo: ${java.util.Date(refreshed.currentCycleStartDate)}"
+            "Tipo: ${refreshed.subscriptionType}\n" +
+            "Creados: ${refreshed.eventsCreatedInCycle} / ${FREE_LIMIT_CREATE_EVENT + refreshed.adEventsUnlocked}\n" +
+            "Extra Ads: ${refreshed.adEventsUnlocked}\n" +
+            "Inicio Ciclo: ${java.util.Date(refreshed.currentCycleStartDate)}"
         } catch (e: Exception) {
             "Error stats: ${e.message}"
         }
     }
 
-    suspend fun updateSubscriptionType(userId: String, type: SubscriptionType) {
+    suspend fun updateSubscriptionType(userId: String, type: String) {
         try {
             usersCollection.document(userId).update("subscriptionType", type).await()
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    /**
+     * Records an ad watch.
+     * Logic: 2 Ads = 1 Unlock.
+     * @return Pair<EventsUnlocked, ProgressToNext>
+     */
+    suspend fun recordAdWatch(userId: String): Result<Pair<Int, Int>> {
+        return try {
+            val userRef = usersCollection.document(userId)
+            val result = firestore.runTransaction { tx ->
+                val snapshot = tx.get(userRef)
+                val currentProgress = snapshot.getLong("adsWatchedProgress")?.toInt() ?: 0
+                val currentUnlocked = snapshot.getLong("adEventsUnlocked")?.toInt() ?: 0
+                
+                // 🛑 MAX CAP: 1 Unlock per month
+                if (currentUnlocked >= 1) {
+                    return@runTransaction Pair(currentUnlocked, currentProgress) // No changing
+                }
+
+                var newProgress = currentProgress + 1
+                var newUnlocked = currentUnlocked
+                
+                if (newProgress >= 2) {
+                    newProgress = 0
+                    newUnlocked += 1
+                }
+                
+                tx.update(userRef, mapOf(
+                    "adsWatchedProgress" to newProgress,
+                    "adEventsUnlocked" to newUnlocked
+                ))
+                
+                Pair(newUnlocked, newProgress)
+            }.await()
+            Result.success(result)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

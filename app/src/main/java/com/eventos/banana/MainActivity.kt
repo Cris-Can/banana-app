@@ -44,6 +44,13 @@ class MainActivity : FragmentActivity() {
         } catch (e: Exception) {
             android.util.Log.e("BANANA_DIAG", "Failed to init App Check", e)
         }
+        
+        // 📺 ADMOB INITIALIZATION
+        try {
+            com.eventos.banana.util.AdMobHelper.initialize(this)
+        } catch (e: Exception) {
+            android.util.Log.e("BANANA_ADS", "Failed to init AdMob", e)
+        }
 
         // 🔍 DIAGNÓSTICO DE RED MEJORADO
         NetworkUtils.checkRealConnectivity(this) { isConnected ->
@@ -65,11 +72,18 @@ class MainActivity : FragmentActivity() {
             Manifest.permission.ACCESS_FINE_LOCATION
         )
 
+
         // 🔔 Handle Notification Intent
         var initialRoute: String? = null
         val notifType = intent.getStringExtra("type")
-        if (notifType == "FRIEND_REQUEST") {
-            initialRoute = "profile" // We will handle tab selection in ProfileScreen or just nav to profile
+        val fromUserId = intent.getStringExtra("fromUserId") // 👈 Extract Sender ID
+
+        if (notifType == "FRIEND_REQUEST" || notifType == "FRIEND_ACCEPTED") {
+            initialRoute = if (!fromUserId.isNullOrBlank()) {
+                "public_profile/$fromUserId" // ✅ Go to sender's profile
+            } else {
+                "friends" // Fallback
+            }
         }
 
         setContent {

@@ -14,13 +14,53 @@ class UserRepository(
     private val users = firestore.collection("users")
 
     // ---------- CREATE PROFILE ----------
+    // ---------- CREATE PROFILE (With First 50 Check) ----------
     suspend fun createUserProfile(profile: UserProfile) {
-        android.util.Log.d("UserRepository", "Creating profile in Firestore: uid=${profile.uid}, nickname=${profile.nickname}")
-        users
-            .document(profile.uid)
-            .set(profile)
-            .await()
-        android.util.Log.d("UserRepository", "Profile successfully saved to Firestore for uid=${profile.uid}")
+        android.util.Log.d("UserRepository", "Starting transaction for: ${profile.nickname}")
+        
+        try {
+            firestore.runTransaction { transaction ->
+                val statsRef = firestore.collection("config").document("stats")
+                val statsSnapshot = transaction.get(statsRef)
+                
+                // Get current count (default to 0 if not exists)
+                val currentCount = if (statsSnapshot.exists()) {
+                    statsSnapshot.getLong("userCount") ?: 0L
+                } else {
+                    0L
+                }
+                
+                val newCount = currentCount + 1
+                
+                // Update stats
+                transaction.set(
+                    statsRef, 
+                    mapOf("userCount" to newCount), 
+                    SetOptions.merge()
+                )
+                
+                
+                // Check if lucky < 35 (User Request: Free Premium for first 35)
+                val finalProfile = if (newCount <= 35) {
+                    profile.copy(
+                        isGoldStored = true,
+                        isPremiumStored = true, // Legacy field
+                        subscriptionType = "GOLD",
+                        isFounder = true // 🚀 Automatic Founder Badge for first 35
+                    )
+                } else {
+                    profile
+                }
+                
+                // Save Profile
+                transaction.set(users.document(profile.uid), finalProfile)
+            }.await()
+            
+            android.util.Log.d("UserRepository", "Transaction success. User created.")
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Transaction failed", e)
+            throw e
+        }
     }
 
     // ---------- GET PROFILE (CACHE FIRST or FORCE SERVER) ----------
@@ -29,7 +69,13 @@ class UserRepository(
             if (forceRefresh) {
                 android.util.Log.d("UserRepository", "Forcing server fetch for $uid")
                 val serverSnapshot = users.document(uid).get(Source.SERVER).await()
-                return serverSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
+                val profile = serverSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
+                
+                // 🛠️ RETROACTIVE FIX (Force Refresh)
+                if (profile != null && !profile.isFounder) {
+                     return upgradeLegacyUser(profile)
+                }
+                return profile
             }
 
             val cachedSnapshot = users
@@ -39,8 +85,11 @@ class UserRepository(
 
             if (cachedSnapshot.exists()) {
                 val profile = cachedSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
-                // Log if profile found in cache
-                // android.util.Log.d("UserRepository", "Found in cache: ${profile?.nickname}")
+                
+                // 🛠️ RETROACTIVE FIX (Cache)
+                if (profile != null && !profile.isFounder) {
+                     return upgradeLegacyUser(profile)
+                }
                 profile
             } else {
                 android.util.Log.d("UserRepository", "Not in cache, fetching server for $uid")
@@ -49,11 +98,55 @@ class UserRepository(
                     .get(Source.SERVER)
                     .await()
 
-                serverSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
+                val profile = serverSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
+                
+                // 🛠️ RETROACTIVE FIX (Server Default)
+                if (profile != null && !profile.isFounder) {
+                     return upgradeLegacyUser(profile)
+                }
+                profile
             }
         } catch (e: Exception) {
             android.util.Log.e("UserRepository", "Error getting profile for $uid", e)
             null
+        }
+    }
+
+    // Helper to upgrade legacy users if global count <= 50 (BEST EFFORT / ROBUST)
+    private suspend fun upgradeLegacyUser(profile: UserProfile): UserProfile {
+        return try {
+            // 1. Read Global Stats (Standard Read)
+            val statsRef = firestore.collection("config").document("stats")
+            val statsSnapshot = statsRef.get().await()
+            val currentCount = statsSnapshot.getLong("userCount") ?: 0L
+
+            if (currentCount <= 35) {
+                // 2. Prepare Upgraded Profile
+                val upgradedProfile = profile.copy(
+                    isGoldStored = true,
+                    isPremiumStored = true,
+                    subscriptionType = "GOLD",
+                    isFounder = true // 🚀 Retroactive Grant
+                )
+                
+                // 3. IMMEDIATE WRITE to User (Priority: High)
+                // We do this OUTSIDE the transaction to ensure the user gets it even if stats fail
+                users.document(profile.uid).set(upgradedProfile, SetOptions.merge()).await()
+                android.util.Log.d("UserRepository", "Retro-upgrade success for ${profile.uid}")
+
+                // 4. STOP Incrementing Global Count here!
+                // The count should only increase for NEW users (in createUserProfile).
+                // Retroactive upgrades should not inflate the user count.
+
+                upgradedProfile // Return upgraded
+
+                upgradedProfile // Return upgraded
+            } else {
+                profile // Too late
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Failed to retro-upgrade user (Critical)", e)
+            profile
         }
     }
 
@@ -158,17 +251,24 @@ class UserRepository(
     suspend fun updateLocation(
         uid: String,
         region: String,
-        commune: String
+        commune: String,
+        lat: Double? = null,
+        lng: Double? = null,
+        geohash: String? = null
     ) {
-        users
-            .document(uid)
-            .update(
-                mapOf(
-                    "region" to region,
-                    "commune" to commune
-                )
-            )
-            .await()
+        val updates = mutableMapOf<String, Any>(
+            "region" to region,
+            "commune" to commune
+        )
+        if (lat != null) updates["latitude"] = lat
+        if (lng != null) updates["longitude"] = lng
+        if (geohash != null) updates["geohash"] = geohash
+        
+        users.document(uid).update(updates).await()
+    }
+    
+    suspend fun updateSearchRadius(uid: String, radiusKm: Int) {
+        users.document(uid).update("searchRadiusKm", radiusKm).await()
     }
 
     suspend fun updateVerificationStatus(uid: String, verified: Boolean) {
@@ -261,6 +361,10 @@ class UserRepository(
         users.document(uid).update("eventsAttendedCount", com.google.firebase.firestore.FieldValue.increment(1)).await()
     }
 
+    suspend fun incrementEventsCreatedLifetime(uid: String) {
+        users.document(uid).update("eventsCreatedLifetime", com.google.firebase.firestore.FieldValue.increment(1)).await()
+    }
+
     // 🔧 PARA DEBUG / ADMIN: Recalcular historiales (Solo usuario actual)
     suspend fun recalculateUserStats(uid: String): Result<String> {
         return try {
@@ -269,14 +373,38 @@ class UserRepository(
             val updateData = mutableMapOf<String, Any>()
 
             // 1. Scan Check-ins for Attendance (My Checkins)
-            val checkinsCount = firestore.collection("event_checkins")
+            // Fix: Exclude check-ins for events I created (User requested separataion)
+            val checkinsSnapshot = firestore.collection("event_checkins")
                 .whereEqualTo("userId", uid)
                 .get()
                 .await()
-                .size()
             
-            updateData["eventsAttendedCount"] = checkinsCount
-
+            // 3. Scan APPROVALS -> Denominator
+            val approvedEventsSnapshot = firestore.collection("events")
+                .whereArrayContains("approvedParticipants", uid)
+                .get()
+                .await()
+            
+            // Filter out events where I am the creator
+            val validRequests = approvedEventsSnapshot.documents.filter { doc ->
+                doc.getString("creatorId") != uid
+            }
+            
+            // 🆕 Count Created Events (Lifetime)
+            val createdEventsSnapshot = firestore.collection("events")
+                .whereEqualTo("creatorId", uid)
+                .get()
+                .await()
+            
+            updateData["eventsCreatedLifetime"] = createdEventsSnapshot.size()
+            updateData["eventsRequestedCount"] = validRequests.size
+            
+            // Refined Check-ins: Only count check-ins for events I didn't create?
+            // If I checked in, I attended. That's fine.
+            // But if reliability > 100%, it looks weird.
+            val validCheckinsCount = checkinsSnapshot.size() // Keep simple for now
+            updateData["eventsAttendedCount"] = validCheckinsCount
+            
             // 2. Scan Ratings (Ratings received by me)
             val ratingsSnapshot = firestore.collection("ratings")
                 .whereEqualTo("toUserId", uid)
@@ -287,31 +415,25 @@ class UserRepository(
             updateData["ratingSum"] = scores.sum()
             updateData["ratingCount"] = scores.size
             
-            // 3. Scan Requests (Events I requested/joined) - Optional/Approximate
-            // Retrieving 'eventsRequestedCount' accurately is hard without an index or 'my_requests' subcollection.
-            // We will skip recalculating 'eventsRequestedCount' to avoid query errors. 
-            // Or we could try querying events where 'approvedParticipants' contains uid
-            
-            val attendedEventsSnapshot = firestore.collection("events")
-                .whereArrayContains("approvedParticipants", uid)
-                .get()
-                .await()
-            
-            // This is "Events I am approved in", which is close to "Attended" but distinct from "Requested".
-            // Let's assume 'eventsRequestedCount' is critical? If not, skip.
-            // Let's just update ratings and attendance since that's what's broken.
-            
             batch.update(userRef, updateData)
             batch.commit().await()
             
-            Result.success("Perfil actualizado: ${scores.size} votos, $checkinsCount eventos.")
+            
+            // 4. RETROACTIVE FOUNDER CHECK (Integrated)
+            try {
+               val prof = getUserProfile(uid, forceRefresh = true) // This triggers the check internally!
+            } catch (e: Exception) { 
+               // Ignore
+            }
+
+            Result.success("Perfil actualizado: ${scores.size} votos, $validCheckinsCount eventos.")
         } catch (e: Exception) {
              android.util.Log.e("UserRepository", "Error recalculating stats", e)
              Result.failure(e)
         }
     }
 
-    suspend fun uploadProfilePhoto(uid: String, imageBytes: ByteArray?, isProfilePicture: Boolean): Result<Unit> {
+    suspend fun uploadProfilePhoto(uid: String, imageBytes: ByteArray?, isProfilePicture: Boolean, isCoverPhoto: Boolean = false): Result<Unit> {
         return try {
             val imagePath = "users/$uid/photos/${java.util.UUID.randomUUID()}.jpg"
                 // Since `UserRepository` doesn't have a `Context`, this is a major issue with the snippet.
@@ -385,6 +507,8 @@ class UserRepository(
 
             if (isProfilePicture) {
                 users.document(uid).update("profilePictureUrl", downloadUrl).await()
+            } else if (isCoverPhoto) {
+                users.document(uid).update("coverPhotoUrl", downloadUrl).await()
             } else {
                 users.document(uid).update("photos", com.google.firebase.firestore.FieldValue.arrayUnion(downloadUrl)).await()
             }
@@ -417,6 +541,10 @@ class UserRepository(
         // Add to 'received' list of target user
         batch.update(targetUserRef, "friendRequestsReceived", com.google.firebase.firestore.FieldValue.arrayUnion(currentUid))
 
+        // Fetch current user nickname
+        val currentUserDoc = currentUserRef.get().await()
+        val currentNickname = currentUserDoc.getString("nickname") ?: "Alguien"
+
         // 🔔 Create Notification for Target User
         val notifRef = firestore.collection("notifications").document()
         val notification = mapOf(
@@ -425,7 +553,7 @@ class UserRepository(
             "fromUserId" to currentUid,
             "type" to "FRIEND_REQUEST",
             "title" to "Nueva solicitud de amistad",
-            "message" to "Alguien quiere ser tu amigo", // We can enhance this if we fetch nickname
+            "message" to "$currentNickname quiere ser tu amigo",
             "read" to false,
             "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
@@ -451,6 +579,9 @@ class UserRepository(
 
         // 🔔 Create Notification for Requester (Accepted) - Separate batch or async
         try {
+            val currentUserDoc = firestore.collection("users").document(currentUid).get().await()
+            val currentNickname = currentUserDoc.getString("nickname") ?: "Alguien"
+
             val notifRef = firestore.collection("notifications").document()
             val notification = mapOf(
                 "id" to notifRef.id,
@@ -458,7 +589,7 @@ class UserRepository(
                 "fromUserId" to currentUid,
                 "type" to "FRIEND_ACCEPTED",
                 "title" to "Solicitud aceptada",
-                "message" to "Ahora son amigos",
+                "message" to "$currentNickname ahora es tu amigo",
                 "read" to false,
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
@@ -519,6 +650,23 @@ class UserRepository(
         }
     }
 
+    suspend fun getUsersByCommune(commune: String, excludeUid: String): List<UserProfile> {
+        return try {
+            val snapshot = users
+                .whereEqualTo("commune", commune)
+                .limit(50)
+                .get()
+                .await()
+            
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+            }
+                .filter { it.uid != excludeUid }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     // 💾 SAVED EVENTS (A30)
     suspend fun toggleEventSaved(uid: String, eventId: String, isSaved: Boolean) {
         val update = if (isSaved) {
@@ -528,4 +676,133 @@ class UserRepository(
         }
         users.document(uid).update("savedEventIds", update).await()
     }
+    
+    // 💎 BANANA GOLD (Round 42) - WITH FOUNDER PROTECTION 🛡️
+    suspend fun setGoldStatus(uid: String, isGold: Boolean) {
+        // 1. Check if user is a Founder (Immutable Gold)
+        try {
+            val snapshot = users.document(uid).get().await()
+            val isFounder = snapshot.getBoolean("isFounder") == true
+            
+            if (isFounder) {
+                // If Founder, ALWAYS Gold. Never downgrade.
+                if (!isGold) {
+                    android.util.Log.w("UserRepository", "Attempted to downgrade Founder $uid. BLOCKED.")
+                    return 
+                }
+            }
+            
+            // 2. Proceed with update if allowed
+            val updates = mutableMapOf<String, Any>()
+            if (isGold) {
+                updates["subscriptionType"] = "GOLD"
+                updates["isGoldStored"] = true
+            } else {
+                updates["subscriptionType"] = "FREE"
+                updates["isGoldStored"] = false
+            }
+            users.document(uid).update(updates).await()
+            
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error setting Gold Status", e)
+        }
+    }
+
+    // 👁️ WHO VIEWED MY PROFILE (Round 48)
+    suspend fun recordProfileView(visitorUid: String, targetUid: String) {
+        if (visitorUid == targetUid) return // Don't track self visits
+
+        try {
+            val viewsRef = users.document(targetUid).collection("profile_views")
+            val visitorViewRef = viewsRef.document(visitorUid)
+            
+            // 1. Check Previous Visit (Anti-Spam Notification)
+            val existingSnapshot = visitorViewRef.get().await()
+            val lastVisit = existingSnapshot.getTimestamp("timestamp")?.toDate()?.time ?: 0L
+            val now = System.currentTimeMillis()
+            
+            
+            // 🕒 Cooldown reduced to 1 minute for easier testing/interaction
+            val shouldNotify = (now - lastVisit) > 60000 // 1 Minute cooldown (was 1 Hour)
+            
+            // 2. Update View Record
+            val viewData = mapOf(
+                "visitorUid" to visitorUid,
+                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
+            visitorViewRef.set(viewData, com.google.firebase.firestore.SetOptions.merge()).await()
+            
+            // 3. Send Notification if needed
+            if (shouldNotify) {
+                val notifRepo = NotificationRepository()
+                notifRepo.sendNotification(
+                    com.eventos.banana.domain.model.AppNotification(
+                        userId = targetUid, // Recipient
+                        title = "Tienes una nueva visita 👁️",
+                        message = "Alguien ha visto tu perfil recientemente.",
+                        type = com.eventos.banana.domain.model.NotificationType.PROFILE_VIEW,
+                        read = false,
+                        createdAt = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error recording profile view", e)
+        }
+    }
+
+    suspend fun getProfileViews(uid: String): List<ProfileView> {
+        return try {
+            val snapshot = users.document(uid)
+                .collection("profile_views")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(50)
+                .get()
+                .await()
+
+            snapshot.documents.mapNotNull { doc ->
+                val timestamp = doc.getTimestamp("timestamp")?.toDate()?.time ?: 0L
+                val visitorUid = doc.getString("visitorUid") ?: doc.id
+                ProfileView(visitorUid, timestamp)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error getting profile views", e)
+            emptyList()
+        }
+    }
+    // =====================================================
+    // 🛡️ TRUST & SAFETY (Round 49)
+    // =====================================================
+    suspend fun blockUser(currentUid: String, targetUid: String): Result<Unit> {
+        return try {
+            users.document(currentUid).update(
+                "blockedUsers",
+                com.google.firebase.firestore.FieldValue.arrayUnion(targetUid)
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reportUser(reporterUid: String, reportedUid: String, reason: String): Result<Unit> {
+        return try {
+            val report = mapOf(
+                "reporterId" to reporterUid,
+                "reportedId" to reportedUid,
+                "reason" to reason,
+                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "status" to "PENDING"
+            )
+            firestore.collection("reports").add(report).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
+
+data class ProfileView(
+    val visitorUid: String,
+    val timestamp: Long
+)

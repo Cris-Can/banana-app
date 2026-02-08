@@ -9,6 +9,7 @@ data class AppNotification(
     val title: String = "",
     val message: String = "",
     val eventId: String? = null,    // opcional
+    val fromUserId: String? = null, // 👈 sender id (for friend requests etc)
     val createdAt: Any? = null,
     val read: Boolean = false,
     val type: NotificationType = NotificationType.GENERIC

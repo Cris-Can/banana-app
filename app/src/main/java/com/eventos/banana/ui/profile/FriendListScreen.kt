@@ -16,8 +16,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import androidx.compose.ui.draw.clip
-import com.eventos.banana.viewmodel.PublicProfileViewModel
 import com.eventos.banana.viewmodel.FriendListViewModel
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,23 +151,58 @@ fun FriendListScreen(
             } else {
                 // 📋 TABS VIEW (Friends / Requests / Suggestions)
                 var selectedTab by remember { mutableIntStateOf(0) }
-                TabRow(selectedTabIndex = selectedTab) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Amigos") })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Solicitudes") })
-                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Sugerencias") })
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = MaterialTheme.colorScheme.primary // Gold/Primary
+                        )
+                    }
+                ) {
+                    Tab(
+                        selected = selectedTab == 0, 
+                        onClick = { selectedTab = 0 }, 
+                        text = { Text("Amigos", fontWeight = if(selectedTab == 0) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
+                        selectedContentColor = MaterialTheme.colorScheme.primary,
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Tab(
+                        selected = selectedTab == 1, 
+                        onClick = { selectedTab = 1 }, 
+                        text = { Text("Solicitudes", fontWeight = if(selectedTab == 1) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
+                        selectedContentColor = MaterialTheme.colorScheme.primary,
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Tab(
+                        selected = selectedTab == 2, 
+                        onClick = { selectedTab = 2 }, 
+                        text = { Text("Sugerencias", fontWeight = if(selectedTab == 2) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
+                        selectedContentColor = MaterialTheme.colorScheme.primary,
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
     
                 if (uiState.isLoading) {
                     Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
                 } else {
-                    LazyColumn(contentPadding = PaddingValues(16.dp)) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         when (selectedTab) {
                             0 -> { // Friends
                                 items(uiState.friends) { friend ->
                                     FriendItem(user = friend, onClick = { onUserClick(friend.uid) }, action = null)
                                 }
                                 if (uiState.friends.isEmpty()) {
-                                    item { Text("No tienes amigos confirmados aún.", modifier = Modifier.padding(16.dp)) }
+                                    item { 
+                                        Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) {
+                                            Text("No tienes amigos confirmados aún.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
                                 }
                             }
                             1 -> { // Requests
@@ -178,13 +214,17 @@ fun FriendListScreen(
                                             com.eventos.banana.ui.components.BananaButton(
                                                 onClick = { viewModel.acceptRequest(currentUserId, request.uid) },
                                                 text = "Aceptar",
-                                                modifier = Modifier.width(100.dp)
+                                                modifier = Modifier.height(36.dp)
                                             )
                                         }
                                     )
                                 }
                                  if (uiState.requests.isEmpty()) {
-                                    item { Text("No tienes solicitudes pendientes.", modifier = Modifier.padding(16.dp)) }
+                                    item { 
+                                        Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) {
+                                            Text("No tienes solicitudes pendientes.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
                                 }
                             }
                             2 -> { // Suggestions
@@ -196,16 +236,17 @@ fun FriendListScreen(
                                             com.eventos.banana.ui.components.BananaButton(
                                                 onClick = { viewModel.sendFriendRequest(currentUserId, suggestion.uid) },
                                                 text = "Agregar",
-                                                modifier = Modifier.width(100.dp)
+                                                modifier = Modifier.height(36.dp)
                                             )
                                         }
                                     )
                                 }
                                  if (uiState.suggestions.isEmpty()) {
                                     item {
-                                        Column(Modifier.padding(16.dp)) {
-                                            Text("No hay sugerencias en tu región por ahora.")
-                                            Text("Invita más gente a usar Banana!", style = MaterialTheme.typography.bodySmall)
+                                        Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("No hay sugerencias en tu región por ahora.", textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                            Spacer(Modifier.height(8.dp))
+                                            Text("Invita más gente a usar Banana!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -218,6 +259,7 @@ fun FriendListScreen(
     }
 }
 
+
 @Composable
 fun FriendItem(
     user: com.eventos.banana.domain.model.UserProfile,
@@ -225,8 +267,10 @@ fun FriendItem(
     action: (@Composable () -> Unit)?
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick() },
-        elevation = CardDefaults.cardElevation(2.dp)
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        elevation = CardDefaults.cardElevation(0.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha=0.5f))
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -235,15 +279,37 @@ fun FriendItem(
             AsyncImage(
                 model = user.profilePictureUrl,
                 contentDescription = null,
-                modifier = Modifier.size(50.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(user.nickname, style = MaterialTheme.typography.titleMedium)
-                // Text(user.email, style = MaterialTheme.typography.bodySmall) // Optional
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        user.nickname, 
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    )
+                    if (user.isGold) {
+                        Spacer(Modifier.width(4.dp))
+                        Text("👑", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                // Optional: Common friends count or location could go here
+                val commune = user.commune // Assuming it's String or String?
+                if (!commune.isNullOrEmpty()) {
+                    Text(
+                        commune, 
+                        style = MaterialTheme.typography.bodySmall, 
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             if (action != null) {
+                Spacer(Modifier.width(8.dp))
                 action()
             }
         }

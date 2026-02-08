@@ -7,8 +7,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import com.eventos.banana.domain.model.EventDetailUiState
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun EventDetailRoute(
     uiState: EventDetailUiState,
@@ -24,12 +28,15 @@ fun EventDetailRoute(
     onRateUser: (String) -> Unit,
     onUserClick: (String) -> Unit,
     onRateParticipants: (com.eventos.banana.domain.model.Event) -> Unit,
+    onBoostClick: () -> Unit,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
     hasAttended: Boolean,
     checkInState: com.eventos.banana.viewmodel.CheckInState,
     onCheckInClick: () -> Unit,
-    onResetCheckInState: () -> Unit
+    onResetCheckInState: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
 ) {
     when (uiState) {
 
@@ -101,13 +108,16 @@ fun EventDetailRoute(
                 onRateUser = onRateUser,
                 onUserClick = onUserClick,
                 onRateParticipants = onRateParticipants,
+                onBoostClick = onBoostClick,
                 eventState = uiState, // Pass full state
                 isSaved = isSaved,
                 onToggleSave = onToggleSave,
                 hasAttended = hasAttended,
                 checkInState = checkInState,
                 onCheckInClick = onCheckInClick,
-                onResetCheckInState = onResetCheckInState
+                onResetCheckInState = onResetCheckInState,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     }

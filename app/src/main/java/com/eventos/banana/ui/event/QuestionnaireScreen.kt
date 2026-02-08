@@ -14,7 +14,8 @@ fun QuestionnaireScreen(
     event: Event,
     submissionState: JoinSubmissionState,
     onSubmit: (Map<String, String>) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onUpgradeClick: () -> Unit = {} // New Param
 ) {
     val answers = remember { mutableStateMapOf<String, String>() }
     var error by remember { mutableStateOf<String?>(null) }
@@ -53,6 +54,21 @@ fun QuestionnaireScreen(
 
         if (submissionState is JoinSubmissionState.Error) {
             Text(submissionState.message, color = MaterialTheme.colorScheme.error)
+            
+            if (submissionState.message.contains("Premium", ignoreCase = true) || 
+                submissionState.message.contains("límite", ignoreCase = true)) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onUpgradeClick, // New Param
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFFFFD700),
+                        contentColor = androidx.compose.ui.graphics.Color.Black
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Obtener Premium 👑")
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

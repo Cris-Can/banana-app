@@ -33,8 +33,8 @@ class FriendListViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                // 1. Get Current User Profile to know friends/requests lists
-                val currentUser = userRepository.getUserProfile(currentUserId)
+                // 1. Get Current User Profile (Force Refresh to ensure latest friends list)
+                val currentUser = userRepository.getUserProfile(currentUserId, forceRefresh = true)
                 if (currentUser == null) {
                     _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Usuario no encontrado")
                     return@launch
@@ -49,17 +49,23 @@ class FriendListViewModel(
                 val requestsList = userRepository.getUsers(requestIds)
 
                 // 4. Fetch Suggestions (Same Region, Exclude Friends/Requests)
+                // 4. Fetch Suggestions (Same Commune preferred, otherwise Region)
                 val region = currentUser.region ?: ""
-                val suggestionsList = if (region.isNotBlank()) {
+                val commune = currentUser.commune ?: ""
+                
+                val suggestionsListRaw = if (commune.isNotBlank()) {
+                    userRepository.getUsersByCommune(commune, currentUserId)
+                } else if (region.isNotBlank()) {
                     userRepository.getUsersByRegion(region, currentUserId)
-                        .filter { user ->
-                            user.uid !in friendIds && 
-                            user.uid !in requestIds &&
-                            user.uid !in currentUser.friendRequestsSent && // Don't suggest if already requested
-                            user.uid != currentUserId // Double check exclusion
-                        }
                 } else {
                     emptyList()
+                }
+
+                val suggestionsList = suggestionsListRaw.filter { user ->
+                    user.uid !in friendIds && 
+                    user.uid !in requestIds &&
+                    user.uid !in currentUser.friendRequestsSent && // Don't suggest if already requested
+                    user.uid != currentUserId // Double check exclusion
                 }
 
                 allFriends = friendsList

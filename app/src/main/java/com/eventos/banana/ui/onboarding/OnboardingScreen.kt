@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,9 +30,9 @@ import androidx.compose.runtime.setValue
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(
-    onFinish: (Boolean) -> Unit
+    onFinish: () -> Unit
 ) {
-    // 3 Slides: Events, Security, Ratings
+    // 4 Slides: Events, Security, Ratings, Location
     val pages = listOf(
         OnboardingPage(
             title = "Eventos Exclusivos",
@@ -47,14 +48,28 @@ fun OnboardingScreen(
             title = "Tu Reputación Vale",
             description = "Sé un buen asistente, recibe calificaciones y destaca como un 'Top Banana' en tu ciudad.",
             icon = Icons.Filled.Star
+        ),
+        OnboardingPage(
+            title = "Tu Ciudad, Tu Muro",
+            description = "Banana usa tu ubicación para mostrarte lo que pasa en tu comuna. ¡Actívala para la mejor experiencia!",
+            icon = Icons.Filled.LocationOn
         )
     )
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
-    var dontShowAgain by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-    Scaffold { padding ->
+    // 🛡️ PERMISSIONS LAUNCHER
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        // Proceed regardless of result (app must handle denial)
+        onFinish()
+    }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -67,8 +82,11 @@ fun OnboardingScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = { onFinish(dontShowAgain) }) {
-                    Text("Omitir")
+                TextButton(onClick = { 
+                    // Skip onboarding without asking permissions (User opted out of intro)
+                    onFinish()
+                }) {
+                    Text("Omitir", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -92,7 +110,7 @@ fun OnboardingScreen(
                 horizontalArrangement = Arrangement.Center
             ) {
                 repeat(pages.size) { iteration ->
-                    val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                    val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     Box(
                         modifier = Modifier
                             .padding(4.dp)
@@ -103,24 +121,7 @@ fun OnboardingScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Checkbox "No volver a mostrar"
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Checkbox(
-                    checked = dontShowAgain,
-                    onCheckedChange = { dontShowAgain = it }
-                )
-                Text(
-                    text = "No volver a mostrar esta guía",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             // Button
             com.eventos.banana.ui.components.BananaButton(
@@ -130,10 +131,18 @@ fun OnboardingScreen(
                             pagerState.animateScrollToPage(pagerState.currentPage + 1)
                         }
                     } else {
-                        onFinish(dontShowAgain)
+                        // 🚀 ASK PERMISSIONS ON FINAL SLIDE
+                         val permissions = mutableListOf(
+                            android.Manifest.permission.ACCESS_FINE_LOCATION,
+                            android.Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        permissionLauncher.launch(permissions.toTypedArray())
                     }
                 },
-                text = if (pagerState.currentPage == pages.size - 1) "Comenzar" else "Siguiente"
+                text = if (pagerState.currentPage == pages.size - 1) "Habilitar y Comenzar" else "Siguiente"
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -159,7 +168,8 @@ fun OnboardingPageContent(page: OnboardingPage) {
             text = page.title,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(

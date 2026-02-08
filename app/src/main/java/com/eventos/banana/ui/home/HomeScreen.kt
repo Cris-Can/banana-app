@@ -3,6 +3,10 @@ package com.eventos.banana.ui.home
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex // ➕
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -13,11 +17,15 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Done
 
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,7 +43,7 @@ import com.eventos.banana.domain.model.EventStatus
 import com.eventos.banana.viewmodel.EventListViewModel
 import com.eventos.banana.viewmodel.SessionViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     sessionViewModel: SessionViewModel,
@@ -47,8 +55,11 @@ fun HomeScreen(
     onSearchClick: () -> Unit,
     onFriendsClick: () -> Unit,
     onMessagesClick: () -> Unit = {},
-    unreadMessages: Int = 0, // Added based on user request
-    eventListViewModel: EventListViewModel = viewModel()
+    unreadMessages: Int = 0,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    eventListViewModel: EventListViewModel = viewModel(),
+    onMapClick: () -> Unit
 ) {
     val context = LocalContext.current
     val locations = remember { ChileCommunesList.getRegionsWithCommunes() }
@@ -56,6 +67,25 @@ fun HomeScreen(
     // Preferences for Guide
     val sharedPreferences = remember { context.getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE) }
     var showGuide by remember { mutableStateOf(false) }
+
+    // 📍 GPS LOGIC
+    val fusedLocationClient = remember { com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context) }
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+    
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { permissions ->
+            hasLocationPermission = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                                    permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        }
+    )
 
     LaunchedEffect(Unit) {
         val seen = sharedPreferences.getBoolean("home_guide_seen", false)
@@ -69,6 +99,30 @@ fun HomeScreen(
         } catch (e: Exception) {
             android.util.Log.e("HomeScreen", "Failed to mark events", e)
         }
+        
+        // 📍 Request Permission
+        if (!hasLocationPermission) {
+            permissionLauncher.launch(arrayOf(
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            ))
+        }
+    }
+    
+    // 📍 GET LOCATION
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission) {
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    if (location != null) {
+                        eventListViewModel.updateLocation(location.latitude, location.longitude)
+                        android.util.Log.d("HomeScreen", "📍 Location updated: ${location.latitude}, ${location.longitude}")
+                    }
+                }
+            } catch (e: SecurityException) {
+                // Ignore
+            }
+        }
     }
     
     val uiState by eventListViewModel.uiState.collectAsState()
@@ -80,7 +134,10 @@ fun HomeScreen(
     var selectedRegion by remember { mutableStateOf<String?>(null) }
     var selectedCommune by remember { mutableStateOf<String?>(null) }
     
+    val snackbarHostState = remember { SnackbarHostState() }
+    
     // 🔔 A29 DEFAULT LOCATION FILTER
+    // Only set default if we haven't manually selected yet
     LaunchedEffect(profileUiState.profile) {
         if (selectedCommune == null && selectedRegion == null) {
             val userProfile = profileUiState.profile
@@ -91,7 +148,37 @@ fun HomeScreen(
         }
     }
     
+    // 📍 UX: Show Toast/Snackbar on Location Update (Background)
+    val locationMsg by sessionViewModel.locationUpdateMessage.collectAsState()
+    LaunchedEffect(locationMsg) {
+        locationMsg?.let { msg ->
+            snackbarHostState.showSnackbar(
+                message = msg,
+                duration = SnackbarDuration.Short,
+                withDismissAction = true
+            )
+            sessionViewModel.clearLocationMessage()
+        }
+    }
+    
+    // Sync Commune Filter with Server
+    LaunchedEffect(selectedCommune) {
+        eventListViewModel.updateCommune(selectedCommune)
+    }
+    
+    // If GPS is active and returning events, we might want to relax the stiff filters?
+    // For now, keep them. If backend returns nearby events, user must ensure filters match.
+    // OR: We could auto-clear filters if GPS is found? 
+    // Let's keep manual filters as "Overrides".
+    
     val effectiveCommune = if (selectedRegion == null) null else (selectedCommune ?: userCommune)
+    
+    // Map Toggle Logic
+    val onMapClick = {
+        // Navigate to World Map
+        // We could also pass current filters if needed? 
+        // For now, World Map is "Global/Nearby" focused.
+    }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -102,28 +189,47 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            // ... (Profile Image) ...
                             // Profile photo thumbnail
                             val photoUrl = profileUiState.profile?.profilePictureUrl
-                            if (!photoUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = photoUrl,
-                                    contentDescription = "Foto de perfil",
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(androidx.compose.foundation.shape.CircleShape)
-                                        .clickable { onProfileClick() },
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(androidx.compose.foundation.shape.CircleShape)
-                                        .background(MaterialTheme.colorScheme.tertiaryContainer)
-                                        .clickable { onProfileClick() },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("👤", style = MaterialTheme.typography.titleMedium)
+                            val isGold = profileUiState.profile?.isGold == true // 👑 Check Gold Status
+                            
+                            Box(contentAlignment = Alignment.TopStart) {
+                                if (!photoUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = photoUrl,
+                                        contentDescription = "Foto de perfil",
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .then(if (isGold) Modifier.border(2.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000))), androidx.compose.foundation.shape.CircleShape) else Modifier)
+                                            .clickable { onProfileClick() },
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .background(MaterialTheme.colorScheme.tertiaryContainer)
+                                            .then(if (isGold) Modifier.border(2.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000))), androidx.compose.foundation.shape.CircleShape) else Modifier)
+                                            .clickable { onProfileClick() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("👤", style = MaterialTheme.typography.titleMedium)
+                                    }
+                                }
+                                
+                                // 👑 Mini Crown
+                                if (isGold) {
+                                    Text(
+                                        "👑", 
+                                        style = MaterialTheme.typography.bodySmall, 
+                                        modifier = Modifier
+                                            .offset(x = (-4).dp, y = (-4).dp)
+                                            .graphicsLayer(rotationZ = -15f)
+                                            .zIndex(1f)
+                                    )
                                 }
                             }
                             // Greeting
@@ -133,9 +239,19 @@ fun HomeScreen(
                         }
                     },
                     actions = {
+                        // 🌍 MAP TOGGLE
+                        IconButton(onClick = onMapClick) {
+                            Icon(Icons.Filled.LocationOn, contentDescription = "Mapa")
+                        }
+
+                        // 🔍 SEARCH
+                        IconButton(onClick = onSearchClick) {
+                            Icon(Icons.Filled.Search, contentDescription = "Buscar")
+                        }
+
                         // 👥 FRIENDS
                         IconButton(onClick = onFriendsClick) {
-                            Icon(Icons.Default.Person, contentDescription = "Amigos")
+                            Icon(Icons.Filled.Person, contentDescription = "Amigos")
                         }
 
                         // Messages button
@@ -147,7 +263,7 @@ fun HomeScreen(
                                     }
                                 }
                             ) {
-                                Icon(Icons.Default.Email, "Mensajes")
+                                Icon(Icons.Filled.Email, "Mensajes")
                             }
                         }
                         // Notifications button
@@ -159,17 +275,18 @@ fun HomeScreen(
                                     }
                                 }
                             ) {
-                                Icon(Icons.Default.Notifications, null)
+                                Icon(Icons.Filled.Notifications, null)
                             }
                         }
                     }
                 )
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
                 FloatingActionButton(onClick = onCreateEventClick) { Text("+") }
             }
-        ) { padding ->
-            Column(Modifier.padding(padding).fillMaxSize()) {
+        ) { paddingValues ->
+            Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             
                 // ---------- FILTRO CATEGORÍAS (Horizontales) ----------
                 val selectedCategory by eventListViewModel.selectedCategory.collectAsState()
@@ -184,23 +301,36 @@ fun HomeScreen(
                             onClick = { eventListViewModel.selectCategory(null) },
                             label = { Text("Todo") },
                             colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface,
                                 selectedContainerColor = MaterialTheme.colorScheme.onSurface,
                                 selectedLabelColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = selectedCategory == null,
+                                borderColor = MaterialTheme.colorScheme.outlineVariant,
+                                selectedBorderColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                     }
                     
                     items(com.eventos.banana.domain.model.EventType.values().toList()) { type ->
+                        val isSelected = selectedCategory == type
                         FilterChip(
-                            selected = selectedCategory == type,
+                            selected = isSelected,
                             onClick = { eventListViewModel.selectCategory(type) },
                             label = { Text("${type.emoji} ${type.displayName}") },
-                            leadingIcon = if (selectedCategory == type) {
-                                { Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                            } else null,
                             colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface, // Clean unselected
                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                             border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = MaterialTheme.colorScheme.outlineVariant, // Subtle border
+                                selectedBorderColor = MaterialTheme.colorScheme.primary // No border or matching color
                             )
                         )
                     }
@@ -210,11 +340,48 @@ fun HomeScreen(
 
                 // ---------- FILTRO FECHA ----------
                 val selectedDateFilter by eventListViewModel.selectedDateFilter.collectAsState()
+                val searchRadiusKm by eventListViewModel.searchRadiusKm.collectAsState()
+                var showRadiusDialog by remember { mutableStateOf(false) }
+
+                if (showRadiusDialog) {
+                    com.eventos.banana.ui.components.RadiusSelectorDialog(
+                        currentRadiusKm = searchRadiusKm,
+                        onDismiss = { showRadiusDialog = false },
+                        onRadiusSelected = { 
+                            eventListViewModel.updateRadius(it)
+                            // Clear manual location filters to enable radius search
+                            selectedRegion = null
+                            selectedCommune = null
+                            eventListViewModel.updateRegion(null) // ➕ Clear VM Region
+                            eventListViewModel.updateCommune(null) // ➕ Clear VM Commune
+                        }
+                    )
+                }
                 
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // 📍 Radius Filter
+                    item {
+                        FilterChip(
+                            selected = true, // Always active if using GPS
+                            onClick = { showRadiusDialog = true },
+                            label = { Text("📍 ${searchRadiusKm} km") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.primary,
+                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = true,
+                                borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+
                     items(com.eventos.banana.domain.model.DateFilter.values().toList()) { filter ->
                         FilterChip(
                             selected = selectedDateFilter == filter,
@@ -259,6 +426,8 @@ fun HomeScreen(
                                 onClick = {
                                     selectedRegion = null
                                     selectedCommune = null
+                                    eventListViewModel.updateRegion(null) // ➕
+                                    eventListViewModel.updateCommune(null) // Ensure commune is also cleared
                                     regionExpanded = false
                                 }
                             )
@@ -268,6 +437,8 @@ fun HomeScreen(
                                     onClick = {
                                         selectedRegion = region
                                         selectedCommune = null
+                                        eventListViewModel.updateRegion(region) // ➕
+                                        eventListViewModel.updateCommune(null)
                                         regionExpanded = false
                                     }
                                 )
@@ -423,7 +594,12 @@ fun HomeScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth().weight(1f),
-                            contentPadding = PaddingValues(16.dp),
+                            contentPadding = PaddingValues(
+                                start = 16.dp, 
+                                end = 16.dp, 
+                                top = 16.dp, 
+                                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 80.dp // Space for FAB + Nav Bar
+                            ),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             items(events, key = { it.id }) { event ->
@@ -439,7 +615,10 @@ fun HomeScreen(
                                     creatorRating = creatorRating,
                                     creatorRatingCount = creatorRatingCount,
                                     onClick = { onEventClick(event.id) },
-                                    modifier = Modifier.animateItem()
+                                    userLocation = (uiState as? EventListUiState.Success)?.currentUserLocation,
+                                    modifier = Modifier.animateItem(),
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = animatedVisibilityScope
                                 )
                             }
 

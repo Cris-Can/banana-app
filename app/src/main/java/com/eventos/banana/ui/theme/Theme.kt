@@ -18,13 +18,13 @@ import androidx.compose.ui.platform.LocalContext
 // 1. BANANA (Alto Impacto - Dark Slate/Yellow)
 // 1. BANANA (Harmonic Dark)
 private val BananaScheme = darkColorScheme(
-    primary = BananaYellow,
+    primary = BananaGold, // Premium Gold
     onPrimary = Color.Black,
-    primaryContainer = Color(0xFF4A4000), // Darker yellow for containers
-    onPrimaryContainer = BananaYellowLight,
-    secondary = BananaOrange,
+    primaryContainer = BananaGoldDim, 
+    onPrimaryContainer = Color.White,
+    secondary = BananaGold, // Unified Gold
     onSecondary = Color.Black,
-    tertiary = BananaYellowLight, // Use light yellow for special accents
+    tertiary = BananaGold, // Minimalist Palette
     background = BananaDarkBackground,
     surface = BananaDarkSurface,
     onBackground = BananaWhite,
@@ -60,14 +60,23 @@ private val LightScheme = lightColorScheme(
 
 @Composable
 fun BananaTheme(
-    // 🎨 Theme Mode: "BANANA", "DARK", "LIGHT"
+    // 🎨 Theme Mode: "BANANA", "DARK", "LIGHT", "DYNAMIC"
     themeMode: String = "BANANA",
-    dynamicColor: Boolean = false, // Disabled for consistency
+    dynamicColor: Boolean = false, // Set to true to enable Material You
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when (themeMode) {
-        "LIGHT" -> LightScheme
-        "DARK" -> DarkScheme
+    val context = LocalContext.current
+    val systemDark = isSystemInDarkTheme()
+    
+    // Determine effective dynamic flag
+    val useDynamic = (dynamicColor || themeMode == "DYNAMIC") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    val colorScheme = when {
+        useDynamic -> {
+            if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        themeMode == "LIGHT" -> LightScheme
+        themeMode == "DARK" -> DarkScheme
         else -> BananaScheme // "BANANA" is default
     }
 

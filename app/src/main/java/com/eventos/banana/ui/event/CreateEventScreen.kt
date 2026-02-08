@@ -24,6 +24,14 @@ import androidx.activity.result.PickVisualMediaRequest
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import com.eventos.banana.ui.components.shimmerEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +39,8 @@ fun CreateEventScreen(
     creatorId: String,
     viewModel: com.eventos.banana.viewmodel.CreateEventViewModel,
     onSuccess: () -> Unit,
-    onSelectExactLocation: () -> Unit
+    onSelectExactLocation: () -> Unit,
+    onNavigateToPremium: () -> Unit
 ) {
     // ================= CONTEXTO =================
     val context = LocalContext.current
@@ -104,6 +113,10 @@ fun CreateEventScreen(
         )
 
         // ---------- FOTO DE PORTADA ----------
+        // ---------- FOTO DE PORTADA ----------
+        val stroke = remember { androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f) }
+        val borderColor = MaterialTheme.colorScheme.outlineVariant
+        
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -113,20 +126,78 @@ fun CreateEventScreen(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 },
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            border = if (formState.selectedImageUri == null) {
+                androidx.compose.foundation.BorderStroke(1.dp, borderColor) // Fallback if dash not easy, but let's try drawBehind instead
+            } else null
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (formState.selectedImageUri == null) {
+                            Modifier.drawBehind {
+                                drawRoundRect(
+                                    color = borderColor,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                        width = 4f,
+                                        pathEffect = stroke
+                                    ),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx())
+                                )
+                            }
+                        } else Modifier
+                    ),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
                 if (formState.selectedImageUri != null) {
-                    AsyncImage(
-                        model = formState.selectedImageUri,
-                        contentDescription = "Portada",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    Box(Modifier.fillMaxSize()) {
+                        coil.compose.SubcomposeAsyncImage(
+                            model = formState.selectedImageUri,
+                            contentDescription = "Portada",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .shimmerEffect()
+                                )
+                            }
+                        )
+                        
+                        // "Change" Badge
+                        Surface(
+                            modifier = Modifier
+                                .align(androidx.compose.ui.Alignment.BottomEnd)
+                                .padding(12.dp),
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                        ) {
+                            Text(
+                                "Cambiar foto",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
                 } else {
-                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                        Text("📷", style = MaterialTheme.typography.displayMedium)
-                        Text("Agregar Foto de Portada")
+                    Column(
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Filled.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            "Agregar Foto de Portada",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -356,22 +427,88 @@ fun CreateEventScreen(
             label = { Text("Dirección Exacta (Solo para aceptados) *") },
             placeholder = { Text("Ej: Calle Falsa 123, Depto 401") },
             modifier = Modifier.fillMaxWidth(),
-            supportingText = { Text("Esta información NO es pública.") }
+            supportingText = { Text("Esta información NO es pública.") },
+            singleLine = true
         )
 
-        // Exact Location Picker
-        OutlinedCard(
+        // Exact Location Picker (PREMIUM CARD)
+        Card(
             onClick = onSelectExactLocation,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Map Icon / Mini Map placeholder
+                Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                         Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (formState.exactLocation != null) "Ubicación exacta definida" else "Definir ubicación en mapa",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                         text = if (formState.exactLocation != null) "Tocá para editar" else "Obligatorio para el check-in",
+                         style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // icon removed from here, import moved to top
+
+// ... inside the file ...
+
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Ir",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        
+        Spacer(Modifier.height(8.dp))
+        
+        // 🌍 PUBLIC EVENT SWITCH
+        Text("Visibilidad", style = MaterialTheme.typography.titleMedium)
+        Card(
+             modifier = Modifier.fillMaxWidth(),
+             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (formState.exactLocation != null) "📍 Ubicación exacta seleccionada" else "🗺️ Seleccionar ubicación exacta en Mapa",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (formState.exactLocation != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Evento Público", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Cualquiera puede ver la ubicación y asistir sin aprobación.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = formState.isPublic,
+                    onCheckedChange = { viewModel.updateIsPublic(it) }
                 )
             }
         }
@@ -385,120 +522,194 @@ fun CreateEventScreen(
         )
 
         // ---------- FECHA INICIO ----------
-        Text("Inicio", style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Button Date
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    val cal = Calendar.getInstance()
-                    formState.startAt?.let { cal.timeInMillis = it }
-                    DatePickerDialog(
-                        context,
-                        { _, y, m, d ->
-                            val newCal = Calendar.getInstance()
-                            formState.startAt?.let { newCal.timeInMillis = it }
-                            newCal.set(y, m, d)
-                            viewModel.updateStartAt(newCal.timeInMillis)
-                        },
-                        cal.get(Calendar.YEAR),
-                        cal.get(Calendar.MONTH),
-                        cal.get(Calendar.DAY_OF_MONTH)
-                    ).show()
-                }
-            ) {
-                Text(formState.startAt?.let { SimpleDateFormat("dd/MM/yyyy").format(Date(it)) } ?: "📅 Fecha")
+        Text("Cuándo empieza", style = MaterialTheme.typography.titleMedium)
+
+        
+        // Let's rewrite the Row approach to be cleaner:
+        
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // DATE PICKER
+            Box(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = formState.startAt?.let { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(it)) } ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Fecha") },
+                    trailingIcon = { Icon(androidx.compose.material.icons.Icons.Default.DateRange, null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledContainerColor = Color.Transparent
+                    ),
+                    enabled = false
+                )
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clickable {
+                            val cal = Calendar.getInstance()
+                            formState.startAt?.let { cal.timeInMillis = it }
+                            DatePickerDialog(
+                                context,
+                                { _, y, m, d ->
+                                    val newCal = Calendar.getInstance()
+                                    formState.startAt?.let { newCal.timeInMillis = it }
+                                    newCal.set(y, m, d)
+                                    viewModel.updateStartAt(newCal.timeInMillis)
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        }
+                )
             }
 
-            // Button Time
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    val cal = Calendar.getInstance()
-                    formState.startAt?.let { cal.timeInMillis = it }
-                    TimePickerDialog(
-                        context,
-                        { _, h, min ->
-                            val newCal = Calendar.getInstance()
-                            formState.startAt?.let { newCal.timeInMillis = it }
-                            newCal.set(Calendar.HOUR_OF_DAY, h)
-                            newCal.set(Calendar.MINUTE, min)
-                            viewModel.updateStartAt(newCal.timeInMillis)
-                        },
-                        cal.get(Calendar.HOUR_OF_DAY),
-                        cal.get(Calendar.MINUTE),
-                        true
-                    ).show()
-                }
-            ) {
-                Text(formState.startAt?.let { SimpleDateFormat("HH:mm").format(Date(it)) } ?: "⏰ Hora")
+            // TIME PICKER
+            Box(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = formState.startAt?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it)) } ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Hora") },
+                    trailingIcon = { Icon(androidx.compose.material.icons.Icons.Default.DateRange, null) }, // Use Watch/Clock icon if available, else Date
+                    modifier = Modifier.fillMaxWidth(),
+                     colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                         disabledContainerColor = Color.Transparent
+                    ),
+                    enabled = false
+                )
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clickable {
+                             val cal = Calendar.getInstance()
+                            formState.startAt?.let { cal.timeInMillis = it }
+                            TimePickerDialog(
+                                context,
+                                { _, h, min ->
+                                    val newCal = Calendar.getInstance()
+                                    formState.startAt?.let { newCal.timeInMillis = it }
+                                    newCal.set(Calendar.HOUR_OF_DAY, h)
+                                    newCal.set(Calendar.MINUTE, min)
+                                    viewModel.updateStartAt(newCal.timeInMillis)
+                                },
+                                cal.get(Calendar.HOUR_OF_DAY),
+                                cal.get(Calendar.MINUTE),
+                                true
+                            ).show()
+                        }
+                )
             }
         }
 
         // ---------- FECHA TÉRMINO ----------
-        Text("Término", style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Button Date
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    val cal = Calendar.getInstance()
-                    formState.endAt?.let { cal.timeInMillis = it }
-                    DatePickerDialog(
-                        context,
-                        { _, y, m, d ->
-                            val newCal = Calendar.getInstance()
-                            formState.endAt?.let { newCal.timeInMillis = it }
-                            newCal.set(y, m, d)
-                            
-                            // Simple client-side check
-                            val start = formState.startAt
-                            if (start != null && newCal.timeInMillis <= start) {
-                                timeError = "El término debe ser posterior al inicio"
-                            } else {
-                                timeError = null
-                            }
-                            viewModel.updateEndAt(newCal.timeInMillis)
-                        },
-                        cal.get(Calendar.YEAR),
-                        cal.get(Calendar.MONTH),
-                        cal.get(Calendar.DAY_OF_MONTH)
-                    ).show()
-                }
-            ) {
-                Text(formState.endAt?.let { SimpleDateFormat("dd/MM/yyyy").format(Date(it)) } ?: "📅 Fecha")
+        Text("Cuándo termina", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+             // DATE PICKER END
+            Box(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = formState.endAt?.let { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(it)) } ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Fecha") },
+                    trailingIcon = { Icon(androidx.compose.material.icons.Icons.Default.DateRange, null) },
+                    modifier = Modifier.fillMaxWidth(),
+                     colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                         disabledContainerColor = Color.Transparent
+                    ),
+                    enabled = false
+                )
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clickable {
+                            val cal = Calendar.getInstance()
+                            formState.endAt?.let { cal.timeInMillis = it }
+                            DatePickerDialog(
+                                context,
+                                { _, y, m, d ->
+                                    val newCal = Calendar.getInstance()
+                                    formState.endAt?.let { newCal.timeInMillis = it }
+                                    newCal.set(y, m, d)
+                                    
+                                     // Simple client-side check
+                                    val start = formState.startAt
+                                    if (start != null && newCal.timeInMillis <= start) {
+                                        timeError = "El término debe ser posterior al inicio"
+                                    } else {
+                                        timeError = null
+                                    }
+                                    
+                                    viewModel.updateEndAt(newCal.timeInMillis)
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        }
+                )
             }
 
-            // Button Time
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    val cal = Calendar.getInstance()
-                    formState.endAt?.let { cal.timeInMillis = it }
-                    TimePickerDialog(
-                        context,
-                        { _, h, min ->
-                            val newCal = Calendar.getInstance()
-                            formState.endAt?.let { newCal.timeInMillis = it }
-                            newCal.set(Calendar.HOUR_OF_DAY, h)
-                            newCal.set(Calendar.MINUTE, min)
+            // TIME PICKER END
+            Box(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = formState.endAt?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it)) } ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Hora") },
+                    trailingIcon = { Icon(androidx.compose.material.icons.Icons.Default.DateRange, null) }, // Clock icon if avail
+                    modifier = Modifier.fillMaxWidth(),
+                     colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                         disabledContainerColor = Color.Transparent
+                    ),
+                    enabled = false
+                )
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clickable {
+                             val cal = Calendar.getInstance()
+                            formState.endAt?.let { cal.timeInMillis = it }
+                            TimePickerDialog(
+                                context,
+                                { _, h, min ->
+                                    val newCal = Calendar.getInstance()
+                                    formState.endAt?.let { newCal.timeInMillis = it }
+                                    newCal.set(Calendar.HOUR_OF_DAY, h)
+                                    newCal.set(Calendar.MINUTE, min)
+                                    
+                                    // Simple client-side check
+                                    val startAt = formState.startAt
+                                    if (startAt != null && newCal.timeInMillis <= startAt) {
+                                        timeError = "El término debe ser posterior al inicio"
+                                    } else {
+                                        timeError = null
+                                    }
 
-                            // Simple client-side check
-                            val startAt = formState.startAt
-                            if (startAt != null && newCal.timeInMillis <= startAt) {
-                                timeError = "El término debe ser posterior al inicio"
-                            } else {
-                                timeError = null
-                            }
-                            viewModel.updateEndAt(newCal.timeInMillis)
-                        },
-                        cal.get(Calendar.HOUR_OF_DAY),
-                        cal.get(Calendar.MINUTE),
-                        true
-                    ).show()
-                }
-            ) {
-                Text(formState.endAt?.let { SimpleDateFormat("HH:mm").format(Date(it)) } ?: "⏰ Hora")
+                                    viewModel.updateEndAt(newCal.timeInMillis)
+                                },
+                                cal.get(Calendar.HOUR_OF_DAY),
+                                cal.get(Calendar.MINUTE),
+                                true
+                            ).show()
+                        }
+                )
             }
         }
 
@@ -544,6 +755,9 @@ fun CreateEventScreen(
                             address = formState.address,
                              exactLatitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
                              exactLongitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
+                             // ⚠️ CRITICAL FIX: Populate main lat/lng fields too!
+                             latitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
+                             longitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
                              exactAddress = formState.exactLocation?.address ?: formState.address,
                              maxParticipants = formState.maxParticipants.toInt(),
                              startAt = formState.startAt!!,
@@ -568,8 +782,131 @@ fun CreateEventScreen(
             }
         }
 
+
         uiState.errorMessage?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
+            if (it == "LIMIT_REACHED") {
+               // Handled by Effect below
+            } else {
+                Text(it, color = MaterialTheme.colorScheme.error)
+            }
         }
+        
+        // 🚀 Espacio para evitar que el teclado o la barra de navegación tapen el botón final
+        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+    }
+
+    // ================= 📺 AD UNLOCK DIALOG =================
+    val adUnlockState by viewModel.adUnlockState.collectAsState()
+    val limitDebugInfo by viewModel.limitDebugInfo.collectAsState()
+    val userLimitStats by viewModel.userLimitStats.collectAsState()
+    var showAdDialog by remember { mutableStateOf(false) }
+
+    // Intercept Limit Error
+    LaunchedEffect(uiState.errorMessage) {
+        if (uiState.errorMessage == "LIMIT_REACHED") {
+            showAdDialog = true
+        }
+    }
+
+    if (showAdDialog) {
+        // Robust check via Structured Data
+        val isCapReached = (userLimitStats?.adsUnlocked ?: 0) >= 1
+        
+        AlertDialog(
+            onDismissRequest = { 
+                if (adUnlockState !is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd) {
+                    showAdDialog = false 
+                    viewModel.resetState() 
+                }
+            },
+            title = {
+                 if (isCapReached) {
+                     Text("Límite Total Alcanzado")
+                 } else {
+                     when (adUnlockState) {
+                         is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked -> Text("¡Evento Desbloqueado! 🎉")
+                         else -> Text("Límite Mensual Alcanzado")
+                     }
+                 }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isCapReached) {
+                        Text("Has utilizado tu desbloqueo extra mensual (2 anuncios).")
+                        Text("Para crear más eventos, vuélvete Banana Gold 🍌✨.")
+                    } else {
+                        when (val state = adUnlockState) {
+                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Idle -> {
+                                Text("Has usado tu cupo gratuito. Puedes desbloquear 1 evento extra viendo 2 anuncios.")
+                            }
+                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd -> {
+                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Cargando anuncio...")
+                                }
+                            }
+                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Progress -> {
+                                LinearProgressIndicator(
+                                    progress = { state.watched.toFloat() / state.required.toFloat() },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                                )
+                                Text("Has visto ${state.watched} de ${state.required} anuncios. ¡Falta poco!")
+                            }
+                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked -> {
+                                Text("¡Ya tienes un cupo extra! Puedes crear tu evento ahora.")
+                            }
+                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Error -> {
+                                Text("Hubo un problema: ${state.message}", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (isCapReached) {
+                    Button(onClick = {
+                        showAdDialog = false
+                         viewModel.resetState()
+                         onNavigateToPremium()
+                    }) {
+                        Text("Entendido (Ir a Premium)")
+                    }
+                } else {
+                    when (val state = adUnlockState) {
+                        is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked -> {
+                            Button(onClick = { 
+                                showAdDialog = false 
+                                viewModel.resetState()
+                            }) {
+                                Text("Continuar")
+                            }
+                        }
+                        is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd -> { } 
+                        else -> {
+                            Button(onClick = {
+                                val activity = context as? android.app.Activity
+                                if (activity != null) {
+                                    viewModel.watchAd(activity, creatorId)
+                                }
+                            }) {
+                                Text(if (state is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Progress) "Ver Siguiente" else "Ver Anuncio (Gratis)")
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                if (adUnlockState !is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd && adUnlockState !is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked) {
+                    TextButton(onClick = { 
+                        showAdDialog = false 
+                        viewModel.resetState()
+                    }) {
+                        Text("Cancelar")
+                    }
+                }
+            }
+        )
     }
 }

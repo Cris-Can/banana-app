@@ -2,6 +2,7 @@ package com.eventos.banana.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlin.jvm.JvmOverloads
 import com.eventos.banana.data.repository.AuthRepository
 import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.LoginUiState
@@ -12,6 +13,7 @@ import com.eventos.banana.domain.model.UserProfile
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.catch
@@ -19,14 +21,15 @@ import com.google.firebase.firestore.ListenerRegistration
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
-class SessionViewModel(
+class SessionViewModel @JvmOverloads constructor(
+    application: android.app.Application,
     private val authRepository: AuthRepository = AuthRepository(),
     private val userRepository: UserRepository = UserRepository(),
     private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository = com.eventos.banana.data.repository.NotificationRepository(),
     private var profileListener: ListenerRegistration? = null,
     private var notificationsJob: kotlinx.coroutines.Job? = null,
     private val sharedPreferences: android.content.SharedPreferences? = null
-) : ViewModel() {
+) : androidx.lifecycle.AndroidViewModel(application) {
 
     // ---------- UI STATE (LOGIN / REGISTER) ----------
     private val _loginUiState = MutableStateFlow(LoginUiState())
@@ -45,6 +48,14 @@ class SessionViewModel(
 
     private val _unreadNotificationsCount = MutableStateFlow(0)
     val unreadNotificationsCount: StateFlow<Int> = _unreadNotificationsCount
+
+    // 📍 Location Update Feedback
+    private val _locationUpdateMessage = MutableStateFlow<String?>(null)
+    val locationUpdateMessage: StateFlow<String?> = _locationUpdateMessage.asStateFlow()
+
+    fun clearLocationMessage() {
+        _locationUpdateMessage.value = null
+    }
 
 
 
@@ -129,10 +140,25 @@ class SessionViewModel(
         profileListener = userRepository.listenUserProfile(
             uid = uid,
             onChange = { profile ->
+                // 📍 Detect & Notify Location Changes (UX)
+                val oldProfile = _profileUiState.value.profile
+                if (oldProfile != null && profile != null) {
+                    if (oldProfile.commune.isNullOrBlank() && !profile.commune.isNullOrBlank()) {
+                         _locationUpdateMessage.value = "📍 Ubicación actualizada: ${profile.commune}"
+                    }
+                }
+
                 _profileUiState.value = ProfileUiState(
                     isLoading = false,
                     profile = profile
                 )
+                
+                // 📍 AUTO-DETECT LOCATION if missing (User Request)
+                profile?.let { userProfile ->
+                    if (userProfile.commune.isNullOrBlank() && userProfile.region.isNullOrBlank()) {
+                        checkAndAutoUpdateLocation(userProfile.uid)
+                    }
+                }
             },
             onError = {
                 android.util.Log.w("SessionViewModel", "Profile not found for $uid, attempting auto-repair")
@@ -236,6 +262,21 @@ class SessionViewModel(
     }
 
     // =====================================================
+    // RESET PASSWORD
+    // =====================================================
+    fun resetPassword(email: String, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val result = authRepository.sendPasswordResetEmail(email)
+            if (result.isSuccess) {
+                onResult(true, null)
+            } else {
+                val error = result.exceptionOrNull()?.localizedMessage ?: "Error desconocido"
+                onResult(false, error)
+            }
+        }
+    }
+
+    // =====================================================
     // REGISTER
     // =====================================================
     fun register(
@@ -243,7 +284,10 @@ class SessionViewModel(
         password: String, 
         nickname: String,
         birthDate: Long,
-        commune: String
+        commune: String,
+        region: String? = null, // 🌍 Global Expansion
+        latitude: Double? = null, // 🌍 Global Expansion
+        longitude: Double? = null // 🌍 Global Expansion
     ) {
         viewModelScope.launch {
             _registerUiState.value = RegisterUiState(isLoading = true)
@@ -263,6 +307,14 @@ class SessionViewModel(
             if (result.isSuccess) {
                 val uid = authRepository.currentUid() ?: return@launch
 
+                // 🌍 Determine Region (Global vs Local)
+                val finalRegion = region ?: com.eventos.banana.data.ChileCommunesList.getRegionForCommune(commune)
+                
+                // 🌍 Geohashing
+                val geohash = if (latitude != null && longitude != null) {
+                    com.eventos.banana.util.GeohashUtils.encode(latitude, longitude, 9)
+                } else null
+
                 val profile = UserProfile(
                     uid = uid,
                     email = email,
@@ -270,7 +322,10 @@ class SessionViewModel(
                     birthDate = birthDate,
                     age = age,
                     commune = commune,
-                    region = com.eventos.banana.data.ChileCommunesList.getRegionForCommune(commune)
+                    region = finalRegion,
+                    latitude = latitude,
+                    longitude = longitude,
+                    geohash = geohash
                 )
                 
                 android.util.Log.d("SessionViewModel", "Creating profile: uid=$uid, nickname=$nickname, age=$age, commune=$commune")
@@ -282,8 +337,13 @@ class SessionViewModel(
                     // 🆕 Send Verification Email Immediately
                     authRepository.sendEmailVerification()
                     
-                    // ✅ Logout and mark as success (don't auto-authenticate)
-                    authRepository.logout()
+                    // ✅ Stay logged in so user lands on Verification Screen immediately
+                    _sessionState.value = SessionState.AUTHENTICATED
+                    isEmailVerified = false
+                    isVerificationChecked = true
+                    
+                    // Force cache update
+                    sharedPreferences?.edit()?.putBoolean("email_verified_cache", false)?.apply()
                     
                     _registerUiState.value = RegisterUiState(
                         isLoading = false,
@@ -399,6 +459,14 @@ class SessionViewModel(
 
     fun currentUserId(): String {
         return authRepository.currentUid() ?: ""
+    }
+
+    private fun checkAndAutoUpdateLocation(uid: String) {
+        // Use WorkManager for reliable background execution
+        val workRequest = androidx.work.OneTimeWorkRequest.Builder(com.eventos.banana.workers.LocationWorker::class.java)
+            .build()
+        
+        androidx.work.WorkManager.getInstance(getApplication()).enqueue(workRequest)
     }
 
     init {

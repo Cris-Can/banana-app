@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.MoreVert // Explicit import
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,8 +37,8 @@ import com.eventos.banana.viewmodel.FeedViewModelFactory
 @Composable
 fun EventFeedSection(
     eventId: String,
-    currentUserId: String,
-    onUserClick: (String) -> Unit, // 🆕 Add callback
+    currentUserId: String, // Restored parameter
+    onUserClick: (String) -> Unit,
     viewModel: FeedViewModel = viewModel(factory = FeedViewModelFactory(eventId))
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -85,7 +86,10 @@ fun EventFeedSection(
                         val post = uiState.posts[index]
                         PostItem(
                             post = post,
-                            onUserClick = { onUserClick(post.userId) }
+                            currentUserId = currentUserId,
+                            onUserClick = { onUserClick(post.userId) },
+                            onBlock = { viewModel.blockUser(currentUserId, post.userId) },
+                            onReport = { reason -> viewModel.reportPost(currentUserId, post, reason) }
                         )
                     }
                 }
@@ -109,7 +113,7 @@ fun EventFeedSection(
         HorizontalDivider()
         Row(
             modifier = Modifier
-                .navigationBarsPadding() // 🆕 Fix system navbar overlap
+                .navigationBarsPadding() // Fix system navbar overlap
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -161,7 +165,10 @@ fun EventFeedSection(
 @Composable
 fun PostItem(
     post: FeedPost,
-    onUserClick: () -> Unit // 🆕 Add callback
+    currentUserId: String,
+    onUserClick: () -> Unit,
+    onBlock: () -> Unit,
+    onReport: (String) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -178,7 +185,7 @@ fun PostItem(
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onUserClick() } // 🆕 Use callback
+                    modifier = Modifier.clickable { onUserClick() }
                 )
                 if (post.isUserVerified) {
                     Icon(
@@ -189,6 +196,49 @@ fun PostItem(
                             .size(16.dp)
                             .padding(start = 4.dp)
                     )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                // 🛡️ Post Options (Round 49)
+                if (post.userId != currentUserId) {
+                    var showMenu by remember { mutableStateOf(false) }
+                    var showReportDialog by remember { mutableStateOf(false) }
+
+                    Box {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
+                            // Use imported MoreVert or fully qualified
+                            Icon(Icons.Filled.MoreVert, "Opciones", tint = Color.Gray)
+                        }
+
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("🚩 Reportar") },
+                                onClick = { showMenu = false; showReportDialog = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("🚫 Bloquear usuario") },
+                                onClick = { showMenu = false; onBlock() }
+                            )
+                        }
+                    }
+
+                    if (showReportDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showReportDialog = false },
+                            title = { Text("Reportar publicación") },
+                            text = { Text("¿Por qué quieres reportar esto?") },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    onReport("Contenido Inapropiado")
+                                    showReportDialog = false
+                                }) { Text("Inapropiado", color = MaterialTheme.colorScheme.error) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showReportDialog = false }) { Text("Cancelar") }
+                            }
+                        )
+                    }
                 }
             }
 
@@ -236,8 +286,7 @@ fun PostItem(
                     }
                 }
             }
-
-
+            
             Text(
                 text = post.timestampAsDate?.let { java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(it) } ?: "",
                 style = MaterialTheme.typography.labelSmall,

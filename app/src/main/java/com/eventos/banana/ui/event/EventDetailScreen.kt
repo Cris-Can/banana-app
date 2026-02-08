@@ -1,5 +1,6 @@
 package com.eventos.banana.ui.event
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -12,7 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import com.eventos.banana.ui.components.shimmerEffect
+import com.eventos.banana.ui.components.SuccessOverlay
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
@@ -27,11 +32,12 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import coil.compose.AsyncImage
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventStatus
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun EventDetailScreen(
     event: Event,
@@ -48,20 +54,25 @@ fun EventDetailScreen(
     onRateUser: (String) -> Unit,
     onUserClick: (String) -> Unit,
     onRateParticipants: (Event) -> Unit,
+    onBoostClick: () -> Unit,
     eventState: com.eventos.banana.domain.model.EventDetailUiState, // Pass full state to access nicknames
     isSaved: Boolean = false,
     onToggleSave: () -> Unit = {},
     hasAttended: Boolean = false,
     checkInState: com.eventos.banana.viewmodel.CheckInState = com.eventos.banana.viewmodel.CheckInState.Idle,
     onCheckInClick: () -> Unit = {},
-    onResetCheckInState: () -> Unit = {}
+    onResetCheckInState: () -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
 ) {
     val context = LocalContext.current
     val isCreator = event.creatorId == currentUserId
     val isApproved = event.approvedParticipants.contains(currentUserId)
     val isPending = event.pendingRequests.any { it.userId == currentUserId }
     val isRejected = event.rejectedParticipants.contains(currentUserId)
-    val canSeeFeed = isCreator || isApproved
+    
+    // 🌍 Public Events Visibility Rules
+    val canSeeFeed = isCreator || isApproved || event.isPublic
 
     // Guide State
     val sharedPreferences = remember { context.getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE) }
@@ -76,168 +87,125 @@ fun EventDetailScreen(
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Detalles", "Muro")
 
+    // 📏 Header Measurement
+    var headerHeightPx by remember { mutableStateOf(0f) }
+    val headerHeightDp = with(LocalDensity.current) { headerHeightPx.toDp() }
+    
+    // 🎨 Dynamic Header Style
+    val isDetailsTab = selectedTab == 0
+    val headerBackground = if (isDetailsTab) {
+        androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f) // ✨ Transparent for Image
+    } else {
+        MaterialTheme.colorScheme.surface // Opaque for Wall
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // ---------- HEADER ----------
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Text(
-                    text = event.title, 
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                // ACTIONS ROW
-                Row {
-                    IconButton(onClick = onToggleSave) {
-                         Icon(
-                            imageVector = if (isSaved) androidx.compose.material.icons.Icons.Filled.Star else androidx.compose.material.icons.Icons.Filled.Add,
-                            contentDescription = "Guardar evento",
-                            tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    val shareHelper = remember { com.eventos.banana.util.ShareHelper(context) }
-                    IconButton(onClick = { shareHelper.shareEvent(event) }) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Compartir evento",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-            Text("${event.region} • ${event.commune}")
-        }
+        
+        // ---------- CONTENT BUFFER (Behind Header) ----------
+        // We render content FIRST so it sits behind the floating header
+        
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (selectedTab == 0) {
+                // DETALLES TAB
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // ========== FOTO DEL EVENTO (Moved to Top) ==========
+                    // Only show if available, otherwise show placeholder
+                    val imageModifier = Modifier
+                        .fillMaxWidth()
+                        .height(350.dp) // Taller to extend behind header
+                    
+                    if (!event.imageUrl.isNullOrBlank()) {
+                        var showImageDialog by remember { mutableStateOf(false) }
 
-        // ---------- TABS ----------
-        TabRow(selectedTabIndex = selectedTab) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index },
-                    text = { Text(title) }
-                )
-            }
-        }
-
-        // ---------- CONTENT BASED ON SELECTED TAB ----------
-        if (selectedTab == 0) {
-            // DETALLES TAB
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                // ========== FOTO DEL EVENTO ==========
-                if (!event.imageUrl.isNullOrBlank()) {
-                    var showImageDialog by remember { mutableStateOf(false) }
-
-                    Box(
-                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp) // Taller header
-                    ) {
-                        AsyncImage(
-                            model = event.imageUrl,
-                            contentDescription = "Foto del evento",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clickable { showImageDialog = true },
-                            contentScale = ContentScale.Crop
-                        )
-                        
-                        // Gradient Overlay for text readability
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
-                                        startY = 100f
+                        Box(modifier = imageModifier) {
+                            with(sharedTransitionScope) {
+                                coil.compose.SubcomposeAsyncImage(
+                                model = event.imageUrl,
+                                contentDescription = "Foto del evento",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clickable { showImageDialog = true },
+                                contentScale = ContentScale.Crop,
+                                loading = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .shimmerEffect()
                                     )
-                                )
-                        )
-
-                        // 🏷️ Category Badge (Top End)
-                        Surface(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .align(Alignment.TopEnd),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ) {
-                            Text(
-                                text = "${event.eventType.emoji} ${event.eventType.displayName}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                }
                             )
                         }
-                    }
-
-                    if (showImageDialog) {
-                        androidx.compose.ui.window.Dialog(
-                            onDismissRequest = { showImageDialog = false },
-                            properties = androidx.compose.ui.window.DialogProperties(
-                                usePlatformDefaultWidth = false 
-                            )
-                        ) {
+                            
+                            // Bottom Gradient for text readability (only at the bottom of the image)
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(androidx.compose.ui.graphics.Color.Black)
-                            ) {
-                                AsyncImage(
-                                    model = event.imageUrl,
-                                    contentDescription = "Foto completa",
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clickable { showImageDialog = false },
-                                    contentScale = ContentScale.Fit
-                                )
-                                IconButton(
-                                    onClick = { showImageDialog = false },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(16.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Cerrar",
-                                        tint = androidx.compose.ui.graphics.Color.White
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)),
+                                            startY = 500f // Start lower
+                                        )
                                     )
+                            )
+                            
+                            // Full Screen Image Dialog Logic (Preserved)
+                             if (showImageDialog) {
+                                androidx.compose.ui.window.Dialog(
+                                    onDismissRequest = { showImageDialog = false },
+                                    properties = androidx.compose.ui.window.DialogProperties(
+                                        usePlatformDefaultWidth = false 
+                                    )
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(androidx.compose.ui.graphics.Color.Black)
+                                    ) {
+                                        AsyncImage(
+                                            model = event.imageUrl,
+                                            contentDescription = "Foto completa",
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clickable { showImageDialog = false },
+                                            contentScale = ContentScale.Fit
+                                        )
+                                        IconButton(
+                                            onClick = { showImageDialog = false },
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(16.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Cerrar",
+                                                tint = androidx.compose.ui.graphics.Color.White
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        // Placeholder
+                         Box(
+                             modifier = imageModifier.background(MaterialTheme.colorScheme.surfaceVariant),
+                             contentAlignment = Alignment.Center
+                        ) {
+                            Text("🍌", style = MaterialTheme.typography.displayLarge)
+                        }
                     }
-                } else {
-                     // Placeholder Header if no image
-                     Box(
-                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                         contentAlignment = Alignment.Center
-                    ) {
-                        Text("🍌", style = MaterialTheme.typography.displayLarge)
-                    }
-                }
 
-                // Contenido con padding
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                    // ---------- REST OF DETAILS CONTENT ----------
+                    // The rest of the content follows naturally
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                         // ... Content continues ...
                     // Title (moved here if image covered it, or redundant)
                     // Let's keep title big here
                     
@@ -245,7 +213,7 @@ fun EventDetailScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.DateRange, null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(8.dp))
-                        val dateFormat = java.text.SimpleDateFormat("EEEE d 'de' MMMM, HH:mm", Locale("es", "ES"))
+                        val dateFormat = java.text.SimpleDateFormat("EEEE d 'de' MMMM, HH:mm", Locale.forLanguageTag("es-ES"))
                         val dateStr = dateFormat.format(java.util.Date(event.startAt))
                             .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
                         Text(dateStr, style = MaterialTheme.typography.bodyLarge)
@@ -284,14 +252,116 @@ fun EventDetailScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             
-                            val creatorNickname = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
-                                    ?.userProfiles?.get(event.creatorId)?.nickname ?: "Cargando..."
+                            val creatorProfile = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
+                                    ?.userProfiles?.get(event.creatorId)
+                            val creatorNickname = creatorProfile?.nickname ?: "Cargando..."
+                            val isCreatorGold = creatorProfile?.isGold == true
                             
-                            Text(
-                                creatorNickname,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    creatorNickname,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (isCreatorGold) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("👑", style = MaterialTheme.typography.titleMedium)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 🚀 CREATOR TOOLS: BOOST (Round 42)
+                    if (isCreator) {
+                        var showBoostDialog by remember { mutableStateOf(false) }
+                        
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { 
+                                    if (!event.isBoosted) {
+                                        showBoostDialog = true 
+                                    }
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (event.isBoosted) 
+                                    androidx.compose.ui.graphics.Color(0xFFFFD700).copy(alpha = 0.2f) // Gold tint
+                                else 
+                                    MaterialTheme.colorScheme.surface
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp, 
+                                if (event.isBoosted) androidx.compose.ui.graphics.Color(0xFFFFD700) else MaterialTheme.colorScheme.outlineVariant
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        if (event.isBoosted) "🔥 Evento Destacado" else "🚀 Destacar Evento",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (event.isBoosted) androidx.compose.ui.graphics.Color(0xFFB8860B) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        if (event.isBoosted) "Tu evento tiene prioridad en el feed." else "Consigue más asistentes y visibilidad.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (!event.isBoosted) {
+                                    Button(
+                                        onClick = { showBoostDialog = true },
+                                        contentPadding = PaddingValues(horizontal = 16.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = androidx.compose.ui.graphics.Color(0xFFFFD700),
+                                            contentColor = androidx.compose.ui.graphics.Color.Black
+                                        )
+                                    ) {
+                                        Text("Boost")
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (showBoostDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showBoostDialog = false },
+                                title = { Text("🚀 Destacar Evento") },
+                                text = {
+                                    Column {
+                                        Text("Al destacar tu evento:")
+                                        Spacer(Modifier.height(8.dp))
+                                        Text("✅ Aparecerá primero en el Feed.")
+                                        Text("✅ Tendrá un borde dorado llamativo.")
+                                        Text("✅ Duración: 24 horas.")
+                                        Spacer(Modifier.height(16.dp))
+                                        Text("¿Quieres continuar?", fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            showBoostDialog = false
+                                            onBoostClick()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = androidx.compose.ui.graphics.Color(0xFFFFD700),
+                                            contentColor = androidx.compose.ui.graphics.Color.Black
+                                        )
+                                    ) {
+                                        Text("Obtener Boost")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showBoostDialog = false }) {
+                                        Text("Cancelar")
+                                    }
+                                }
                             )
                         }
                     }
@@ -305,7 +375,7 @@ fun EventDetailScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { 
-                                        if (isCreator || isApproved) {
+                                        if (isCreator || isApproved || event.isPublic) {
                                             showParticipantsDialog = true 
                                         } else {
                                             android.widget.Toast.makeText(context, "Debes unirte para ver a los participantes", android.widget.Toast.LENGTH_SHORT).show()
@@ -347,8 +417,10 @@ fun EventDetailScreen(
                                     ) {
                                         event.approvedParticipants.forEach { userId ->
                                             // Nickname lookup inside Dialog
-                                            val nickname = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
-                                                ?.userProfiles?.get(userId)?.nickname ?: "Usuario"
+                                            val participantProfile = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
+                                                ?.userProfiles?.get(userId)
+                                            val nickname = participantProfile?.nickname ?: "Usuario"
+                                            val isGold = participantProfile?.isGold == true
 
                                             Row(
                                                 modifier = Modifier
@@ -364,6 +436,10 @@ fun EventDetailScreen(
                                                     nickname,
                                                     style = MaterialTheme.typography.bodyLarge
                                                 )
+                                                if (isGold) {
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("👑", style = MaterialTheme.typography.bodyLarge)
+                                                }
                                             }
                                             if (userId != event.approvedParticipants.last()) {
                                                 HorizontalDivider()
@@ -532,47 +608,117 @@ fun EventDetailScreen(
 
                     // ========== UBICACIÓN EN MAPA ==========
                     if (event.exactLatitude != null && event.exactLongitude != null) {
-                        val canSeeMap = isCreator || isApproved
+                        val canSeeMap = isCreator || isApproved || event.isPublic
                         
                         if (canSeeMap) {
+                            val eventLocation = com.google.android.gms.maps.model.LatLng(event.exactLatitude, event.exactLongitude)
+                            val cameraPositionState = com.google.maps.android.compose.rememberCameraPositionState {
+                                position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(eventLocation, 15f)
+                            }
+                            
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                ),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(240.dp) // Fixed height for embedded map
+                                    .padding(vertical = 8.dp),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                elevation = CardDefaults.cardElevation(2.dp)
                             ) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text(
-                                        "🗺️ Ubicación Exacta",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (!event.exactAddress.isNullOrBlank()) {
-                                        Spacer(Modifier.height(4.dp))
+                                Column {
+                                    // Title Header inside Card
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(Modifier.width(8.dp))
                                         Text(
-                                            event.exactAddress,
-                                            style = MaterialTheme.typography.bodyMedium
+                                            "Ubicación Exacta",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(Modifier.weight(1f))
+                                        // "Open" hint text
+                                        Text("Toca para navegar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                    }
+                                    
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        com.google.maps.android.compose.GoogleMap(
+                                            modifier = Modifier.fillMaxSize(),
+                                            cameraPositionState = cameraPositionState,
+                                            uiSettings = com.google.maps.android.compose.MapUiSettings(
+                                                zoomControlsEnabled = false,
+                                                scrollGesturesEnabled = false,
+                                                zoomGesturesEnabled = false,
+                                                rotationGesturesEnabled = false,
+                                                tiltGesturesEnabled = false,
+                                                compassEnabled = false,
+                                                myLocationButtonEnabled = false
+                                            ),
+                                            googleMapOptionsFactory = {
+                                                com.google.android.gms.maps.GoogleMapOptions().liteMode(true)
+                                            },
+                                            onMapClick = {
+                                               // Open External Map
+                                               val uri = android.net.Uri.parse("geo:0,0?q=${event.exactLatitude},${event.exactLongitude}(${android.net.Uri.encode(event.title)})")
+                                               val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                               intent.setPackage("com.google.android.apps.maps")
+                                               try {
+                                                   androidx.core.content.ContextCompat.startActivity(context, intent, null)
+                                               } catch (e: Exception) {
+                                                   val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                                   androidx.core.content.ContextCompat.startActivity(context, fallbackIntent, null)
+                                               }
+                                            }
+                                        ) {
+                                            com.google.maps.android.compose.Marker(
+                                                state = com.google.maps.android.compose.MarkerState(position = eventLocation),
+                                                title = event.title,
+                                                snippet = event.exactAddress
+                                            )
+                                        }
+                                        
+                                    // Overlay "How to get there" Button
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd) // Bottom Right
+                                            .padding(12.dp)
+                                    ) {
+                                        ExtendedFloatingActionButton(
+                                            onClick = {
+                                                val uri = android.net.Uri.parse("geo:0,0?q=${event.exactLatitude},${event.exactLongitude}(${android.net.Uri.encode(event.title)})")
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                                intent.setPackage("com.google.android.apps.maps")
+                                                try {
+                                                    context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                                    context.startActivity(fallbackIntent)
+                                                } 
+                                            },
+                                            icon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Navegar") },
+                                            text = { Text("Cómo llegar") },
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                         )
                                     }
-                                    Spacer(Modifier.height(8.dp))
-                                    OutlinedButton(
-                                        onClick = {
-                                            val uri = android.net.Uri.parse("geo:0,0?q=${event.exactLatitude},${event.exactLongitude}(${android.net.Uri.encode(event.title)})")
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                                            intent.setPackage("com.google.android.apps.maps")
-                                            try {
-                                                androidx.core.content.ContextCompat.startActivity(context, intent, null)
-                                            } catch (e: Exception) {
-                                                // Fallback to browser or generic map handler if Google Maps app is not installed
-                                                val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                                                androidx.core.content.ContextCompat.startActivity(context, fallbackIntent, null)
+                                    
+                                    // Transparent scrim for map interaction (keep existing)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clickable {
+                                               val uri = android.net.Uri.parse("geo:0,0?q=${event.exactLatitude},${event.exactLongitude}(${android.net.Uri.encode(event.title)})")
+                                               val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                               try {
+                                                   context.startActivity(intent)
+                                               } catch (e: Exception) { }
                                             }
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Ver en Mapa")
-                                    }
+                                    )
+                                }
                                 }
                             }
                         }
@@ -598,9 +744,9 @@ fun EventDetailScreen(
                     else -> Unit
                 }
 
-                Divider()
+                HorizontalDivider()
                 Text(event.description)
-                Divider()
+                HorizontalDivider()
 
                 Text("Cupos: ${event.approvedParticipants.size} / ${event.maxParticipants}")
 
@@ -628,7 +774,7 @@ fun EventDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !isJoining
                             ) {
-                                Text("Solicitar acceso")
+                                Text(if (event.isPublic) "Entrar al Evento" else "Solicitar acceso")
                             }
                         }
                     }
@@ -718,10 +864,17 @@ fun EventDetailScreen(
 
                 // SOLICITUDES PENDIENTES
                 if (isCreator && event.pendingRequests.isNotEmpty()) {
-                    Divider()
+                    HorizontalDivider()
                     Text("Solicitudes pendientes", style = MaterialTheme.typography.titleMedium)
 
-                    event.pendingRequests.forEach { request ->
+                    // ⚡ FAST PASS: Ordenar Gold primero
+                    val sortedRequests = event.pendingRequests.sortedByDescending { request ->
+                         val profile = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
+                                    ?.userProfiles?.get(request.userId)
+                         profile?.isGold == true
+                    }
+
+                    sortedRequests.forEach { request ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
 
@@ -729,6 +882,7 @@ fun EventDetailScreen(
                                     ?.userProfiles?.get(request.userId)
                                 val requesterName = requesterProfile?.nickname ?: "Usuario"
                                 val badge = requesterProfile?.getRatingBadge() ?: ""
+                                val isGold = requesterProfile?.isGold == true
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
@@ -736,6 +890,23 @@ fun EventDetailScreen(
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    if (isGold) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("👑", style = MaterialTheme.typography.titleMedium)
+                                        Spacer(Modifier.width(4.dp))
+                                        // Optional: "Fast Pass" label
+                                        Surface(
+                                            color = androidx.compose.ui.graphics.Color(0xFFFFD700),
+                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                " FAST PASS ",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = androidx.compose.ui.graphics.Color.Black,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
                                 
                                 // Stats (Punto 5)
@@ -801,38 +972,141 @@ fun EventDetailScreen(
                         Spacer(Modifier.height(12.dp))
                     }
                 }
+                
+                // 🛑 SAFETY SPACER FOR NAVIGATION BARS 🛑
+                Spacer(modifier = Modifier.height(80.dp))
+                Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                 }  // End inner Column (with padding)
             }  // End outer Column (scrollable)
         } else {
             // MURO TAB
-            if (canSeeFeed) {
-                EventFeedSection(
-                    eventId = event.id,
-                    currentUserId = currentUserId,
-                    onUserClick = onUserClick
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Debes unirte al evento para ver el muro",
-                        style = MaterialTheme.typography.bodyLarge
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 🛑 Spacer for Header (Dynamic Height)
+                 Spacer(modifier = Modifier.height(headerHeightDp))
+                 
+                if (canSeeFeed) {
+                    EventFeedSection(
+                        eventId = event.id,
+                        currentUserId = currentUserId,
+                        onUserClick = onUserClick
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Debes unirte al evento para ver el muro",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             }
         }
+    } // End Content Box
 
-        // Guide Overlay
-        if (showGuide) {
-            EventDetailGuideOverlay(onDismiss = {
-                showGuide = false
-                sharedPreferences.edit().putBoolean("event_detail_guide_seen", true).apply()
-            })
+    // ---------- FLOATING HEADER & TABS (Overlay) ----------
+    Column(
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .fillMaxWidth()
+            .background(headerBackground) // Applied Transparency
+            .onGloballyPositioned { coordinates ->
+                headerHeightPx = coordinates.size.height.toFloat()
+            }
+    ) {
+        // Header Content
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = event.title, 
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f),
+                     // Ensure title is readable on transparent bg
+                    color = if (isDetailsTab) Color.White else MaterialTheme.colorScheme.onSurface 
+                )
+                
+                // ACTIONS ROW
+                Row {
+                    IconButton(onClick = onToggleSave) {
+                         Icon(
+                            imageVector = if (isSaved) androidx.compose.material.icons.Icons.Filled.Star else androidx.compose.material.icons.Icons.Filled.Add,
+                            contentDescription = "Guardar evento",
+                            tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    val shareHelper = remember { com.eventos.banana.util.ShareHelper(context) }
+                    IconButton(onClick = { shareHelper.shareEvent(event) }) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartir evento",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            Text(
+                "${event.region} • ${event.commune}",
+                color = if (isDetailsTab) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
+
+        // Tabs
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent, // Tabs container follows header opacity
+            contentColor = if (isDetailsTab) Color.White else MaterialTheme.colorScheme.primary
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+    }
+
+    // Guide Overlay
+    if (showGuide) {
+        EventDetailGuideOverlay(onDismiss = {
+            showGuide = false
+            sharedPreferences.edit().putBoolean("event_detail_guide_seen", true).apply()
+        })
+    }
+
+    // 🎉 Success Overlay (Join Event)
+    var showSuccess by remember { mutableStateOf(false) }
+    // Detect successful join (Transition from Joining=true to Joining=false AND (Approved or Pending))
+    val wasJoining = remember { mutableStateOf(false) }
+    
+    LaunchedEffect(isJoining, isApproved, isPending) {
+        if (isJoining) {
+            wasJoining.value = true
+        } else if (wasJoining.value) {
+            // Just finished joining
+            if (isApproved || isPending) {
+                showSuccess = true
+            }
+            wasJoining.value = false
+        }
+    }
+
+    if (showSuccess) {
+        SuccessOverlay(
+            visible = true,
+            message = if (event.isPublic) "¡Te has unido!" else "Solicitud enviada",
+            onDismiss = { showSuccess = false }
+        )
     }
 }
 }

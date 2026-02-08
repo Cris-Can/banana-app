@@ -274,7 +274,53 @@ class EventRepository {
     }
 
     // =========================================================
-    // APROBAR PARTICIPANTE
+    // UNIRSE DIRECTAMENTE (EVENTOS PÚBLICOS)
+    // =========================================================
+    suspend fun joinEventDirectly(
+        eventId: String,
+        userId: String
+    ): Result<Unit> {
+        return try {
+            firestore.runTransaction { tx ->
+                val ref = eventsCollection.document(eventId)
+                val event = tx.get(ref).toObject(Event::class.java)
+                    ?: throw Exception("Evento no encontrado")
+
+                if (event.status != EventStatus.OPEN) {
+                    throw Exception("El evento no acepta participantes")
+                }
+                
+                if (!event.isPublic) {
+                    throw Exception("Este evento requiere aprobación manual")
+                }
+
+                if (event.approvedParticipants.contains(userId)) {
+                    // Already joined, do nothing
+                    return@runTransaction
+                }
+                
+                if (event.approvedParticipants.size >= event.maxParticipants) {
+                     throw Exception("Evento sin cupos")
+                }
+
+                tx.update(
+                    ref,
+                    "approvedParticipants",
+                    com.google.firebase.firestore.FieldValue.arrayUnion(userId)
+                )
+            }.await()
+            
+            // Note: We do NOT send notification to creator for public joins to avoid spam,
+            // or maybe we should? Let's keep it silent for now as requested for "Public" feel.
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // =========================================================
+    // SOLICITAR ACCESO
     // =========================================================
     suspend fun approveParticipant(
         eventId: String,
@@ -447,34 +493,71 @@ class EventRepository {
     }
 
     // =========================================================
-    // OBSERVAR EVENTOS (REALTIME)
+    // OBSERVAR EVENTOS (REALTIME) - GEOHASH SUPPORT
     // =========================================================
-    fun observeEvents(): Flow<List<Event>> = callbackFlow {
+    // =========================================================
+    // OBSERVAR EVENTOS (REALTIME) - GEOHASH SUPPORT
+    // =========================================================
+    fun observeNearbyEvents(geohashPrefix: String? = null, commune: String? = null, region: String? = null): Flow<List<Event>> = callbackFlow {
 
-        val listener = eventsCollection
-            .orderBy("createdAt")
-            .addSnapshotListener { snapshot, error ->
+        val collectionRef = eventsCollection
 
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
+        var query: com.google.firebase.firestore.Query = collectionRef
 
-                val now = System.currentTimeMillis()
+        if (!commune.isNullOrBlank()) {
+            // 🏙️ 1. Filter by Commune (Highest Priority)
+            query = query.whereEqualTo("commune", commune)
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(100)
+        } else if (!region.isNullOrBlank()) {
+            // 🗺️ 2. Filter by Region (New)
+            query = query.whereEqualTo("region", region)
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(100)
+        } else if (!geohashPrefix.isNullOrEmpty()) {
+            // 📍 3. Filter by Geohash (GPS)
+            val endParams = geohashPrefix + "~"
+            query = query
+                .orderBy("geohash")
+                .startAt(geohashPrefix)
+                .endAt(endParams)
+                .limit(100)
+        } else {
+            // 🌍 4. Global Fallback
+            query = query.orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(500) // Increased limit to support "All Radius" global search strategy
+        }
 
-                val events = snapshot
-                    ?.toObjects(Event::class.java)
-                    ?.filter {
-                        it.status == EventStatus.OPEN &&
-                                it.endAt > now
-                    }
-                    ?: emptyList()
+        val listener = query.addSnapshotListener { snapshot, error ->
 
-                trySend(events)
+            if (error != null) {
+                close(error)
+                return@addSnapshotListener
             }
+
+            val now = System.currentTimeMillis()
+
+            val events = snapshot
+                ?.toObjects(Event::class.java)
+                ?.filter {
+                    // Client-side filtering
+                    it.status == EventStatus.OPEN &&
+                    it.endAt > now
+                }
+                ?.sortedWith(
+                    compareByDescending<Event> { it.isBoosted && it.boostExpiry > now }
+                        .thenByDescending { it.createdAt }
+                )
+                ?: emptyList()
+
+            trySend(events)
+        }
 
         awaitClose { listener.remove() }
     }
+    
+    // Deprecated: Kept for compatibility if needed, but pointing to new logic
+    fun observeEvents() = observeNearbyEvents(null, null, null)
 
     // =========================================================
     // AUTO-MARK EVENTS AS RATABLE (Round 11)
@@ -519,6 +602,59 @@ class EventRepository {
             Result.success(markedCount)
         } catch (e: Exception) {
             android.util.Log.e("EventRepository", "Error marking events as ratable", e)
+            Result.failure(e)
+        }
+    }
+
+    // =========================================================
+    // MONETIZACIÓN: BOOST EVENT (Round 42)
+    // =========================================================
+    suspend fun boostEvent(eventId: String, durationMs: Long): Result<Unit> {
+        return try {
+            val now = System.currentTimeMillis()
+            val expiry = now + durationMs
+            
+            eventsCollection.document(eventId).update(
+                mapOf(
+                    "isBoosted" to true,
+                    "boostExpiry" to expiry
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // =========================================================
+    // MIGRATION TOOL (A29) - Fix old events
+    // =========================================================
+    suspend fun migrateEventsToGeohash(): Result<Int> {
+        return try {
+            // 1. Get ALL events (or those missing geohash if possible, but Firestore doesn't support "missing field" query easily without custom index on null)
+            // Safer to just get all Open events or all events. Let's get ALL for now (assuming DB size isn't huge yet).
+            val snapshot = eventsCollection.get().await()
+            val batch = firestore.batch()
+            var count = 0
+            
+            snapshot.documents.forEach { doc ->
+                val lat = doc.getDouble("latitude")
+                val lng = doc.getDouble("longitude")
+                val currentHash = doc.getString("geohash")
+                
+                if (lat != null && lng != null && currentHash == null) {
+                    val newHash = com.eventos.banana.util.GeohashUtils.encode(lat, lng, 9)
+                    batch.update(doc.reference, "geohash", newHash)
+                    count++
+                }
+            }
+            
+            if (count > 0) {
+                batch.commit().await()
+            }
+            
+            Result.success(count)
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }

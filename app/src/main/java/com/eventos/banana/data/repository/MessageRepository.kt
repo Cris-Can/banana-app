@@ -170,4 +170,27 @@ class MessageRepository {
         
         awaitClose { listener.remove() }
     }
+    // 🎨 CHAT THEMES (Round 48)
+    suspend fun updateConversationTheme(conversationId: String, themeColor: String): Result<Unit> {
+        return try {
+            conversationsCollection.document(conversationId).update("themeColor", themeColor).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // Observar detalles de una conversación (Theme, Nicknames, etc.)
+    fun observeConversation(conversationId: String): Flow<Conversation?> = callbackFlow {
+        val listener = conversationsCollection.document(conversationId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val conversation = snapshot?.toObject(Conversation::class.java)
+                trySend(conversation)
+            }
+        awaitClose { listener.remove() }
+    }
 }

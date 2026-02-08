@@ -8,7 +8,8 @@ data class Conversation(
     val lastMessageSenderId: String = "",
     val lastMessageTimestamp: Long = 0L,
     val unreadCount: Map<String, Int> = emptyMap(),  // uid -> cantidad no leídas
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val themeColor: String? = null // 🎨 Chat Theme (Hex or Key)
 )
 
 data class Message(

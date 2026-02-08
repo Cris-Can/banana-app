@@ -110,4 +110,38 @@ class FeedViewModel(
             }
         }
     }
+    fun blockUser(targetUid: String) {
+        viewModelScope.launch {
+            try {
+                // Get current user ID (assuming we can get it from repository or pass it in)
+                // For this VM, we might need to pass currentUserId to the function or get it from Auth
+                // Since FeedViewModel doesn't have AuthRepository injected, we'll rely on the caller passing ID 
+                // OR we inject AuthRepository.
+                // Simpler: FeedViewModel is often scoped to Event, let's pass currentUserId to the function
+            } catch (e: Exception) { }
+        }
+    }
+    
+    // Better approach: Since we already call createPost with userId, we can do the same here.
+    fun blockUser(currentUid: String, targetUid: String) {
+         viewModelScope.launch {
+             try {
+                 userRepository.blockUser(currentUid, targetUid)
+                 // Optimistically filter posts from blocked user
+                 _uiState.value = _uiState.value.copy(
+                     posts = _uiState.value.posts.filter { it.userId != targetUid }
+                 )
+             } catch (e: Exception) {
+                 // Log
+             }
+         }
+    }
+
+    fun reportPost(currentUid: String, post: FeedPost, reason: String) {
+        viewModelScope.launch {
+            try {
+                userRepository.reportUser(currentUid, post.userId, "POST_REPORT: ${post.id} - $reason")
+            } catch (e: Exception) { }
+        }
+    }
 }

@@ -16,5 +16,10 @@ class BananaApp : Application() {
         FirebaseFirestore.getInstance().firestoreSettings = settings
         
         com.eventos.banana.util.BananaAnalytics.init(this)
+
+        // 🌍 Places API Initialization (Global Expansion)
+        if (!com.google.android.libraries.places.api.Places.isInitialized()) {
+            com.google.android.libraries.places.api.Places.initialize(applicationContext, "AIzaSyCoCzzjj6ZIO6a-RH-9c-5JlYm2VlzRKCY")
+        }
     }
 }

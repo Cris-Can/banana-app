@@ -40,6 +40,9 @@ data class Event(
 
 
     val maxParticipants: Int = 0,
+    
+    // 🌍 PUBLIC EVENTS (Update)
+    val isPublic: Boolean = false, // True = Entrada libre, sin aprobación, ubicación visible
 
     val approvalRequired: Boolean = true,
     val joinQuestions: List<JoinQuestion> = emptyList(),
@@ -55,7 +58,14 @@ data class Event(
     // ⭐ SISTEMA DE PUNTUACIÓN (Round 11)
     val minimumScore: Double? = null,    // null = sin restricción, ej: 3.5
     val ratingDeadline: Long? = null,    // eventTimestamp + 5 días
-    val canBeRated: Boolean = false      // true si ya finalizó y se puede puntuar
+    val canBeRated: Boolean = false,      // true si ya finalizó y se puede puntuar
+    
+    // 💎 MONETIZACIÓN (Round 42)
+    val isBoosted: Boolean = false,       // Evento destacado en feed
+    val boostExpiry: Long = 0L,           // Expiración del boost
+    
+    // 🌍 GEOHASHING (Round 52)
+    val geohash: String? = null           // Indexed field for radius queries
 ) {
     // Helper para verificar si un usuario puede unirse según su score
     fun canUserJoin(userAverageRating: Double, userRatingCount: Int): Boolean {

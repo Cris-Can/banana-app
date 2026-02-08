@@ -24,5 +24,8 @@ enum class NotificationType {
     REMOVED_FROM_EVENT,   // 👈 A15.1
     
     // Chat
-    NEW_MESSAGE
+    NEW_MESSAGE,
+    
+    // Perfil
+    PROFILE_VIEW // 👁️ Round 48
 }

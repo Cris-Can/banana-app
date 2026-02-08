@@ -27,6 +27,10 @@ import com.eventos.banana.ui.messages.ChatScreen
 import com.eventos.banana.data.repository.MessageRepository
 import com.eventos.banana.domain.model.Conversation
 import com.eventos.banana.domain.model.Message
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
 import com.eventos.banana.viewmodel.*
 
 @Composable
@@ -50,7 +54,10 @@ fun AppNavigation(startDestination: String = "splash") {
         factory = object : androidx.lifecycle.ViewModelProvider.Factory {
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return SessionViewModel(sharedPreferences = sharedPreferences) as T
+                return SessionViewModel(
+                    application = context.applicationContext as android.app.Application,
+                    sharedPreferences = sharedPreferences
+                ) as T
             }
         }
     )
@@ -79,91 +86,135 @@ fun AppNavigation(startDestination: String = "splash") {
     // If Authenticated -> Check Onboarding -> Home/Onboarding
     // If Not Authenticated -> Login
     
+    // Logic: Start at Splash.
+    // If Authenticated -> Check Onboarding -> Home/Onboarding
+    // If Not Authenticated -> Login
+    
     Box(modifier = Modifier.fillMaxSize()) {
-        NavHost(
-        navController = navController,
-        startDestination = "splash"
-    ) {
-
-        // ---------- SPLASH ----------
-        composable("splash") {
-            SplashScreen()
-        }
-
-        // ---------- ONBOARDING ----------
-        composable("onboarding") {
-            com.eventos.banana.ui.onboarding.OnboardingScreen(
-                onFinish = { dontShowAgain ->
-                    if (dontShowAgain) {
-                        sharedPreferences.edit().putBoolean("onboarding_seen_v2", true).apply()
-                        hasSeenOnboarding.value = true // Update cached state
-                    }
-                    // Navigate to Home after onboarding
-                    navController.navigate("home") {
-                        popUpTo("onboarding") { inclusive = true }
-                    }
+        @OptIn(ExperimentalSharedTransitionApi::class)
+        SharedTransitionLayout {
+            NavHost(
+                navController = navController,
+                startDestination = "splash"
+            ) {
+        
+                // ---------- SPLASH ----------
+                composable("splash") {
+                    SplashScreen()
                 }
-            )
-        }
+        
+                // ---------- ONBOARDING ----------
+                composable("onboarding") {
+                    com.eventos.banana.ui.onboarding.OnboardingScreen(
+                        onFinish = {
+                            sharedPreferences.edit().putBoolean("onboarding_seen_v2", true).apply()
+                            hasSeenOnboarding.value = true // Update cached state
 
-        // ---------- LOGIN ----------
-        composable("login") {
-            val loginUiState by sessionViewModel.loginUiState.collectAsState()
-            val registerUiState by sessionViewModel.registerUiState.collectAsState()
-
-            LoginScreen(
-                loginUiState = loginUiState,
-                registerUiState = registerUiState,
-                onLogin = sessionViewModel::login,
-                onRegister = sessionViewModel::register
-            )
-        }
-
-        // ---------- HOME ----------
-        composable("home") {
-            val notificationViewModel: NotificationViewModel = viewModel()
-
-            LaunchedEffect(Unit) {
-                notificationViewModel.start(sessionViewModel.currentUserId())
-                // 🚀 Start Guide if needed (Only on Home)
-                guideViewModel.startGuide()
-            }
-
-            val notifications by notificationViewModel.notifications.collectAsState()
-            val unreadCount = notifications.count { !it.read }
-
-            // 📩 Unread Messages Count
-            val msgRepo = remember { MessageRepository() }
-            val conversations by msgRepo.observeConversations(sessionViewModel.currentUserId()).collectAsState(initial = emptyList())
-            val unreadMessagesCount = conversations.sumOf { it.unreadCount[sessionViewModel.currentUserId()] ?: 0 }
-
-            HomeScreen(
-                sessionViewModel = sessionViewModel,
-                unreadNotifications = unreadCount,
-                unreadMessages = unreadMessagesCount, // Pass the count
-                onCreateEventClick = {
-                    navController.navigate("create_event")
-                },
-                onEventClick = { eventId ->
-                    navController.navigate("event_detail/$eventId")
-                },
-                onNotificationsClick = {
-                    navController.navigate("notifications")
-                },
-                onProfileClick = {
-                    navController.navigate("profile")
-                },
-                onSearchClick = {
-                    navController.navigate("search")
-                },
-                onFriendsClick = {
-                    navController.navigate("friends")
-                },
-                onMessagesClick = {
-                    navController.navigate("conversations")
+                            // Navigate to Home after onboarding
+                            // Navigate to Home after onboarding
+                            navController.navigate("home") {
+                                popUpTo("onboarding") { inclusive = true }
+                            }
+                        }
+                    )
                 }
-            )
-        }
+        
+                // ---------- LOGIN ----------
+                composable("login") {
+                    val loginUiState by sessionViewModel.loginUiState.collectAsState()
+                    val registerUiState by sessionViewModel.registerUiState.collectAsState()
+        
+                    LoginScreen(
+                        loginUiState = loginUiState,
+                        registerUiState = registerUiState,
+                        onLogin = sessionViewModel::login,
+                        onRegister = { email, password, nickname, birthDate, commune, region, lat, lng ->
+                            sessionViewModel.register(email, password, nickname, birthDate, commune, region, lat, lng)
+                        },
+                        onForgotPassword = sessionViewModel::resetPassword
+                    )
+                }
+        
+                // ---------- GOLD SUBSCRIPTION ----------
+                composable("gold") {
+                    val billingViewModel: com.eventos.banana.viewmodel.BillingViewModel = viewModel()
+                    com.eventos.banana.ui.monetization.BananaGoldScreen(
+                        billingViewModel = billingViewModel,
+                        onDismiss = { navController.popBackStack() },
+                        onNavigateToIcons = { navController.navigate("app_icons") }
+                    )
+                }
+
+                // ---------- APP ICON SELECTOR ----------
+                composable("app_icons") {
+                    com.eventos.banana.ui.monetization.AppIconSelectorScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                // ---------- HOME ----------
+                composable("home") {
+                    val notificationViewModel: NotificationViewModel = viewModel()
+        
+                    LaunchedEffect(Unit) {
+                        notificationViewModel.start(sessionViewModel.currentUserId())
+                        // 🚀 Start Guide if needed (Only on Home)
+                        guideViewModel.startGuide()
+                    }
+        
+                    val notifications by notificationViewModel.notifications.collectAsState()
+                    val unreadCount = notifications.count { !it.read }
+        
+                    // 📩 Unread Messages Count
+                    val msgRepo = remember { MessageRepository() }
+                    val conversations by msgRepo.observeConversations(sessionViewModel.currentUserId()).collectAsState(initial = emptyList())
+                    val unreadMessagesCount = conversations.sumOf { it.unreadCount[sessionViewModel.currentUserId()] ?: 0 }
+        
+                    HomeScreen(
+                        sessionViewModel = sessionViewModel,
+                        unreadNotifications = unreadCount,
+                        unreadMessages = unreadMessagesCount, // Pass the count
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedVisibilityScope = this@composable,
+                        onCreateEventClick = {
+                            navController.navigate("create_event")
+                        },
+                        onEventClick = { eventId ->
+                            navController.navigate("event_detail/$eventId")
+                        },
+                        onNotificationsClick = {
+                            navController.navigate("notifications")
+                        },
+                        onProfileClick = {
+                            navController.navigate("profile")
+                        },
+                        onSearchClick = {
+                            navController.navigate("search")
+                        },
+                        onFriendsClick = {
+                            navController.navigate("friends")
+                        },
+                        onMessagesClick = {
+                            navController.navigate("conversations")
+                        },
+                        onMapClick = {
+                            navController.navigate("world_map")
+                        }
+                    )
+                }
+                
+                // ---------- WORLD MAP ----------
+                composable("world_map") {
+                    // We instantiate a fresh ViewModel. 
+                    // It will init with default "Nearby" logic (Global or Cached Location).
+                    // WorldMapScreen handles updating location on start.
+                    com.eventos.banana.ui.maps.WorldMapScreen(
+                        onBack = { navController.popBackStack() },
+                        onEventClick = { eventId ->
+                            navController.navigate("event_detail/$eventId")
+                        }
+                    )
+                }
 
         // ---------- REST OF ROUTES ----------
         composable("create_event") { backStackEntry ->
@@ -198,6 +249,9 @@ fun AppNavigation(startDestination: String = "splash") {
                 onSuccess = {
                     vm.resetState()
                     navController.popBackStack()
+                },
+                onNavigateToPremium = {
+                    navController.navigate("gold")
                 }
             )
         }
@@ -251,6 +305,13 @@ fun AppNavigation(startDestination: String = "splash") {
                 }
             )
 
+            // 💰 Billing ViewModel for Boosts (Round 42)
+            val billingViewModel: BillingViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                     androidx.compose.ui.platform.LocalContext.current.applicationContext as android.app.Application
+                )
+            )
+
             val uiState by vm.uiState.collectAsState()
             val isSaved by vm.isSaved.collectAsState()
             val hasAttended by vm.hasAttended.collectAsState()
@@ -259,11 +320,15 @@ fun AppNavigation(startDestination: String = "splash") {
             LaunchedEffect(vm, sessionViewModel.currentUserId()) {
                  vm.loadUserInteractionState(sessionViewModel.currentUserId())
             }
+            
+            val context = androidx.compose.ui.platform.LocalContext.current
 
             EventDetailRoute(
                 uiState = uiState,
                 currentUserId = sessionViewModel.currentUserId(),
                 isEmailVerified = sessionViewModel.isEmailVerified,
+                sharedTransitionScope = this@SharedTransitionLayout,
+                animatedVisibilityScope = this@composable,
                 onJoinClick = {
                     navController.navigate("questionnaire/$eventId")
                 },
@@ -301,6 +366,18 @@ fun AppNavigation(startDestination: String = "splash") {
                 onRateParticipants = { event ->
                     val participantIds = (event.approvedParticipants + event.creatorId).joinToString(",")
                     navController.navigate("rate_participants/${event.id}/${event.eventType.name}/$participantIds")
+                },
+                onBoostClick = {
+                    (context as? android.app.Activity)?.let { activity ->
+                        val success = billingViewModel.buyEventBoost(activity, eventId)
+                        if (!success) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "⚠️ Error: Producto 'boost' no disponible en Play Store",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
                 },
                 isSaved = isSaved,
                 onToggleSave = { vm.toggleSaveEvent(sessionViewModel.currentUserId()) },
@@ -417,6 +494,11 @@ fun AppNavigation(startDestination: String = "splash") {
                         notification.eventId?.let { conversationId ->
                             navController.navigate("chat/$conversationId")
                         }
+                    } else if (notification.type == com.eventos.banana.domain.model.NotificationType.FRIEND_ACCEPTED) {
+                         // 🔔 FRIEND_ACCEPTED -> Go to sender's profile
+                         notification.fromUserId?.let { senderId ->
+                             navController.navigate("public_profile/$senderId")
+                         }
                     } else {
                         notification.eventId?.let { eventId ->
                              navController.navigate("event_detail/$eventId")
@@ -467,7 +549,92 @@ fun AppNavigation(startDestination: String = "splash") {
                 onFriendsClick = { navController.navigate("friends") },
                 onEventClick = { eventId ->
                     navController.navigate("event_detail/$eventId")
-                }
+                },
+                onSettingsClick = { navController.navigate("settings") },
+                onProfileViewsClick = { navController.navigate("profile_views") }
+            )
+        }
+
+        // ---------- PROFILE VIEWS (Round 48) ----------
+        composable("profile_views") {
+             val profileViewModel: ProfileViewModel = viewModel()
+             val profileUiState by sessionViewModel.profileUiState.collectAsState()
+             val isGold = profileUiState.profile?.isGold == true
+             
+             com.eventos.banana.ui.profile.ProfileViewsScreen(
+                 profileViewModel = profileViewModel,
+                 currentUserUid = sessionViewModel.currentUserId() ?: "",
+                 isGold = isGold,
+                 onBack = { navController.popBackStack() },
+                 onNavigateToGold = { navController.navigate("gold") },
+                 onUserClick = { userId ->
+                      navController.navigate("public_profile/$userId")
+                 }
+             )
+        }
+
+        // ---------- SETTINGS ----------
+        // ---------- SETTINGS ----------
+        composable("settings") {
+            val deleteStatus by sessionViewModel.deleteAccountStatus.collectAsState()
+            val profileViewModel: ProfileViewModel = viewModel()
+            val profileUiState by sessionViewModel.profileUiState.collectAsState()
+            val profileViewModelCallbackUiState by profileViewModel.uiState.collectAsState()
+            
+            com.eventos.banana.ui.settings.SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToGold = { navController.navigate("gold") },
+                onLogout = { 
+                    sessionViewModel.logout()
+                    navController.navigate("login") { popUpTo(0) { inclusive = true } }
+                },
+                onDeleteAccount = { sessionViewModel.deleteAccount() },
+                deleteAccountStatus = deleteStatus,
+                onResetDeleteStatus = { sessionViewModel.resetDeleteAccountStatus() },
+                onGuideReset = {
+                    sharedPreferences.edit().putBoolean("onboarding_seen_v2", false).apply()
+                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    context.startActivity(intent)
+                },
+                userProfile = profileUiState.profile,
+                onUpdateTheme = { theme -> 
+                    profileUiState.profile?.uid?.let { uid -> profileViewModel.updateAppTheme(uid, theme) }
+                },
+                onSendPasswordReset = { email ->
+                    profileViewModel.sendPasswordReset(email)
+                },
+                onVerifyEmail = {
+                    sessionViewModel.sendEmailVerification()
+                },
+                isEmailVerified = sessionViewModel.isEmailVerified,
+                onRecalculateStats = { uid ->
+                    profileViewModel.recalculateStats(uid)
+                },
+                onUpdateLocation = { uid, region, commune ->
+                    profileViewModel.updateLocation(uid, region, commune)
+                },
+                onUpdateNotifyCommune = { enabled, region, commune ->
+                    profileUiState.profile?.uid?.let { uid ->
+                        profileViewModel.updateNotifyEventsByCommune(uid, enabled, region, commune)
+                    }
+                },
+                onToggleCategorySubscription = { topic, isEnabled ->
+                    profileUiState.profile?.uid?.let { uid ->
+                        profileViewModel.toggleCategorySubscription(uid, topic, isEnabled)
+                    }
+                },
+                onUpdateNotifyWall = { enabled ->
+                    sessionViewModel.currentUserId()?.let { uid ->
+                        profileViewModel.updateNotifyEventWall(uid, enabled)
+                    }
+                },
+                onNavigateToIcons = { navController.navigate("app_icons") },
+                onMigrateEvents = {
+                    profileViewModel.runMigration()
+                },
+                migrationStatus = profileViewModel.migrationStatus.collectAsState().value,
+                profileUiState = profileViewModelCallbackUiState
             )
         }
 
@@ -541,20 +708,53 @@ fun AppNavigation(startDestination: String = "splash") {
             val messages by messageRepository.observeMessages(conversationId)
                 .collectAsState(initial = emptyList<com.eventos.banana.domain.model.Message>())
             
+            // 🎨 CHAT THEME OBSERVATION
+            val conversationDetails by messageRepository.observeConversation(conversationId).collectAsState(initial = null)
+            val themeColor = conversationDetails?.themeColor
+            val profileUiState by sessionViewModel.profileUiState.collectAsState()
+            val isGold = profileUiState.profile?.isGold == true
+
             // Get other user nickname from first message or conversation
-            val otherNickname = "Chat"
+            val otherNickname = (conversationDetails?.participantNicknames?.get(
+                conversationDetails?.participants?.firstOrNull { it != currentUserId }
+            )) ?: "Chat"
+
             val scope = rememberCoroutineScope()
             
             ChatScreen(
                 otherUserNickname = otherNickname,
                 messages = messages,
                 currentUserId = currentUserId,
+                themeColor = themeColor,
+                isGold = isGold,
                 onSendMessage = { content ->
                     scope.launch {
                         messageRepository.sendMessage(conversationId, currentUserId, content)
                     }
                 },
-                onBack = { navController.popBackStack() }
+                onUpdateTheme = { color ->
+                    scope.launch {
+                        messageRepository.updateConversationTheme(conversationId, color)
+                    }
+                },
+                onBack = { navController.popBackStack() },
+                onReportUser = { reason ->
+                    // 🛡️ Quick inline reporting for now
+                     scope.launch {
+                         val userRepository = com.eventos.banana.data.repository.UserRepository()
+                         userRepository.reportUser(currentUserId, conversationDetails?.participants?.firstOrNull { it != currentUserId } ?: "", reason)
+                     }
+                },
+                onBlockUser = {
+                     scope.launch {
+                         val userRepository = com.eventos.banana.data.repository.UserRepository()
+                         val targetId = conversationDetails?.participants?.firstOrNull { it != currentUserId }
+                         if (targetId != null) {
+                             userRepository.blockUser(currentUserId, targetId)
+                             navController.popBackStack() // Exit chat
+                         }
+                     }
+                }
             )
         }
 
@@ -615,7 +815,8 @@ fun AppNavigation(startDestination: String = "splash") {
         com.eventos.banana.ui.components.GuideOverlay(
             viewModel = guideViewModel
         )
-    }
+    } // End SharedTransitionLayout
+    } // End Box
 
     // ---------- SESSION REDIRECTION ----------
     // React to sessionState changes and verification check completion

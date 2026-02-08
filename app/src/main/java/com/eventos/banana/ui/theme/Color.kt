@@ -5,13 +5,15 @@ import androidx.compose.ui.graphics.Color
 // 🎨 BANANA BRAND COLORS (Harmonic Update)
 
 // Primary Brand
-val BananaYellow = Color(0xFFFFD600)    // Vivid Yellow (Material 700)
-val BananaYellowLight = Color(0xFFFFEA00) // Lighter accent
+// Primary Brand (Updated to Premium Gold)
+val BananaYellow = Color(0xFFFFD600)    // Legacy Yellow
+val BananaGold = Color(0xFFFFD700)      // Premium Gold (Main)
+val BananaGoldDim = Color(0xFFC5A000)   // Darker Gold
 
 // Backgrounds (Clean Dark Mode)
-val BananaDarkBackground = Color(0xFF121212)
-val BananaDarkSurface = Color(0xFF1E1E1E)
-val BananaDarkSurfaceVariant = Color(0xFF2D2D2D)
+val BananaDarkBackground = Color(0xFF050505) // Deeper Black
+val BananaDarkSurface = Color(0xFF101010)    // Premium Dark Surface
+val BananaDarkSurfaceVariant = Color(0xFF1F1F1F)
 
 // Text
 val BananaWhite = Color(0xFFF5F5F5)    // High Emphasis

@@ -80,7 +80,11 @@ class EventDetailViewModel(
     // ---------- SOLICITUDES ----------
     fun approveParticipant(userId: String) {
         viewModelScope.launch {
-            repository.approveParticipant(eventId, userId)
+            val result = repository.approveParticipant(eventId, userId)
+            if (result.isSuccess) {
+                 // 📊 STATS: Increment "Requested" (now acting as "Approved") to track reliability
+                 userRepository.incrementEventsRequested(userId)
+            }
             loadEvent()
         }
     }
@@ -101,6 +105,12 @@ class EventDetailViewModel(
         viewModelScope.launch {
             _joinSubmissionState.value = JoinSubmissionState.Loading
             
+            // 🚨 Check if event is PUBLIC first to skip Limits?
+            // User requested that Public events be "unrestricted".
+            // However, premium/free limits on "Joins" might still apply?
+            // "Sin restricción de usuarios" usually means approval restrictions.
+            // Let's keep the join count limit (3/month) for now unless strictly told otherwise.
+            
             // Check Limits
             val canJoin = subscriptionRepository.canJoinEvent(userId)
             if (canJoin.isFailure || !canJoin.getOrDefault(false)) {
@@ -111,27 +121,45 @@ class EventDetailViewModel(
             }
 
             try {
-                val userNickname = userRepository.getUserProfile(userId)?.nickname ?: "Usuario"
-                val answersWithNickname = answers + ("_nickname" to userNickname)
-
-                val result = repository.requestJoinEventWithAnswers(
-                    eventId = eventId,
-                    userId = userId,
-                    answers = answersWithNickname
-                )
-
-                if (result.isSuccess) {
-                    // Increment Usage
-                    subscriptionRepository.incrementJoinCount(userId)
-                    
-                    // 📊 STATS (Round 14)
-                    userRepository.incrementEventsRequested(userId)
-                    
-                    _joinSubmissionState.value = JoinSubmissionState.Success
+                // Fetch event to check if public
+                // Ideally this info is passed in, but we can trust the repo or current state
+                val currentEvent = (_uiState.value as? EventDetailUiState.Success)?.event
+                
+                if (currentEvent?.isPublic == true) {
+                     // 🌍 DIRECT JOIN
+                     val result = repository.joinEventDirectly(eventId, userId)
+                     if (result.isSuccess) {
+                         // Increment Usage (Subscription limits still apply?)
+                         subscriptionRepository.incrementJoinCount(userId)
+                         
+                         // 📊 STATS: DO NOT INCREMENT requested count for Public Events
+                         // This ensures reliability score isn't affected.
+                         
+                         _joinSubmissionState.value = JoinSubmissionState.Success
+                     } else {
+                         _joinSubmissionState.value = JoinSubmissionState.Error(result.exceptionOrNull()?.message ?: "Error")
+                     }
                 } else {
-                    _joinSubmissionState.value = JoinSubmissionState.Error(
-                        result.exceptionOrNull()?.message ?: "Error desconocido"
+                    // 🔒 RESTRICTED JOIN (Normal)
+                    val userNickname = userRepository.getUserProfile(userId)?.nickname ?: "Usuario"
+                    val answersWithNickname = answers + ("_nickname" to userNickname)
+    
+                    val result = repository.requestJoinEventWithAnswers(
+                        eventId = eventId,
+                        userId = userId,
+                        answers = answersWithNickname
                     )
+    
+                    if (result.isSuccess) {
+                        subscriptionRepository.incrementJoinCount(userId)
+                         // 📊 STATS: DO NOT INCREMENT requested count on Request.
+                         // We wait for Approval in restricted events too (changed recently).
+                        _joinSubmissionState.value = JoinSubmissionState.Success
+                    } else {
+                        _joinSubmissionState.value = JoinSubmissionState.Error(
+                            result.exceptionOrNull()?.message ?: "Error desconocido"
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _joinSubmissionState.value = JoinSubmissionState.Error(e.message ?: "Excepción inesperada")

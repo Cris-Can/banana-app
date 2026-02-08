@@ -12,13 +12,37 @@ import com.eventos.banana.domain.model.RegisterUiState
 @Composable
 fun RegisterScreen(
     uiState: RegisterUiState,
-    onRegister: (String, String, String) -> Unit
+    onRegister: (String, String, String, String, String?, Double?, Double?) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
     
+    // 🌍 Location State
+    var commune by remember { mutableStateOf("") }
+    var region by remember { mutableStateOf("") }
+    var latitude by remember { mutableStateOf<Double?>(null) }
+    var longitude by remember { mutableStateOf<Double?>(null) }
+    var isLocationLoading by remember { mutableStateOf(false) }
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    // 📍 Auto-Detect Location
+    LaunchedEffect(Unit) {
+        if (com.eventos.banana.util.LocationHelper.hasLocationPermissions(context)) {
+            isLocationLoading = true
+            val helper = com.eventos.banana.util.LocationHelper(context)
+            val result = helper.detectLocationFull()
+            if (result != null) {
+                commune = result.commune
+                region = result.region
+                latitude = result.latitude
+                longitude = result.longitude
+            }
+            isLocationLoading = false
+        }
+    }
     
     LaunchedEffect(uiState) {
         if (uiState.errorMessage != null) {
@@ -40,6 +64,7 @@ fun RegisterScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
+            // ... (Email/Pass/Nickname fields remain) ...
             TextField(
                 value = email,
                 onValueChange = { email = it },
@@ -65,12 +90,28 @@ fun RegisterScreen(
                 label = { Text("Apodo") },
                 modifier = Modifier.fillMaxWidth()
             )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 📍 Comuna Field (Auto-filled)
+            OutlinedTextField(
+                value = if (isLocationLoading) "Detectando ubicación..." else commune.ifBlank { "Ubicación no detectada" },
+                onValueChange = { }, // Read-only
+                label = { Text("Tu Comuna (Automático)") },
+                enabled = false, // User cannot edit manually (for now)
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = { onRegister(email, password, nickname) },
-                enabled = !uiState.isLoading,
+                onClick = { onRegister(email, password, nickname, commune, region, latitude, longitude) },
+                enabled = !uiState.isLoading && email.isNotBlank() && password.isNotBlank() && nickname.isNotBlank() && commune.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (uiState.isLoading) {

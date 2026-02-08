@@ -8,10 +8,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.Message
 
@@ -21,10 +25,44 @@ fun ChatScreen(
     otherUserNickname: String,
     messages: List<Message>,
     currentUserId: String,
+    themeColor: String? = null,
+    isGold: Boolean = false, // 💎 Gold Feature
     onSendMessage: (String) -> Unit,
-    onBack: () -> Unit
+    onUpdateTheme: (String) -> Unit = {},
+    onBack: () -> Unit,
+    onReportUser: (String) -> Unit = {},
+    onBlockUser: () -> Unit = {}
 ) {
     var messageText by remember { mutableStateOf("") }
+    var showColorPicker by remember { mutableStateOf(false) }
+    var showUpsellDialog by remember { mutableStateOf(false) }
+    
+    // 🎨 Resolve Theme Color
+    val activeColor = remember(themeColor) {
+        if (themeColor != null && themeColor.startsWith("#")) {
+            try {
+                androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(themeColor))
+            } catch (e: Exception) {
+                null // Fallback to primary
+            }
+        } else {
+            null
+        }
+    }
+    
+    // Fallback to MaterialTheme.colorScheme.primary if activeColor is null, but we need it inside Composable for MessageBubble
+    
+    if (showColorPicker) {
+        ColorPickerDialog(
+            onDismiss = { showColorPicker = false },
+            onColorSelected = { colorHex ->
+                onUpdateTheme(colorHex)
+                showColorPicker = false
+            }
+        )
+    }
+
+    // Upsell dialog removed (Themes are now free)
     
     Scaffold(
         topBar = {
@@ -33,6 +71,56 @@ fun ChatScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                    }
+                },
+                actions = {
+                    // 🎨 Theme Button (Open for everyone now)
+                    IconButton(onClick = {
+                        showColorPicker = true
+                    }) {
+                        Icon(androidx.compose.material.icons.Icons.Default.Edit, "Tema",
+                            tint = activeColor ?: MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    // 🛡️ Block/Report Menu (Round 49)
+                    var showMenu by remember { mutableStateOf(false) }
+                    var showReportDialog by remember { mutableStateOf(false) }
+                    
+                    IconButton(onClick = { showMenu = !showMenu }) {
+                        Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, "Opciones")
+                    }
+                    
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("🚩 Reportar") },
+                            onClick = { showMenu = false; showReportDialog = true }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🚫 Bloquear") },
+                            onClick = { 
+                                showMenu = false
+                                onBlockUser()
+                            }
+                        )
+                    }
+                    
+                    if (showReportDialog) {
+                         // Simple Report Dialog
+                         AlertDialog(
+                             onDismissRequest = { showReportDialog = false },
+                             title = { Text("Denunciar chat") },
+                             text = { Text("¿Denunciar este chat por contenido inapropiado?") },
+                             confirmButton = {
+                                 TextButton(onClick = {
+                                     onReportUser("Contenido inapropiado")
+                                     showReportDialog = false
+                                 }) { Text("Denunciar", color = MaterialTheme.colorScheme.error) }
+                             },
+                             dismissButton = {
+                                 TextButton(onClick = { showReportDialog = false }) { Text("Cancelar") }
+                             }
+                         )
                     }
                 }
             )
@@ -54,7 +142,8 @@ fun ChatScreen(
                 items(messages) { message ->
                     MessageBubble(
                         message = message,
-                        isCurrentUser = message.senderId == currentUserId
+                        isCurrentUser = message.senderId == currentUserId,
+                        activeColor = activeColor
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -72,7 +161,11 @@ fun ChatScreen(
                     onValueChange = { messageText = it },
                     placeholder = { Text("Escribe un mensaje...") },
                     modifier = Modifier.weight(1f),
-                    maxLines = 3
+                    maxLines = 3,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = activeColor ?: MaterialTheme.colorScheme.primary,
+                        cursorColor = activeColor ?: MaterialTheme.colorScheme.primary
+                    )
                 )
                 
                 Spacer(Modifier.width(8.dp))
@@ -86,7 +179,11 @@ fun ChatScreen(
                     },
                     enabled = messageText.isNotBlank()
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, "Enviar")
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send, 
+                        "Enviar",
+                        tint = if (messageText.isNotBlank()) activeColor ?: MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha=0.38f)
+                    )
                 }
             }
         }
@@ -94,9 +191,60 @@ fun ChatScreen(
 }
 
 @Composable
+fun ColorPickerDialog(
+    onDismiss: () -> Unit,
+    onColorSelected: (String) -> Unit
+) {
+    val colors = listOf(
+        Pair("Default", "DEFAULT"), // Null/Reset
+        Pair("Rojo", "#F44336"),
+        Pair("Azul", "#2196F3"),
+        Pair("Verde", "#4CAF50"),
+        Pair("Rosa", "#E91E63"),
+        Pair("Naranja", "#FF9800"),
+        Pair("Morado", "#9C27B0"),
+        Pair("Negro", "#000000")
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Elige un color") },
+        text = {
+            Column {
+                colors.chunked(4).forEach { rowColors ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        rowColors.forEach { (name, hex) ->
+                            val color = if (hex == "DEFAULT") MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex))
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(color, CircleShape)
+                                    .clickable {
+                                        onColorSelected(hex)
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
 private fun MessageBubble(
     message: Message,
-    isCurrentUser: Boolean
+    isCurrentUser: Boolean,
+    activeColor: androidx.compose.ui.graphics.Color? = null
 ) {
     Box(
         modifier = Modifier.fillMaxWidth(),
@@ -105,7 +253,7 @@ private fun MessageBubble(
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = if (isCurrentUser) {
-                MaterialTheme.colorScheme.primary
+                activeColor ?: MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
             },
@@ -123,3 +271,4 @@ private fun MessageBubble(
         }
     }
 }
+

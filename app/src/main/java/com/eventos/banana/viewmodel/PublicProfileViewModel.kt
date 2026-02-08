@@ -47,6 +47,18 @@ class PublicProfileViewModel(
                 
                 if (profile != null) {
                     android.util.Log.d("PublicProfileVM", "Profile found: ${profile.nickname}")
+                    
+                    // 👁️ TRACK VIEW
+                    if (currentUid != null && currentUid != targetUid) {
+                        launch { // Fire and forget inside scope, don't block UI
+                            try {
+                                userRepository.recordProfileView(currentUid, targetUid)
+                            } catch (e: Exception) {
+                                android.util.Log.e("PublicProfileVM", "Error recording view", e)
+                            }
+                        }
+                    }
+
                     val status = calculateFriendStatus(currentUid, profile)
                     _uiState.value = PublicProfileUiState(
                         isLoading = false,
@@ -111,6 +123,28 @@ class PublicProfileViewModel(
              } catch(e: Exception) {
                  // Error
              }
+        }
+    }
+    fun blockUser(targetUid: String) {
+        val currentUid = authRepository.currentUid() ?: return
+        viewModelScope.launch {
+            try {
+                userRepository.blockUser(currentUid, targetUid)
+                // Optionally update UI or navigate back
+            } catch (e: Exception) {
+                // Log
+            }
+        }
+    }
+
+    fun reportUser(reportedUid: String, reason: String) {
+        val currentUid = authRepository.currentUid() ?: return
+        viewModelScope.launch {
+            try {
+                userRepository.reportUser(currentUid, reportedUid, reason)
+            } catch (e: Exception) {
+               // Log
+            }
         }
     }
 }

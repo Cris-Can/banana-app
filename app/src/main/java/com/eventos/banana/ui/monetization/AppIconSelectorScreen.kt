@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,10 +36,10 @@ fun AppIconSelectorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Icono de App") },
+                title = { Text(stringResource(com.eventos.banana.R.string.app_icon_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(com.eventos.banana.R.string.common_back_nav))
                     }
                 }
             )
@@ -47,12 +48,12 @@ fun AppIconSelectorScreen(
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
             
             Text(
-                "Personaliza tu Banana",
+                stringResource(com.eventos.banana.R.string.app_icon_customize),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "Elige cómo se ve la app en tu teléfono.",
+                stringResource(com.eventos.banana.R.string.app_icon_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray
             )
@@ -119,10 +120,10 @@ fun AppIconItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            if (resId != 0) {
+                if (resId != 0) {
                 Image(
                     painter = painterResource(id = resId),
-                    contentDescription = icon.displayName,
+                    contentDescription = stringResource(icon.nameResId),
                     modifier = Modifier.size(64.dp)
                 )
             } else {
@@ -130,13 +131,13 @@ fun AppIconItem(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                icon.displayName,
+                stringResource(icon.nameResId),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
             )
             if (isSelected) {
                 Text(
-                    "Activo",
+                    stringResource(com.eventos.banana.R.string.app_icon_active),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )

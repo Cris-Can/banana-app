@@ -41,8 +41,10 @@ class ShareHelper(private val context: Context) {
         val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         val dateStr = dateFormat.format(Date(event.startAt))
         
-        // Placeholder link - In a real app this would be a deep link
-        val link = "https://banana.app/event/${event.id}"
+        // 🔗 Deep link — abre directo el evento si ya tienen la app
+        val deepLink = "https://bananaapp-aa46e.web.app/event/${event.id}"
+        // 🏪 Play Store link — para quienes no tienen la app
+        val playStoreLink = "https://play.google.com/store/apps/details?id=com.eventos.banana"
 
         return """
             🍌 *${event.title}*
@@ -52,10 +54,11 @@ class ShareHelper(private val context: Context) {
             
             ${event.description}
             
-            👀 ¡Míralo aquí!: $link
+            📲 ¿Ya tienes Banana? Ábrelo aquí: $deepLink
             
-            📱 Descarga *Banana App* para unirte
-            📸 @banana_app
+            📱 ¿No la tienes? Descárgala gratis: $playStoreLink
+            
+            📸 @getbananaapp
         """.trimIndent()
     }
 

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,10 +34,10 @@ fun EventMapViewScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ubicación del Evento") },
+                title = { Text(stringResource(com.eventos.banana.R.string.map_event_location_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(com.eventos.banana.R.string.common_back_nav))
                     }
                 }
             )
@@ -83,7 +84,7 @@ fun EventMapViewScreen(
                     .padding(16.dp)
                     .fillMaxWidth()
             ) {
-                Text("Abrir en Google Maps")
+                Text(stringResource(com.eventos.banana.R.string.map_open_google_maps))
             }
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.viewmodel.RateUserUiState
 
@@ -26,7 +27,7 @@ fun RateUserScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Calificar usuario") }
+                title = { Text(stringResource(com.eventos.banana.R.string.rating_title)) }
             )
         }
     ) { padding ->
@@ -43,10 +44,10 @@ fun RateUserScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text("¡Calificación enviada!", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(com.eventos.banana.R.string.rating_sent), style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = onBack) {
-                        Text("Volver")
+                        Text(stringResource(com.eventos.banana.R.string.common_back))
                     }
                 }
             } else if (uiState.alreadyRated) {
@@ -54,10 +55,10 @@ fun RateUserScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text("Ya has calificado a este usuario en este evento.", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(com.eventos.banana.R.string.rating_already_rated), style = MaterialTheme.typography.titleMedium)
                      Spacer(modifier = Modifier.height(16.dp))
                      Button(onClick = onBack) {
-                         Text("Volver")
+                         Text(stringResource(com.eventos.banana.R.string.common_back))
                      }
                 }
             } else {
@@ -93,7 +94,7 @@ fun RateUserScreen(
                     OutlinedTextField(
                         value = comment,
                         onValueChange = { comment = it },
-                        label = { Text("Comentario (opcional)") },
+                        label = { Text(stringResource(com.eventos.banana.R.string.rating_comment_label)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(120.dp)
@@ -108,11 +109,11 @@ fun RateUserScreen(
                         enabled = score > 0,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Enviar calificación")
+                        Text(stringResource(com.eventos.banana.R.string.common_send))
                     }
                     
                     TextButton(onClick = onBack) {
-                        Text("Cancelar")
+                        Text(stringResource(com.eventos.banana.R.string.common_cancel))
                     }
                 }
             }

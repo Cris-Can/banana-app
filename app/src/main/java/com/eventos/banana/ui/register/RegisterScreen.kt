@@ -6,8 +6,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.RegisterUiState
+import androidx.compose.material3.SnackbarDuration
 
 @Composable
 fun RegisterScreen(
@@ -48,6 +50,12 @@ fun RegisterScreen(
         if (uiState.errorMessage != null) {
             snackbarHostState.showSnackbar("❌ ${uiState.errorMessage}")
         }
+        if (uiState.isSuccess) {
+            snackbarHostState.showSnackbar(
+                message = "✅ Cuenta creada. ¡Verifica tu email para acceder!",
+                duration = SnackbarDuration.Long
+            )
+        }
     }
 
     Scaffold(
@@ -68,7 +76,7 @@ fun RegisterScreen(
             TextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email") },
+                label = { Text(stringResource(com.eventos.banana.R.string.auth_email_hint)) },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -77,7 +85,7 @@ fun RegisterScreen(
             TextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Password") },
+                label = { Text(stringResource(com.eventos.banana.R.string.auth_password_hint)) },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -87,7 +95,7 @@ fun RegisterScreen(
             TextField(
                 value = nickname,
                 onValueChange = { nickname = it },
-                label = { Text("Apodo") },
+                label = { Text(stringResource(com.eventos.banana.R.string.auth_apodo_label)) },
                 modifier = Modifier.fillMaxWidth()
             )
             
@@ -95,9 +103,9 @@ fun RegisterScreen(
 
             // 📍 Comuna Field (Auto-filled)
             OutlinedTextField(
-                value = if (isLocationLoading) "Detectando ubicación..." else commune.ifBlank { "Ubicación no detectada" },
+                value = if (isLocationLoading) stringResource(com.eventos.banana.R.string.auth_detecting_location) else commune.ifBlank { stringResource(com.eventos.banana.R.string.auth_location_not_detected) },
                 onValueChange = { }, // Read-only
-                label = { Text("Tu Comuna (Automático)") },
+                label = { Text(stringResource(com.eventos.banana.R.string.auth_your_commune)) },
                 enabled = false, // User cannot edit manually (for now)
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -120,7 +128,7 @@ fun RegisterScreen(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Crear cuenta")
+                    Text(stringResource(com.eventos.banana.R.string.auth_create_account_button))
                 }
             }
 

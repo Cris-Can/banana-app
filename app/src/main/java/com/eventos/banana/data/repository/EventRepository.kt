@@ -174,7 +174,7 @@ class EventRepository {
         val listener = eventsCollection.document(eventId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    android.util.Log.e("EventRepository", "listenToEvent error: ${error.message}", error)
                     return@addSnapshotListener
                 }
                 val event = snapshot?.toObject(Event::class.java)
@@ -229,7 +229,7 @@ class EventRepository {
                 if (
                     event.approvedParticipants.contains(userId) ||
                     event.rejectedParticipants.contains(userId) ||
-                    event.pendingRequests.any { it.userId == userId }
+                    (event.pendingRequests as? List<JoinRequest?>)?.filterNotNull()?.any { it.userId == userId } == true
                 ) {
                     throw Exception("Solicitud inválida")
                 }
@@ -281,6 +281,9 @@ class EventRepository {
         userId: String
     ): Result<Unit> {
         return try {
+            var eventTitle = ""
+            var participantsToNotify = emptyList<String>()
+
             firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(Event::class.java)
@@ -308,10 +311,26 @@ class EventRepository {
                     "approvedParticipants",
                     com.google.firebase.firestore.FieldValue.arrayUnion(userId)
                 )
+                
+                eventTitle = event.title
+                // Store list of participants to notify (excluding the new one)
+                participantsToNotify = event.approvedParticipants + event.creatorId
             }.await()
             
-            // Note: We do NOT send notification to creator for public joins to avoid spam,
-            // or maybe we should? Let's keep it silent for now as requested for "Public" feel.
+            // Notify existing participants
+            participantsToNotify.forEach { participantId ->
+                if (participantId != userId) {
+                    notificationRepository.sendNotification(
+                        AppNotification(
+                            userId = participantId,
+                            title = "Nuevo participante",
+                            message = "¡Un nuevo usuario se ha unido al evento \"$eventTitle\"!",
+                            eventId = eventId,
+                            type = NotificationType.JOIN_APPROVED // Fix reference
+                        )
+                    )
+                }
+            }
             
             Result.success(Unit)
         } catch (e: Exception) {
@@ -327,8 +346,8 @@ class EventRepository {
         userId: String
     ): Result<Unit> {
         return try {
-
             var eventTitle = ""
+            var participantsToNotify = emptyList<String>()
 
             firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
@@ -345,27 +364,50 @@ class EventRepository {
 
                 eventTitle = event.title
 
+                // 🛡️ Sanitize first
+                @Suppress("UNCHECKED_CAST")
+                val safePending = (event.pendingRequests as? List<JoinRequest?>)?.filterNotNull() ?: emptyList()
+                
                 tx.update(
                     ref,
                     mapOf(
-                        "pendingRequests" to event.pendingRequests.filterNot {
+                        "pendingRequests" to safePending.filterNot {
                             it.userId == userId
                         },
                         "approvedParticipants" to
                                 (event.approvedParticipants + userId)
                     )
                 )
+                
+                // Collect existing participants + creator
+                participantsToNotify = event.approvedParticipants + event.creatorId
             }.await()
 
+            // 1. Notify the JOINER
             notificationRepository.sendNotification(
                 AppNotification(
                     userId = userId,
-                    title = "Solicitud aceptada",
-                    message = "Fuiste aceptado en \"$eventTitle\"",
+                    title = "Solicitud aprobada",
+                    message = "Has sido aceptado en \"$eventTitle\"",
                     eventId = eventId,
                     type = NotificationType.JOIN_APPROVED
                 )
             )
+            
+            // 2. Notify OTHER participants
+            participantsToNotify.forEach { participantId ->
+                if (participantId != userId) {
+                    notificationRepository.sendNotification(
+                        AppNotification(
+                            userId = participantId,
+                            title = "Nuevo participante",
+                            message = "¡Un nuevo usuario se ha unido al evento \"$eventTitle\"!",
+                            eventId = eventId,
+                            type = NotificationType.JOIN_APPROVED
+                        )
+                    )
+                }
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -391,12 +433,17 @@ class EventRepository {
                     ?: throw Exception("Evento no encontrado")
 
                 eventTitle = event.title
-                userNickname = event.pendingRequests.firstOrNull { it.userId == userId }?.userNickname ?: "Usuario"
+                
+                // 🛡️ Sanitize
+                @Suppress("UNCHECKED_CAST")
+                val safePending = (event.pendingRequests as? List<JoinRequest?>)?.filterNotNull() ?: emptyList()
+
+                userNickname = safePending.firstOrNull { it.userId == userId }?.userNickname ?: "Usuario"
 
                 tx.update(
                     ref,
                     mapOf(
-                        "pendingRequests" to event.pendingRequests.filterNot {
+                        "pendingRequests" to safePending.filterNot {
                             it.userId == userId
                         },
                         "rejectedParticipants" to
@@ -467,10 +514,14 @@ class EventRepository {
                     throw Exception("No se puede eliminar al creador")
                 }
 
+                // 🛡️ Sanitize Approved
+                @Suppress("UNCHECKED_CAST")
+                val safeApproved = (event.approvedParticipants as? List<String?>)?.filterNotNull() ?: emptyList()
+
                 tx.update(
                     ref,
                     "approvedParticipants",
-                    event.approvedParticipants.filterNot { it == userId }
+                    safeApproved.filterNot { it == userId }
                 )
             }.await()
 
@@ -531,7 +582,8 @@ class EventRepository {
         val listener = query.addSnapshotListener { snapshot, error ->
 
             if (error != null) {
-                close(error)
+                android.util.Log.e("EventRepository", "observeNearbyEvents error: ${error.message}", error)
+                trySend(emptyList())
                 return@addSnapshotListener
             }
 

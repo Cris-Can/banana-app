@@ -13,3 +13,23 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 🔑 Firebase Admin SDK (NUNCA subir)
+**/serviceAccountKey.json
+
+# Node modules (scripts/)
+scripts/node_modules/
+
+# 🔑 Signing & Secrets (CRITICAL)
+*.jks
+*.keystore
+keystore.properties
+*.pem
+*.p12
+*.key
+
+# 🪵 Logs
+*.log
+release_retry.log
+kotlin_error.log
+play_store_api_key.json

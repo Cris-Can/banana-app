@@ -40,13 +40,13 @@ class UserRepository(
                 )
                 
                 
-                // Check if lucky < 35 (User Request: Free Premium for first 35)
-                val finalProfile = if (newCount <= 35) {
+                // Check if lucky < 40 (User Request: Free access for first 40)
+                val finalProfile = if (newCount <= 40) {
                     profile.copy(
                         isGoldStored = true,
                         isPremiumStored = true, // Legacy field
-                        subscriptionType = "GOLD",
-                        isFounder = true // 🚀 Automatic Founder Badge for first 35
+                        subscriptionType = "FOUNDER",
+                        isFounder = true // 🚀 Automatic Founder Badge for first 40
                     )
                 } else {
                     profile
@@ -120,12 +120,12 @@ class UserRepository(
             val statsSnapshot = statsRef.get().await()
             val currentCount = statsSnapshot.getLong("userCount") ?: 0L
 
-            if (currentCount <= 35) {
+            if (currentCount <= 40) {
                 // 2. Prepare Upgraded Profile
                 val upgradedProfile = profile.copy(
                     isGoldStored = true,
                     isPremiumStored = true,
-                    subscriptionType = "GOLD",
+                    subscriptionType = "FOUNDER",
                     isFounder = true // 🚀 Retroactive Grant
                 )
                 
@@ -415,6 +415,14 @@ class UserRepository(
             updateData["ratingSum"] = scores.sum()
             updateData["ratingCount"] = scores.size
             
+            // 🆕 GAMIFICATION SCORE CALCULATION
+            // Formula: (Events Attended * 10) + (Avg Rating * 20)
+            // Example: 5 events * 10 = 50. Rating 5.0 * 20 = 100. Total = 150.
+            val avgRating = if (scores.isNotEmpty()) scores.average() else 0.0
+            val score = (validCheckinsCount * 10) + (avgRating * 20).toInt()
+            
+            updateData["score"] = score
+            
             batch.update(userRef, updateData)
             batch.commit().await()
             
@@ -433,88 +441,68 @@ class UserRepository(
         }
     }
 
+    // 🏆 GAMIFICATION: Get Top Users
+    suspend fun getTopUsers(limit: Int = 10): Result<List<UserProfile>> {
+        return try {
+            val snapshot = users
+                .orderBy("score", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(limit.toLong())
+                .get()
+                .await()
+
+            val topUsers = snapshot.toObjects(UserProfile::class.java)
+            Result.success(topUsers)
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error getting top users", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun uploadProfilePhoto(uid: String, imageBytes: ByteArray?, isProfilePicture: Boolean, isCoverPhoto: Boolean = false): Result<Unit> {
         return try {
-            val imagePath = "users/$uid/photos/${java.util.UUID.randomUUID()}.jpg"
-                // Since `UserRepository` doesn't have a `Context`, this is a major issue with the snippet.
-                // I cannot add a `Context` parameter without making an "unrelated edit".
-                // The only way to make it syntactically correct *without* adding `Context` is to make `imageBytes` a dummy,
-                // which would make the code non-functional.
-
-                // Given the constraint "Make sure to incorporate the change in a way so that the resulting file is syntactically correct.",
-                // and "without making any unrelated edits", I must assume `imageBytes` is somehow available or the user will fix it.
-                // However, the snippet *itself* introduces `imageBytes`.
-
-                // Let's assume the user wants to replace the `putFile(uri)` with `putBytes(imageBytes)` and the new retry logic.
-                // I will define `imageBytes` as `uri.readBytes()` (conceptually) and `imageUrl` as `downloadUrl`.
-                // This will require a `Context` to read `uri`. I will add a comment about this.
-
-                // Final plan:
-                // 1. Keep `val projectID` and `val imagePath`.
-                // 2. Remove the `buckets` list and the `for (bucket in buckets)` loop.
-            
-            var downloadUrl: String? = null
-
-            if (imageBytes != null && imageBytes.isNotEmpty()) {
-                val projectID = "bananaapp-aa46e"
-                val buckets = listOf(
-                    "default",
-                    "$projectID.appspot.com",
-                    "$projectID.firebasestorage.app"
-                )
-                
-                var lastEx: Exception? = null
-
-                for (bucketName in buckets) {
-                    try {
-                        val storageInstance = if (bucketName == "default") {
-                            com.google.firebase.storage.FirebaseStorage.getInstance()
-                        } else {
-                            com.google.firebase.storage.FirebaseStorage.getInstance("gs://$bucketName")
-                        }
-                        
-                        val storageRef = storageInstance.reference.child(imagePath)
-                        
-                        // Upload
-                        storageRef.putBytes(imageBytes).await()
-                        
-                        // URL
-                        for (i in 1..3) {
-                            try {
-                                kotlinx.coroutines.delay(500L * i)
-                                downloadUrl = storageRef.downloadUrl.await().toString()
-                                if (downloadUrl != null) break
-                            } catch (e: Exception) { }
-                        }
-
-                        if (downloadUrl != null) break 
-                    } catch (e: Exception) {
-                        lastEx = e
-                        if (e is com.google.firebase.storage.StorageException && e.errorCode == -13010) {
-                            continue
-                        } else {
-                            break
-                        }
-                    }
-                }
-
-                if (downloadUrl == null) {
-                    throw Exception("Fallo en foto de perfil. Revisa que Storage esté activado: ${lastEx?.message}")
-                }
-            } else {
+            if (imageBytes == null || imageBytes.isEmpty()) {
                 throw Exception("No se proporcionaron datos de imagen")
             }
 
-            if (isProfilePicture) {
-                users.document(uid).update("profilePictureUrl", downloadUrl).await()
-            } else if (isCoverPhoto) {
-                users.document(uid).update("coverPhotoUrl", downloadUrl).await()
-            } else {
-                users.document(uid).update("photos", com.google.firebase.firestore.FieldValue.arrayUnion(downloadUrl)).await()
+            val imagePath = "users/$uid/photos/${java.util.UUID.randomUUID()}.jpg"
+            
+            // 📸 Upload to Firebase Storage (default bucket from google-services.json)
+            val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
+            val storageRef = storage.reference.child(imagePath)
+            
+            android.util.Log.d("UserRepository", "Uploading photo to: $imagePath (bucket: ${storage.reference.bucket})")
+            
+            // Upload bytes
+            storageRef.putBytes(imageBytes).await()
+            
+            // Get download URL (with retry)
+            var downloadUrl: String? = null
+            for (i in 1..3) {
+                try {
+                    kotlinx.coroutines.delay(500L * i)
+                    downloadUrl = storageRef.downloadUrl.await().toString()
+                    if (downloadUrl != null) break
+                } catch (e: Exception) {
+                    android.util.Log.w("UserRepository", "Retry $i getting download URL", e)
+                }
+            }
+
+            if (downloadUrl == null) {
+                throw Exception("No se pudo obtener la URL de descarga de la foto")
+            }
+
+            android.util.Log.d("UserRepository", "Photo uploaded OK: $downloadUrl")
+
+            // Update Firestore with the URL
+            when {
+                isProfilePicture -> users.document(uid).update("profilePictureUrl", downloadUrl).await()
+                isCoverPhoto -> users.document(uid).update("coverPhotoUrl", downloadUrl).await()
+                else -> users.document(uid).update("photos", com.google.firebase.firestore.FieldValue.arrayUnion(downloadUrl)).await()
             }
 
             Result.success(Unit)
         } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "❌ Photo upload failed: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -667,6 +655,8 @@ class UserRepository(
         }
     }
 
+
+
     // 💾 SAVED EVENTS (A30)
     suspend fun toggleEventSaved(uid: String, eventId: String, isSaved: Boolean) {
         val update = if (isSaved) {
@@ -679,20 +669,27 @@ class UserRepository(
     
     // 💎 BANANA GOLD (Round 42) - WITH FOUNDER PROTECTION 🛡️
     suspend fun setGoldStatus(uid: String, isGold: Boolean) {
-        // 1. Check if user is a Founder (Immutable Gold)
+        // 1. Check if user is a Founder (Immutable — NEVER downgrade)
         try {
-            val snapshot = users.document(uid).get().await()
+            // 🛡️ FORCE SERVER to avoid stale cache missing isFounder
+            val snapshot = users.document(uid).get(Source.SERVER).await()
             val isFounder = snapshot.getBoolean("isFounder") == true
             
             if (isFounder) {
-                // If Founder, ALWAYS Gold. Never downgrade.
-                if (!isGold) {
-                    android.util.Log.w("UserRepository", "Attempted to downgrade Founder $uid. BLOCKED.")
-                    return 
+                // Founder: ensure subscriptionType stays as FOUNDER, never FREE
+                val currentType = snapshot.getString("subscriptionType") ?: ""
+                if (currentType != "FOUNDER") {
+                    // Auto-repair: restore FOUNDER type if it was corrupted
+                    users.document(uid).update(mapOf(
+                        "subscriptionType" to "FOUNDER",
+                        "isGoldStored" to true
+                    )).await()
+                    android.util.Log.w("UserRepository", "Auto-repaired Founder $uid subscriptionType → FOUNDER")
                 }
+                return // Never modify founders further
             }
             
-            // 2. Proceed with update if allowed
+            // 2. Proceed with update if allowed (non-founder only)
             val updates = mutableMapOf<String, Any>()
             if (isGold) {
                 updates["subscriptionType"] = "GOLD"
@@ -785,6 +782,39 @@ class UserRepository(
         }
     }
 
+    suspend fun unblockUser(currentUid: String, targetUid: String): Result<Unit> {
+        return try {
+            users.document(currentUid).update(
+                "blockedUsers",
+                com.google.firebase.firestore.FieldValue.arrayRemove(targetUid)
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getBlockedUsers(uid: String): List<String> {
+        return try {
+            val profile = getUserProfile(uid)
+            profile?.blockedUsers ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getBlockedUsersProfiles(uid: String): List<UserProfile> {
+        return try {
+            val blockedIds = getBlockedUsers(uid)
+            if (blockedIds.isEmpty()) return emptyList()
+            blockedIds.mapNotNull { blockedId ->
+                getUserProfile(blockedId)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     suspend fun reportUser(reporterUid: String, reportedUid: String, reason: String): Result<Unit> {
         return try {
             val report = mapOf(
@@ -795,6 +825,58 @@ class UserRepository(
                 "status" to "PENDING"
             )
             firestore.collection("reports").add(report).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    // Link to next section without closing the class
+
+    // =====================================================
+    // 👮 ADMIN DASHBOARD ACTIONS (Round 69)
+    // =====================================================
+    
+    suspend fun getPendingReports(): List<Map<String, Any>> {
+        return try {
+            val snapshot = firestore.collection("reports")
+                .whereEqualTo("status", "PENDING")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .get()
+                .await()
+            
+            snapshot.documents.map { doc ->
+                doc.data?.plus("id" to doc.id) ?: emptyMap()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error getting reports", e)
+            emptyList()
+        }
+    }
+
+    suspend fun resolveReport(reportId: String, action: String): Result<Unit> {
+        return try {
+            firestore.collection("reports").document(reportId)
+                .update("status", action) // "RESOLVED" or "IGNORED"
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun banUser(uid: String): Result<Unit> {
+        return try {
+            users.document(uid).update("isBanned", true).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // Unban specifically for admin correction
+    suspend fun unbanUser(uid: String): Result<Unit> {
+        return try {
+            users.document(uid).update("isBanned", false).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -27,6 +27,11 @@ class ProfileViewModel(
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Idle)
     val uiState: StateFlow<ProfileUiState> = _uiState
 
+    // 📸 Upload progress tracking
+    private val _isUploadingPhoto = MutableStateFlow(false)
+    val isUploadingPhoto: StateFlow<Boolean> = _isUploadingPhoto.asStateFlow()
+
+
     fun updateNickname(uid: String, nickname: String) {
         android.util.Log.d("ProfileViewModel", "updateNickname called: uid='$uid', nickname='$nickname'")
         
@@ -197,18 +202,39 @@ class ProfileViewModel(
         
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
+            _isUploadingPhoto.value = true
             try {
                 if (!isProfilePicture && !isCoverPhoto) {
                     val profile = userRepository.getUserProfile(uid)
                     if (profile != null && profile.photos.size >= 6) {
                         _uiState.value = ProfileUiState.Error("Límite de 6 fotos alcanzado (máx. 6)")
+                        _isUploadingPhoto.value = false
                         return@launch
                     }
                 }
-                userRepository.uploadProfilePhoto(uid, imageBytes, isProfilePicture, isCoverPhoto)
-                _uiState.value = ProfileUiState.Success
+                
+                val type = when {
+                    isProfilePicture -> "perfil"
+                    isCoverPhoto -> "portada"
+                    else -> "galería"
+                }
+                android.util.Log.d("ProfileViewModel", "Uploading $type photo for $uid (${imageBytes.size} bytes)")
+                
+                val result = userRepository.uploadProfilePhoto(uid, imageBytes, isProfilePicture, isCoverPhoto)
+                
+                if (result.isSuccess) {
+                    android.util.Log.d("ProfileViewModel", "✅ Foto de $type subida OK")
+                    _uiState.value = ProfileUiState.Success
+                } else {
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Error desconocido al subir foto"
+                    android.util.Log.e("ProfileViewModel", "❌ Error subiendo foto de $type: $errorMsg")
+                    _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(result.exceptionOrNull()))
+                }
             } catch (e: Exception) {
+                android.util.Log.e("ProfileViewModel", "❌ Exception en uploadPhoto", e)
                 _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
+            } finally {
+                _isUploadingPhoto.value = false
             }
         }
     }
@@ -499,19 +525,45 @@ class ProfileViewModel(
     private val _migrationStatus = MutableStateFlow<String?>(null)
     val migrationStatus: StateFlow<String?> = _migrationStatus.asStateFlow()
 
-    fun runMigration() {
+
+    // 🏆 LEADERBOARD
+    private val _leaderboardUsers = MutableStateFlow<List<com.eventos.banana.domain.model.UserProfile>>(emptyList())
+    val leaderboardUsers: StateFlow<List<com.eventos.banana.domain.model.UserProfile>> = _leaderboardUsers
+
+    fun loadLeaderboard() {
         viewModelScope.launch {
-            _migrationStatus.value = "⏳ Migrando eventos..."
-            val result = com.eventos.banana.data.repository.EventRepository().migrateEventsToGeohash()
+            _uiState.value = ProfileUiState.Loading
+            try {
+                val result = userRepository.getTopUsers(50)
+                if (result.isSuccess) {
+                     _leaderboardUsers.value = result.getOrDefault(emptyList())
+                     _uiState.value = ProfileUiState.Success
+                } else {
+                     _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(result.exceptionOrNull()))
+                }
+            } catch (e: Exception) {
+                _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(e))
+            }
+        }
+    }
+
+    fun runMigration(context: android.content.Context) {
+        viewModelScope.launch {
+            _migrationStatus.value = "⏳ Iniciando migración..."
             
-            result.onSuccess { count ->
-                _migrationStatus.value = "✅ Éxito: $count eventos actualizados con Geohash."
+            val repo = com.eventos.banana.data.repository.AdminRepository(context)
+            val result = repo.migrateData { progress ->
+                _migrationStatus.value = progress
+            }
+            
+            result.onSuccess { msg ->
+                _migrationStatus.value = msg
             }.onFailure { e ->
                 _migrationStatus.value = "❌ Error: ${e.message}"
             }
             
-            // Clear status after 5 seconds
-            kotlinx.coroutines.delay(5000)
+            // Clear status after 10 seconds (longer to read summary)
+            kotlinx.coroutines.delay(10000)
             _migrationStatus.value = null
         }
     }

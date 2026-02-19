@@ -1,0 +1,80 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:injectCrashlyticsMappingFileIdDebug UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:838:28 Unresolved reference 'firestore'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:842:18 None of the following candidates is applicable:
+suspend fun <T> Task<T>.await(): T
+suspend fun <T> Task<T>.await(cancellationTokenSource: CancellationTokenSource): T
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:844:22 Unresolved reference 'documents'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:844:38 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:845:21 Unresolved reference 'data'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:845:37 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:845:44 Unresolved reference 'id'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:845:51 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:845:51 Not enough information to infer type argument for 'K'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:845:51 Not enough information to infer type argument for 'V'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:855:13 Unresolved reference 'firestore'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:857:18 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:866:13 Unresolved reference 'users'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:866:58 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:876:13 Unresolved reference 'users'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:876:59 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/data/repository/UserRepository.kt:882:1 Syntax error: Expecting a top level declaration.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/ui/messages/ChatScreen.kt:239:105 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/ui/screens/AdminDashboardScreen.kt:42:28 Unresolved reference 'getPendingReports'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/ui/screens/AdminDashboardScreen.kt:81:46 Unresolved reference 'resolveReport'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/ui/screens/AdminDashboardScreen.kt:88:46 Unresolved reference 'banUser'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/ui/screens/AdminDashboardScreen.kt:89:46 Unresolved reference 'resolveReport'.
+e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/ui/settings/SettingsScreen.kt:294:50 Unresolved reference 'Warning'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3s
+32 actionable tasks: 1 executed, 31 up-to-date

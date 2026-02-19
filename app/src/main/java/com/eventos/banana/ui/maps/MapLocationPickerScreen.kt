@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,10 +51,10 @@ fun MapLocationPickerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Seleccionar Ubicación Exacta") },
+                title = { Text(stringResource(com.eventos.banana.R.string.map_select_exact_location)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(com.eventos.banana.R.string.common_back_nav))
                     }
                 },
                 actions = {
@@ -66,7 +67,7 @@ fun MapLocationPickerScreen(
                             )
                         }
                     ) {
-                        Icon(Icons.Default.Check, "Confirmar")
+                        Icon(Icons.Default.Check, stringResource(com.eventos.banana.R.string.common_confirm_nav))
                     }
                 }
             )
@@ -87,7 +88,7 @@ fun MapLocationPickerScreen(
             ) {
                 Marker(
                     state = MarkerState(position = selectedPosition),
-                    title = "Ubicación del evento"
+                    title = stringResource(com.eventos.banana.R.string.map_event_location)
                 )
             }
 
@@ -103,7 +104,7 @@ fun MapLocationPickerScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Arrastra el marcador o toca en el mapa",
+                        stringResource(com.eventos.banana.R.string.map_drag_or_tap),
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
@@ -118,7 +119,7 @@ fun MapLocationPickerScreen(
                     OutlinedTextField(
                         value = address,
                         onValueChange = { address = it },
-                        label = { Text("Dirección (opcional)") },
+                        label = { Text(stringResource(com.eventos.banana.R.string.map_address_optional)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )

@@ -20,6 +20,15 @@ class AppFirebaseMessagingService : FirebaseMessagingService() {
         val body = remoteMessage.notification?.body ?: remoteMessage.data["message"] ?: remoteMessage.data["body"]
         
         if (title != null || body != null) {
+            // 🚫 Prevent sending notification to self (e.g. Creator of event)
+            val senderId = remoteMessage.data["senderId"]
+            val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            
+            if (senderId != null && senderId == currentUid) {
+                // Ignore notification
+                return
+            }
+
             sendNotification(title, body, remoteMessage.data)
         }
     }

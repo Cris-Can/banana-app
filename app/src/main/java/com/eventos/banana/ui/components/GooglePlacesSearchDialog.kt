@@ -12,12 +12,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
-import com.google.android.libraries.places.api.model.TypeFilter
+import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
 
 data class PlacePredictionItem(
@@ -49,7 +50,7 @@ fun GooglePlacesSearchDialog(
             val request = FindAutocompletePredictionsRequest.builder()
                 .setSessionToken(token)
                 .setQuery(query)
-                .setTypeFilter(TypeFilter.CITIES)
+                .setTypesFilter(listOf("(cities)"))
                 .build()
 
             placesClient.findAutocompletePredictions(request)
@@ -97,11 +98,11 @@ fun GooglePlacesSearchDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Buscar Ciudad",
+                        stringResource(com.eventos.banana.R.string.places_search_title),
                         style = MaterialTheme.typography.titleLarge
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, "Cerrar")
+                        Icon(Icons.Default.Close, stringResource(com.eventos.banana.R.string.common_close))
                     }
                 }
 
@@ -111,7 +112,7 @@ fun GooglePlacesSearchDialog(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("Escribe tu ciudad...") },
+                    label = { Text(stringResource(com.eventos.banana.R.string.places_search_hint)) },
                     leadingIcon = { Icon(Icons.Default.Search, null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -150,7 +151,7 @@ fun GooglePlacesSearchDialog(
                     if (query.length > 2 && predictions.isEmpty() && !isLoading) {
                         item {
                             Text(
-                                "No se encontraron resultados",
+                                stringResource(com.eventos.banana.R.string.places_no_results),
                                 modifier = Modifier.padding(16.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant

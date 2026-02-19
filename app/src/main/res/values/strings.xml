@@ -1,3 +1,604 @@
 <resources>
     <string name="app_name">Banana</string>
+
+    <!-- COMMON -->
+    <string name="common_ok">OK</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_save">Guardar</string>
+    <string name="common_edit">Editar</string>
+    <string name="common_back">Atrás</string>
+    <string name="common_confirm">Confirmar</string>
+    <string name="common_send">Enviar</string>
+    <string name="common_close">Cerrar</string>
+    <string name="common_skip">Omitir</string>
+    <string name="common_next">Siguiente</string>
+    <string name="common_clear">Borrar</string>
+    <string name="common_change">Cambiar</string>
+    <!-- Common Actions (Replaced by localized versions or unused) -->
+    <!-- Removed: common_ok, common_delete, common_error, common_success, common_loading, common_yes, common_no, common_share, common_search, common_accept, common_reject, common_remove, common_add -->
+    <string name="common_user">Usuario</string>
+    <string name="common_all">Todos</string>
+
+    <!-- AUTH -->
+    <string name="auth_login_title">Iniciar Sesión</string>
+    <string name="auth_register_title">Registrarse</string>
+    <string name="auth_email_hint">Correo electrónico</string>
+    <string name="auth_password_hint">Contraseña</string>
+    <string name="auth_forgot_password">¿Olvidaste tu contraseña?</string>
+    <string name="auth_login_button">Ingresar</string>
+    <string name="auth_register_button">Crear Cuenta</string>
+    <!-- Auth (Replaced) -->
+    <!-- Removed: auth_google_signin -->
+    <string name="auth_no_account">¿No tienes cuenta? Regístrate</string>
+    <string name="auth_has_account">¿Ya tienes cuenta? Ingresa</string>
+    <string name="auth_invalid_email">Email inválido</string>
+    <string name="auth_password_error_short">Mínimo 8 caracteres</string>
+    <string name="auth_password_error_upper">Debe tener 1 mayúscula</string>
+    <string name="auth_password_error_digit">Debe tener 1 número</string>
+    <string name="auth_password_requirements">Mínimo 8 caracteres, 1 mayúscula, 1 número</string>
+    <string name="auth_recover_title">Recuperar Contraseña</string>
+    <string name="auth_recover_body">Ingresa tu email y te enviaremos un enlace para restablecerla.</string>
+    <string name="auth_recover_success">✅ Correo enviado. Revisa tu bandeja de entrada.</string>
+    <string name="auth_nickname_label">Nickname (Nombre visible)</string>
+    <string name="auth_select_birthdate">📅 Seleccionar Fecha de Nacimiento</string>
+    <string name="auth_age_error">❌ Debes ser mayor de 18 años para usar esta app</string>
+    <string name="auth_birthdate_required">Debes seleccionar tu fecha de nacimiento</string>
+    <string name="auth_city_label">Ciudad / Comuna (Auto)</string>
+    <string name="auth_city_placeholder">Toca para buscar...</string>
+    <string name="auth_location_selected">📍 Ubicación seleccionada: %1$s (%2$s)</string>
+    <string name="auth_register_success">✅ Cuenta creada exitosamente! Revisa tu email para verificar tu cuenta antes de iniciar sesión.</string>
+    <string name="auth_apodo_label">Apodo</string>
+    <string name="auth_detecting_location">Detectando ubicación...</string>
+    <string name="auth_location_not_detected">Ubicación no detectada</string>
+    <string name="auth_your_commune">Tu Comuna (Automático)</string>
+    <string name="auth_create_account_button">Crear cuenta</string>
+
+    <!-- PROFILE -->
+    <string name="profile_title">Perfil</string>
+    <!-- Profile (Replaced) -->
+    <!-- Removed: profile_edit_title, profile_events, profile_reputation, profile_founder, profile_gold_member -->
+    <string name="profile_friends">Amigos</string>
+    <string name="profile_about_me">Sobre mí</string>
+    <string name="profile_interests">Intereses</string>
+    <string name="profile_verified">Verificado</string>
+    <string name="profile_cover_desc">Portada</string>
+    <string name="profile_add_cover">Toca para agregar portada</string>
+    <string name="profile_edit_cover">Editar Portada</string>
+    <string name="profile_avatar_desc">Avatar</string>
+    <string name="profile_add_photo">Agregar foto</string>
+    <string name="profile_edit_avatar">Editar Avatar</string>
+    <string name="profile_attended">Asistidos</string>
+    <string name="profile_created">Creados</string>
+    <string name="profile_reliability">Confiabilidad</string>
+    <string name="profile_reliability_desc">Has asistido a %1$d de %2$d eventos.</string>
+    <string name="profile_social_title">Perfil Social</string>
+    <string name="profile_new_interest">Nuevo interés</string>
+    <string name="profile_suggestions">Sugerencias por Categoría</string>
+    <string name="profile_update_social">Actualizar Social</string>
+    <string name="profile_photos">Mis Fotos</string>
+    <string name="profile_delete_photo">Eliminar</string>
+    <string name="profile_my_events">Mis Eventos</string>
+    <string name="profile_tab_history">Historial</string>
+    <string name="profile_tab_saved">Guardados</string>
+    <string name="profile_no_history">No tienes eventos recientes</string>
+    <string name="profile_no_saved">No tienes eventos guardados</string>
+    <string name="profile_edit_nickname_title">Cambiar Nickname</string>
+    <string name="profile_new_nickname_label">Nuevo nombre</string>
+    <string name="profile_add_friend">Agregar Amigo</string>
+    <string name="profile_report">Denunciar</string>
+    <string name="profile_block">Bloquear</string>
+
+    <!-- HOME / EVENTS -->
+    <!-- Home (Replaced) -->
+    <!-- Removed: home_tab_feed, home_tab_map, home_search_hint, home_no_events, home_no_events_nearby, home_filter_today, home_filter_weekend, home_filter_nearby, home_distance_format -->
+    <string name="home_filter_all">Todas</string>
+    <string name="home_pull_to_refresh">Desliza para actualizar</string>
+
+    <!-- EVENT CREATE -->
+    <!-- Event Creation (Replaced) -->
+    <!-- Removed: event_create_title, event_create_button, hints, validations -->
+
+    <!-- EVENT DETAIL -->
+    <!-- Event Detail (Replaced) -->
+    <!-- Removed: event_join_button...event_remove_confirm (Lines 100-140) -->
+
+    <!-- SETTINGS -->
+    <string name="settings_title">Configuración</string>
+    <!-- Removed: settings_notifications -->
+    <string name="settings_notifications_title">Ajustes de Notificaciones</string>
+    <string name="settings_notifications_desc">Configura qué notificaciones quieres recibir en tu dispositivo.</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_title">Tema de la App</string>
+    <!-- Removed: settings_language -->
+    <string name="settings_account">Cuenta</string>
+    <string name="settings_logout">Cerrar Sesión</string>
+    <string name="settings_delete_account">Eliminar Cuenta</string>
+    <string name="settings_delete_confirm_title">¿Eliminar cuenta?</string>
+    <string name="settings_delete_confirm_body">Esta acción es irreversible. Perderás todo tu historial y rango.</string>
+    <string name="settings_delete_loading">Eliminando...</string>
+    <string name="settings_delete_loading_msg">Borrando tu rastro de la matrix...</string>
+    <string name="settings_delete_permanently">Eliminar definitivamente</string>
+    <!-- Removed: settings_version -->
+    <string name="settings_banana_gold">Banana Gold</string>
+    <string name="settings_manage_subscription">Gestiona tu suscripción</string>
+    <string name="settings_app_icon">Icono de App</string>
+    <string name="settings_app_icon_desc">Personaliza el icono en tu inicio.</string>
+    <string name="settings_alerts_location">Alertas y Ubicación</string>
+    <string name="settings_wall_posts">Publicaciones en Muro</string>
+    <string name="settings_wall_posts_desc">Avisar cuando comentan en eventos.</string>
+    <string name="settings_location_alerts">Ubicación para Alertas</string>
+    <string name="settings_location_alerts_desc">Recibe avisos de eventos en tu comuna</string>
+    <string name="settings_region_undefined">Región no definida</string>
+    <string name="settings_commune_undefined">Comuna no definida</string>
+    <string name="settings_events_nearby">Eventos en mi zona</string>
+    <string name="settings_events_nearby_desc">Avisar cuando hay nuevos eventos en mi comuna.</string>
+    <string name="settings_interest_categories">Categorías de Interés</string>
+    <string name="settings_security">Seguridad</string>
+    <string name="settings_change_password">Cambiar Contraseña</string>
+    <string name="settings_verify_email">Verificar Email</string>
+    <string name="settings_guide_reset">Reiniciar Guía</string>
+    <!-- Removed: settings_recalculate_stats -->
+
+    <!-- MESSAGES -->
+    <string name="messages_title">Mensajes</string>
+    <string name="messages_no_conversations">No tienes conversaciones aún</string>
+    <string name="messages_placeholder">Escribe un mensaje...</string>
+    <string name="messages_report_title">Denunciar chat</string>
+    <string name="messages_report_body">¿Denunciar este chat por contenido inapropiado?</string>
+    <string name="messages_report_button">Denunciar</string>
+    <string name="messages_pick_color">Elige un color</string>
+
+    <!-- SEARCH -->
+    <string name="search_placeholder">Buscar...</string>
+    <string name="search_tab_events">Eventos</string>
+    <string name="search_tab_users">Usuarios</string>
+
+    <!-- NOTIFICATIONS -->
+    <string name="notifications_title">Notificaciones</string>
+    <string name="notifications_empty">No tienes notificaciones</string>
+    <!-- Removed: notifications_channel_name, notifications_channel_desc -->
+
+    <!-- RATING -->
+    <string name="rating_title">Calificar usuario</string>
+    <string name="rating_already_rated">Ya has calificado a este usuario en este evento.</string>
+    <string name="rating_rate_participants">Calificar Participantes</string>
+
+    <!-- SPLASH -->
+    <string name="splash_loading">Cargando...</string>
+
+    <!-- ONBOARDING -->
+    <!-- Removed: onboarding_skip, onboarding_next, onboarding_start -->
+
+    <!-- FRIENDS -->
+    <string name="friends_title">Amigos</string>
+    <!-- Removed: friends_tab_all -->
+    <string name="friends_tab_requests">Solicitudes</string>
+    <string name="friends_tab_suggestions">Sugerencias</string>
+    <!-- Removed: friends_tab_all, friends_no_friends... -->
+
+    <!-- MAP -->
+    <!-- Removed: map_search_radius... -->
+
+    <!-- MONETIZATION -->
+    <!-- Removed: gold_title... -->
+
+    <!-- WIFI/NETWORK -->
+    <!-- Removed: wifi_no_internet -->
+
+    <!-- GUIDE OVERLAY (Tutorial) -->
+    <string name="guide_welcome_title">¡Bienvenido a Banana! 🍌</string>
+    <string name="guide_welcome_desc">Aquí encontrarás los mejores eventos cerca de ti. Explora, únete y diviértete.</string>
+    <string name="guide_filters_title">Encuentra lo tuyo 🔍</string>
+    <string name="guide_filters_desc">Usa los filtros superiores para ver solo eventos Deportivos, Sociales, Culturales, y más.</string>
+    <string name="guide_create_title">Crea tu propio evento ✨</string>
+    <string name="guide_create_desc">Vamos a la pantalla de creación para que organices tu primera junta.</string>
+    <string name="guide_form_title">Formulario Simple 📝</string>
+    <string name="guide_form_desc">Aquí defines el título, fecha y ubicación. ¡Es súper rápido!</string>
+    <string name="guide_profile_title">Tu Identidad 😎</string>
+    <string name="guide_profile_desc">Ahora vamos a tu perfil para ver tus progresos.</string>
+    <string name="guide_achievements_title">Tus Logros 🏆</string>
+    <string name="guide_achievements_desc">Aquí verás tus medallas, reputación y nivel dentro de la comunidad.</string>
+    <string name="guide_finish_title">¡Estás listo! 🚀</string>
+    <string name="guide_finish_desc">Eso es todo. ¡Empieza a conectar con gente genial ahora mismo!</string>
+    <string name="guide_go_create">Ir a Crear</string>
+    <string name="guide_go_profile">Ir al Perfil</string>
+    <string name="guide_start">¡Comenzar!</string>
+    <string name="guide_next">Siguiente</string>
+    <string name="guide_skip">No volver a mostrar</string>
+
+    <!-- RADIUS SELECTOR -->
+    <string name="radius_title">Radio de Búsqueda</string>
+    <string name="radius_description">Ajusta la distancia para encontrar eventos cerca de ti.</string>
+    <string name="radius_apply">Aplicar</string>
+
+    <!-- GOOGLE PLACES SEARCH -->
+    <string name="places_search_title">Buscar Ciudad</string>
+    <string name="places_search_hint">Escribe tu ciudad...</string>
+    <string name="places_no_results">No se encontraron resultados</string>
+
+    <!-- EVENT CARD -->
+    <string name="event_status_full">AGOTADO</string>
+    <string name="event_status_finished">FINALIZADO</string>
+    <string name="event_card_by">Por</string>
+
+    <!-- RATING (additional) -->
+    <string name="rating_comment_label">Comentario (opcional)</string>
+    <string name="rating_sent">¡Calificación enviada!</string>
+    <string name="rating_stars">%1$d estrellas</string>
+
+    <!-- PUBLIC PROFILE -->
+    <string name="public_profile_options">Opciones</string>
+    <string name="public_profile_report_user">🚩 Denunciar usuario</string>
+    <string name="public_profile_block_user">🚫 Bloquear usuario</string>
+    <string name="public_profile_report_title">Denunciar usuario</string>
+    <string name="public_profile_report_body">¿Confirmas que quieres denunciar a este usuario por contenido inapropiado o spam?</string>
+    <string name="public_profile_report_confirm">Denunciar</string>
+    <string name="public_profile_requests">Solicitudes</string>
+    <string name="public_profile_attendances">Asistencias</string>
+    <string name="public_profile_commitment_rate">Tasa de compromiso: %1$d%%</string>
+    <string name="public_profile_add_friend">Agregar a mis amigos</string>
+    <string name="public_profile_request_sent">Solicitud enviada</string>
+    <string name="public_profile_accept_request">Aceptar solicitud de amistad</string>
+    <string name="public_profile_send_message">💬 Enviar Mensaje</string>
+    <string name="public_profile_verify_to_message">Verifícate para enviar mensajes</string>
+    <string name="public_profile_user_not_verified">Usuario no verificado</string>
+    <string name="public_profile_this_is_you">Este es tu perfil público 👤</string>
+    <string name="public_profile_about_me">Sobre mí</string>
+    <string name="public_profile_interests">Intereses</string>
+    <string name="public_profile_photos">Fotos</string>
+    <string name="public_profile_full_photo">Foto Completa</string>
+    <string name="public_profile_full_avatar">Avatar Completo</string>
+
+    <!-- PROFILE VIEWS -->
+    <string name="profile_views_title">Quién vio mi perfil</string>
+    <string name="profile_views_empty">Nadie ha visto tu perfil recientemente.\n¡Interactúa más para ser visible!</string>
+    <string name="profile_views_recent">Últimas visitas (%1$d)</string>
+    <string name="profile_views_seen">Visto %1$s</string>
+    <string name="profile_views_spy_title">👁️ ¿Quién te está espiando?</string>
+    <string name="profile_views_spy_body">Descubre quién visita tu perfil con Banana Gold. ¡No te quedes con la duda!</string>
+    <string name="profile_views_get_gold">Obtener Banana Gold -&gt;</string>
+
+    <!-- USER STATS DIALOG -->
+    <string name="stats_requested">Solicitados</string>
+    <string name="stats_attended">Asistidos</string>
+    <string name="stats_attendance_rate">Tasa de Asistencia: %1$d%%</string>
+
+    <!-- ONBOARDING -->
+    <string name="onboarding_title_1">Eventos Exclusivos</string>
+    <string name="onboarding_desc_1">Descubre panoramas únicos cerca de ti o crea los tuyos en segundos. ¡Sin complicaciones!</string>
+    <string name="onboarding_title_2">Comunidad Real</string>
+    <string name="onboarding_desc_2">Solo perfiles verdaderos. Tu seguridad es nuestra prioridad para que disfrutes con tranquilidad.</string>
+    <string name="onboarding_title_3">Tu Reputación Vale</string>
+    <string name="onboarding_desc_3">Sé un buen asistente, recibe calificaciones y destaca como un \'Top Banana\' en tu ciudad.</string>
+    <string name="onboarding_title_4">Tu Ciudad, Tu Muro</string>
+    <string name="onboarding_desc_4">Banana usa tu ubicación para mostrarte lo que pasa en tu comuna. ¡Actívala para la mejor experiencia!</string>
+    <string name="onboarding_enable_start">Habilitar y Comenzar</string>
+
+    <!-- APP ICON -->
+    <string name="app_icon_title">Icono de App</string>
+    <string name="app_icon_customize">Personaliza tu Banana</string>
+    <string name="app_icon_description">Elige cómo se ve la app en tu teléfono.</string>
+    <string name="app_icon_active">Activo</string>
+    <string name="app_icon_classic">Clásico</string>
+    <string name="app_icon_gold">Gold</string>
+    <string name="app_icon_neon">Neon</string>
+    <string name="app_icon_dark">Oscuro</string>
+
+    <!-- MAP SCREENS -->
+    <string name="map_events_title">Mapa de Eventos</string>
+    <string name="map_radius_label">Radio: %1$d km</string>
+    <string name="map_approximate_zone">📍 Zona Aproximada</string>
+    <string name="map_select_exact_location">Seleccionar Ubicación Exacta</string>
+    <string name="map_event_location">Ubicación del evento</string>
+    <string name="map_drag_or_tap">Arrastra el marcador o toca en el mapa</string>
+    <string name="map_address_optional">Dirección (opcional)</string>
+    <string name="map_event_location_title">Ubicación del Evento</string>
+    <string name="map_open_google_maps">Abrir en Google Maps</string>
+    <string name="common_back_nav">Volver</string>
+    <string name="common_confirm_nav">Confirmar</string>
+
+    <!-- EMAIL VERIFICATION -->
+    <string name="email_verify_title">Verifica tu correo</string>
+    <string name="email_verify_body">Hemos enviado un enlace de confirmación a tu email. Debes verificarlo para poder usar Banana.</string>
+    <string name="email_verify_already">Ya lo verifiqué</string>
+    <string name="email_verify_not_yet">Aún no verificado. Intenta de nuevo.</string>
+    <string name="email_verify_resend">Reenviar correo</string>
+    <string name="email_verify_resent">Correo reenviado (revisa Spam)</string>
+    <string name="email_verify_logout">Cerrar Sesión / Cambiar cuenta</string>
+
+    <!-- QUESTIONNAIRE -->
+    <string name="questionnaire_title">Solicitud para: %1$s</string>
+    <string name="questionnaire_get_premium">Obtener Premium 👑</string>
+    <string name="questionnaire_required_error">Responde todas las preguntas obligatorias</string>
+    <string name="questionnaire_submit">Enviar solicitud</string>
+
+    <!-- CREATE EVENT GUIDE -->
+    <string name="create_guide_basic_info">📝 Info Básica</string>
+    <string name="create_guide_basic_desc">Define un título atractivo\ny una descripción clara.</string>
+    <string name="create_guide_location">📍 Ubicación y Tipo</string>
+    <string name="create_guide_location_desc">Elige la categoría correcta\npara que te encuentren fácil.</string>
+    <string name="create_guide_publish">Publicar</string>
+    <string name="create_guide_publish_desc">Cuando estés listo,\n¡lánzalo al mundo!</string>
+    <string name="create_guide_dismiss">Toca para cerrar guía</string>
+
+    <!-- RATE PARTICIPANTS -->
+    <string name="rate_participants_title">⭐ Calificar Participantes</string>
+    <string name="rate_participants_header">Puntúa a los participantes</string>
+    <string name="rate_participants_desc">Califica su comportamiento y compromiso (1-5 estrellas)</string>
+    <string name="rate_participants_progress">Progreso: %1$d / %2$d puntuados</string>
+    <string name="rate_participants_rated">✅ Puntuado</string>
+    <string name="rate_participants_rate">Puntuar</string>
+    <string name="rate_participants_select_score">Selecciona puntuación:</string>
+    <string name="rate_participants_score_1">⚠️ Muy malo</string>
+    <string name="rate_participants_score_2">😕 Malo</string>
+    <string name="rate_participants_score_3">😐 Regular</string>
+    <string name="rate_participants_score_4">😊 Bueno</string>
+    <string name="rate_participants_score_5">🌟 Excelente</string>
+    <string name="rate_participants_comment_placeholder">Explica tu puntuación...</string>
+    <string name="rate_participants_comment_visibility">Solo visible para usuarios Premium</string>
+    <string name="rate_participants_submit">Enviar Puntuación</string>
+
+    <!-- EVENT FEED -->
+    <string name="feed_no_posts">No hay publicaciones aún</string>
+    <string name="feed_add_photo">Agregar foto</string>
+    <string name="feed_write_something">Escribe algo...</string>
+    <string name="feed_image_selected">Imagen seleccionada</string>
+    <string name="feed_verified">Verificado</string>
+    <string name="feed_report_post">Reportar publicación</string>
+    <string name="feed_report_why">¿Por qué quieres reportar esto?</string>
+    <string name="feed_inappropriate">Inapropiado</string>
+    <string name="feed_block_user">🚫 Bloquear usuario</string>
+    <string name="feed_report">🚩 Reportar</string>
+    <string name="feed_full_image">Imagen completa</string>
+
+    <!-- FRIEND LIST -->
+    <!-- <string name="friends_title">Amigos y Comunidad</string> DUPLICATE -->
+    <string name="friends_search_placeholder">Buscar personas...</string>
+    <string name="friends_search_results">Resultados de búsqueda</string>
+    <string name="friends_your_friends">Tus amigos</string>
+    <string name="friends_community">Comunidad</string>
+    <string name="friends_add">Agregar</string>
+    <string name="friends_no_results">No se encontraron usuarios.</string>
+    <string name="friends_tab_friends">Amigos</string>
+    <!-- <string name="friends_tab_requests">Solicitudes</string> DUPLICATE -->
+    <!-- <string name="friends_tab_suggestions">Sugerencias</string> DUPLICATE -->
+    <string name="friends_empty_friends">No tienes amigos confirmados aún.</string>
+    <string name="friends_accept">Aceptar</string>
+    <string name="friends_empty_requests">No tienes solicitudes pendientes.</string>
+    <string name="friends_empty_suggestions">No hay sugerencias en tu región por ahora.</string>
+    <string name="friends_invite">¡Invita más gente a usar Banana!</string>
+
+    <!-- NOTIFICATIONS -->
+    <!-- <string name="notifications_title">Notificaciones</string> DUPLICATE -->
+    <!-- <string name="notifications_empty">No tienes notificaciones</string> DUPLICATE -->
+
+    <!-- HOME SCREEN (filters) -->
+    <!-- <string name="home_filter_all">Todo</string> DUPLICATE -->
+    <string name="home_filter_region">Región</string>
+    <string name="home_filter_all_regions">Todas las regiones</string>
+    <string name="home_filter_commune">Comuna</string>
+    <string name="home_filter_all_communes">Todas las comunas</string>
+    <string name="home_cd_profile_photo">Foto de perfil</string>
+    <string name="home_cd_map">Mapa</string>
+    <string name="home_cd_search">Buscar</string>
+    <string name="home_cd_friends">Amigos</string>
+
+    <!-- EVENT DETAIL -->
+    <string name="event_detail_boost">Boost</string>
+    <string name="event_detail_boost_benefits">Al destacar tu evento:</string>
+    <string name="event_detail_boost_confirm">¿Quieres continuar?</string>
+    <string name="event_detail_boost_get">Obtener Boost</string>
+    <string name="event_detail_participants">Participantes (%1$d)</string>
+    <string name="event_detail_verifying">Verificando...</string>
+    <string name="event_detail_gps_checkin">Check-in GPS (Estoy aquí)</string>
+    <string name="event_detail_tap_to_navigate">Toca para navegar</string>
+    <string name="event_detail_how_to_get_there">Cómo llegar</string>
+    <string name="event_detail_spots">Cupos: %1$d / %2$d</string>
+    <string name="event_detail_close_event">Cerrar evento</string>
+    <string name="event_detail_cancel_event">Cancelar evento</string>
+    <string name="event_detail_rate_requirement">Para calificar, debiste confirmar tu asistencia con GPS.</string>
+    <string name="event_detail_rate_now">Calificar ahora</string>
+    <string name="event_detail_pending_requests">Solicitudes pendientes</string>
+    <string name="event_detail_reject">Rechazar</string>
+    <string name="event_detail_accept">Aceptar</string>
+    <!-- Removed: event_detail_cd_event_photo, event_detail_cd_full_photo (Unused) -->
+    <string name="event_detail_cd_save_event">Guardar evento</string>
+    <string name="event_detail_cd_share_event">Compartir evento</string>
+
+    <!-- CREATE EVENT -->
+    <string name="create_event_title">Crear evento</string>
+    <string name="create_event_field_title">Título *</string>
+    <string name="create_event_field_description">Descripción *</string>
+    <string name="create_event_field_type">Tipo de Evento *</string>
+    <string name="create_event_field_min_reputation">Reputación Mínima (Opcional)</string>
+    <string name="create_event_field_region">Región *</string>
+    <string name="create_event_field_commune">Comuna * (%1$d)</string>
+    <string name="create_event_field_address">Dirección Exacta (Solo para aceptados) *</string>
+    <string name="create_event_field_address_placeholder">Ej: Calle Falsa 123, Depto 401</string>
+    <string name="create_event_field_address_note">Esta información NO es pública.</string>
+    <string name="create_event_visibility">Visibilidad</string>
+    <string name="create_event_public">Evento Público</string>
+    <string name="create_event_cd_cover">Portada</string>
+    <string name="create_event_cd_go">Ir</string>
+
+    <!-- PROFILE CONTENT DESCRIPTIONS -->
+    <!-- Removed: profile_cd_remove, profile_cd_save, profile_cd_full_screen (Unused) -->
+
+    <!-- EVENT DETAIL (extra) -->
+    <string name="event_detail_boost_title">🚀 Destacar Evento</string>
+    <string name="event_detail_boost_bullet1">✅ Aparecerá primero en el Feed.</string>
+    <string name="event_detail_boost_bullet2">✅ Tendrá un borde dorado llamativo.</string>
+    <string name="event_detail_boost_bullet3">✅ Duración: 24 horas.</string>
+    <string name="event_detail_exact_location">Ubicación Exacta</string>
+    <string name="event_detail_navigate">Navegar</string>
+    <string name="event_detail_event_cancelled">Evento cancelado</string>
+    <string name="event_detail_event_closed">Evento cerrado</string>
+    <string name="event_detail_already_accepted">Ya estás aceptado</string>
+    <string name="event_detail_request_sent">Solicitud enviada</string>
+    <string name="event_detail_request_rejected">Solicitud rechazada</string>
+    <string name="event_detail_join_public">Entrar al Evento</string>
+    <string name="event_detail_join_private">Solicitar acceso</string>
+    <string name="event_detail_cancelled_reason">Cancelado por el organizador</string>
+    <string name="event_detail_unverified_title">⚠️ Asistencia no verificada</string>
+    <string name="event_detail_rate_title">⭐ Calificar Participantes</string>
+    <string name="event_detail_days_remaining">Tienes %1$d %2$s para calificar.</string>
+    <string name="event_detail_day">día</string>
+    <string name="event_detail_days">días</string>
+    <string name="event_detail_stats_format">📊 %1$d/%2$d asignados (%3$d%%)</string>
+    <string name="event_detail_ghost">⚠️ Fantasma</string>
+    <string name="event_detail_perfect">💎 Perfecto</string>
+
+    <!-- BANANA GOLD -->
+    <string name="banana_gold_title">Banana Gold</string>
+    <string name="banana_gold_subtitle">La experiencia definitiva.</string>
+    <string name="banana_gold_fast_pass_title">Fast Pass (Prioridad)</string>
+    <string name="banana_gold_fast_pass_desc">Tus solicitudes aparecen primero.</string>
+    <string name="banana_gold_views_title">¿Quién vio mi perfil?</string>
+    <string name="banana_gold_views_desc">Descubre quién te está stalkeando.</string>
+    <string name="banana_gold_icons_title">Iconos Exclusivos</string>
+    <string name="banana_gold_icons_desc">Personaliza el icono de tu App.</string>
+    <string name="banana_gold_themes_title">Temas de Chat</string>
+    <string name="banana_gold_themes_desc">Fondos exclusivos para tus mensajes.</string>
+    <string name="banana_gold_cancel_anytime">Cancela cuando quieras.</string>
+    <string name="banana_gold_cta_button">OBTENER GOLD</string>
+    <string name="banana_gold_loading_price">Cargando precios de Google Play...</string>
+    <string name="banana_gold_fallback_price">$2.990 / mes</string>
+
+    <!-- PROFILE (Extra) -->
+    <string name="profile_no_name">Sin Nombre</string>
+    <string name="profile_founder_edition">🚀 Founder Edition</string>
+    <string name="profile_ratings_count_fmt">(%1$d valoraciones)</string>
+    <string name="profile_instagram_follow">📸 Síguenos en Instagram</string>
+
+    <!-- EVENT TYPE NAMES -->
+    <string name="event_type_deportes">Deportes</string>
+    <string name="event_type_social">Social</string>
+    <string name="event_type_cultural">Cultural</string>
+    <string name="event_type_educativo">Educativo</string>
+    <string name="event_type_juegos">Juegos</string>
+    <string name="event_type_gastronomia">Gastronomía</string>
+    <string name="event_type_aire_libre">Aire Libre</string>
+    <string name="event_type_otro">Otro</string>
+
+    <!-- SUBCATEGORIES: DEPORTES -->
+    <string name="sub_futbol">Fútbol</string>
+    <string name="sub_calistenia">Calistenia</string>
+    <string name="sub_gym">Gym</string>
+    <string name="sub_tenis">Tenis</string>
+    <string name="sub_padel">Pádel</string>
+    <string name="sub_running">Running</string>
+    <string name="sub_ciclismo">Ciclismo</string>
+    <string name="sub_trekking">Trekking</string>
+    <string name="sub_basket">Basket</string>
+    <string name="sub_voleibol">Voleibol</string>
+    <string name="sub_yoga">Yoga</string>
+    <string name="sub_crossfit">Crossfit</string>
+
+    <!-- SUBCATEGORIES: SOCIAL -->
+    <string name="sub_fiesta">Fiesta</string>
+    <string name="sub_previa">Previa</string>
+    <string name="sub_bar">Bar</string>
+    <string name="sub_boliche">Boliche</string>
+    <string name="sub_cita">Cita</string>
+    <string name="sub_reunion">Reunión</string>
+    <string name="sub_cumpleanos">Cumpleaños</string>
+    <string name="sub_networking">Networking</string>
+
+    <!-- SUBCATEGORIES: CULTURAL -->
+    <string name="sub_cine">Cine</string>
+    <string name="sub_teatro">Teatro</string>
+    <string name="sub_museo">Museo</string>
+    <string name="sub_concierto">Concierto</string>
+    <string name="sub_arte">Arte</string>
+    <string name="sub_standup">Stand-up</string>
+    <string name="sub_lectura">Lectura</string>
+    <string name="sub_musica_vivo">Música en vivo</string>
+
+    <!-- SUBCATEGORIES: EDUCATIVO -->
+    <string name="sub_taller">Taller</string>
+    <string name="sub_curso">Curso</string>
+    <string name="sub_idiomas">Idiomas</string>
+    <string name="sub_estudio">Estudio</string>
+    <string name="sub_hackathon">Hackathon</string>
+    <string name="sub_charla">Charla</string>
+    <string name="sub_tutoria">Tutoría</string>
+
+    <!-- SUBCATEGORIES: JUEGOS -->
+    <string name="sub_videojuegos">Videojuegos</string>
+    <string name="sub_juegos_mesa">Juegos de Mesa</string>
+    <string name="sub_rol">Rol</string>
+    <string name="sub_cartas">Cartas</string>
+    <string name="sub_escape_room">Escape Room</string>
+    <string name="sub_trivia">Trivia</string>
+    <string name="sub_casino">Casino</string>
+
+    <!-- SUBCATEGORIES: GASTRONOMIA -->
+    <string name="sub_cena">Cena</string>
+    <string name="sub_almuerzo">Almuerzo</string>
+    <string name="sub_cafe">Café</string>
+    <string name="sub_asado">Asado</string>
+    <string name="sub_foodtrucks">Foodtrucks</string>
+    <string name="sub_cata">Cata</string>
+    <string name="sub_cocina">Cocina</string>
+
+    <!-- SUBCATEGORIES: AIRE LIBRE -->
+    <string name="sub_parque">Parque</string>
+    <string name="sub_playa">Playa</string>
+    <string name="sub_camping">Camping</string>
+    <string name="sub_pesca">Pesca</string>
+    <string name="sub_picnic">Picnic</string>
+    <string name="sub_caminata">Caminata</string>
+    <string name="sub_escalada">Escalada</string>
+
+    <!-- DATE FILTERS -->
+    <string name="date_filter_all">Cualquier fecha</string>
+    <string name="date_filter_today">Hoy</string>
+    <string name="date_filter_tomorrow">Mañana</string>
+    <string name="date_filter_weekend">Este Finde</string>
+
+    <!-- RATING BADGES -->
+    <string name="badge_perfect_attendee">Asistente Perfecto</string>
+    <string name="badge_new_user">Nuevo Usuario</string>
+    <string name="badge_top_banana">Top Banana</string>
+    <string name="badge_reliable">Confiable</string>
+    <string name="badge_good">Bueno</string>
+    <string name="badge_developing">En Desarrollo</string>
+
+    <!-- NOTIFICATION TEMPLATES -->
+    <string name="notif_new_event_title">Nuevo evento en %1$s</string>
+    <string name="notif_join_request_title">Nueva solicitud</string>
+    <string name="notif_join_request_msg">Un usuario solicitó unirse a \"%1$s\"</string>
+    <string name="notif_join_approved_title">Solicitud aceptada</string>
+    <string name="notif_join_approved_msg">Fuiste aceptado en \"%1$s\"</string>
+    <string name="notif_join_rejected_title">Solicitud rechazada</string>
+    <string name="notif_join_rejected_msg">Tu solicitud a \"%1$s\" fue rechazada</string>
+    <string name="notif_friend_request_title">Nueva solicitud de amistad</string>
+    <string name="notif_friend_request_msg">%1$s quiere ser tu amigo</string>
+    <string name="notif_friend_accepted_title">Solicitud aceptada</string>
+    <string name="notif_friend_accepted_msg">%1$s ahora es tu amigo</string>
+    <string name="notif_new_message_title">Nuevo mensaje de %1$s</string>
+    <string name="notif_profile_view_title">Tienes una nueva visita 👁️</string>
+    <string name="notif_profile_view_msg">Alguien ha visto tu perfil recientemente.</string>
+    <string name="notif_generic_title">Notificación</string>
+
+    <!-- EVENT REMINDER (push local) -->
+    <!-- Removed: reminder_channel_name, reminder_channel_desc (Duplicated/Old) -->
+    <string name="reminder_title">¡Tu evento comienza pronto!</string>
+    <string name="reminder_body">En 1 hora comienza: %1$s. ¡Prepárate! 🍌</string>
+    <string name="reminder_fallback_title">Evento</string>
+
+    <!-- NOTIFICATION CHANNELS -->
+    <string name="notif_channel_general">Notificaciones Generales</string>
+    <string name="notif_channel_general_desc">Avisos importantes de la app</string>
+    <string name="notif_channel_reminders">Recordatorios de Eventos</string>
+    <string name="notif_channel_reminders_desc">Avisos 1 hora antes del evento</string>
+    <string name="notif_channel_messages">Mensajes</string>
+    <string name="notif_channel_messages_desc">Notificaciones de nuevos mensajes</string>
+
+    <!-- THEME NAMES -->
+    <string name="theme_banana">Banana 🍌</string>
+    <string name="theme_dark">Oscuro 🌑</string>
+    <string name="theme_light">Claro ☀️</string>
+    <string name="theme_dynamic">Dinámico 🎨</string>
+
 </resources>

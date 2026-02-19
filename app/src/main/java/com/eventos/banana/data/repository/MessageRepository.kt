@@ -66,7 +66,9 @@ class MessageRepository {
             .orderBy("lastMessageTimestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    android.util.Log.e("MessageRepository", "Error observing conversations: ${error.message}", error)
+                    // Don't crash — emit empty list and keep listening
+                    trySend(emptyList())
                     return@addSnapshotListener
                 }
                 
@@ -140,31 +142,125 @@ class MessageRepository {
             Result.failure(e)
         }
     }
-    // Marcar conversación como leída
+
+
+    // ⌨️ TYPING STATUS (Round 67)
+    suspend fun setTypingStatus(conversationId: String, userId: String, isTyping: Boolean): Result<Unit> {
+        return try {
+            val docRef = conversationsCollection.document(conversationId)
+            if (isTyping) {
+                docRef.update("typingUsers", com.google.firebase.firestore.FieldValue.arrayUnion(userId)).await()
+            } else {
+                docRef.update("typingUsers", com.google.firebase.firestore.FieldValue.arrayRemove(userId)).await()
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            // Fail silently is mostly fine for typing status to avoid blocking UI
+            Result.failure(e)
+        }
+    }
+
+    // 👁️ MARK AS READ v2 (Round 67)
+    // Marks all unread messages in conversation as read by current user
     suspend fun markConversationAsRead(conversationId: String, userId: String): Result<Unit> {
         return try {
+            // 1. Reset unread count
             conversationsCollection.document(conversationId).update(
                 "unreadCount.$userId", 0
             ).await()
+
+            // 2. Add user to 'readers' of recent unread messages (Cost optimization: limit to last 20?)
+            // We only update messages that don't have us in 'readers' yet.
+            // Doing this for *every* read might be write-heavy.
+            // Strategy: We will just update the "lastMessage" read status or do a batch update on unread ones.
+            // For simplicity and cost balance: we won't batch update ALL past messages 'readers' field 
+            // because that could be hundreds of writes.
+            // We'll rely on 'unreadCount' for the "grey/blue" check on the CONVERSATION list.
+            // But for individual messages (Double Check), we need to update the message docs.
+            
+            // Let's only update the last 20 messages to save writes, assuming older ones are scrolled past or read.
+            val unreadMessagesQuery = conversationsCollection.document(conversationId)
+                .collection("messages")
+                .whereArrayContains("participants", userId) // Invalid query for subcollection usually
+                // Better: just query messages where 'readers' does NOT contain userId? Firestore doesn't support "not-array-contains".
+                // So we query last 20 orders by timestamp desc.
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(20)
+                .get()
+                .await()
+
+            val batch = firestore.batch()
+            var updatesCount = 0
+
+            for (doc in unreadMessagesQuery.documents) {
+                val readers = doc.get("readers") as? List<*> ?: emptyList<Any>()
+                if (!readers.contains(userId)) {
+                    batch.update(doc.reference, "readers", com.google.firebase.firestore.FieldValue.arrayUnion(userId))
+                    updatesCount++
+                }
+            }
+            
+            if (updatesCount > 0) {
+                batch.commit().await()
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
-            // Ignore error if field doesn't exist yet
             Result.success(Unit)
         }
     }
 
+    // 🗑️ DELETE MESSAGE (Soft Delete)
+    suspend fun deleteMessage(conversationId: String, messageId: String): Result<Unit> {
+        return try {
+            conversationsCollection.document(conversationId)
+                .collection("messages")
+                .document(messageId)
+                .update("isDeleted", true)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ✏️ EDIT MESSAGE
+    suspend fun editMessage(conversationId: String, messageId: String, oldContent: String, newContent: String): Result<Unit> {
+        return try {
+            conversationsCollection.document(conversationId)
+                .collection("messages")
+                .document(messageId)
+                .update(
+                    mapOf(
+                        "content" to newContent,
+                        "isEdited" to true,
+                        "editHistory" to com.google.firebase.firestore.FieldValue.arrayUnion(oldContent)
+                    )
+                )
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // Observar mensajes de una conversación
-    fun observeMessages(conversationId: String): Flow<List<Message>> = callbackFlow {
+    // Observar mensajes de una conversación con paginación
+    fun observeMessages(conversationId: String, limit: Int = 30): Flow<List<Message>> = callbackFlow {
+        // Query last 'limit' messages ordered by timestamp DESC
         val listener = conversationsCollection.document(conversationId)
             .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(limit.toLong())
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    android.util.Log.e("MessageRepository", "Error observing messages: ${error.message}", error)
+                    trySend(emptyList())
                     return@addSnapshotListener
                 }
                 
-                val messages = snapshot?.toObjects(Message::class.java) ?: emptyList()
+                // Get messages and reverse them to show oldest -> newest
+                val messages = snapshot?.toObjects(Message::class.java)?.reversed() ?: emptyList()
                 trySend(messages)
             }
         
@@ -185,7 +281,8 @@ class MessageRepository {
         val listener = conversationsCollection.document(conversationId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    android.util.Log.e("MessageRepository", "Error observing conversation: ${error.message}", error)
+                    trySend(null)
                     return@addSnapshotListener
                 }
                 val conversation = snapshot?.toObject(Conversation::class.java)

@@ -35,6 +35,8 @@ fun EventDetailRoute(
     checkInState: com.eventos.banana.viewmodel.CheckInState,
     onCheckInClick: () -> Unit,
     onResetCheckInState: () -> Unit,
+    actionState: com.eventos.banana.viewmodel.ActionState = com.eventos.banana.viewmodel.ActionState.Idle,
+    onResetActionState: () -> Unit = {},
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
@@ -116,6 +118,8 @@ fun EventDetailRoute(
                 checkInState = checkInState,
                 onCheckInClick = onCheckInClick,
                 onResetCheckInState = onResetCheckInState,
+                actionState = actionState,
+                onResetActionState = onResetActionState,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
             )

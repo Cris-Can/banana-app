@@ -49,6 +49,10 @@ data class UserProfile(
     // 🛡️ TRUST & SAFETY (Round 49)
     val blockedUsers: List<String> = emptyList(),     // UIDs de usuarios bloqueados
     
+    // 👮 ADMIN & MODERATION (Round 69)
+    val isAdmin: Boolean = false, // 🔑 Acceso al Panel de Control
+    val isBanned: Boolean = false, // 🚫 Usuario baneado (no puede loguear/interactuar)
+    
     // 💾 SAVED EVENTS (A30)
     val savedEventIds: List<String> = emptyList(),
     
@@ -83,11 +87,17 @@ data class UserProfile(
         }
     
     // 💎 Helpers for Subscription (Computed, not stored)
+    // 💎 isGold = tiene acceso ilimitado (GOLD pago, FOUNDER, o legacy)
     val isGold: Boolean
-        get() = isGoldStored || subscriptionType == "GOLD" || subscriptionType == "PREMIUM" || isFounder // 🚀 Founder = Automatic Gold
+        get() = isGoldStored || subscriptionType == "GOLD" || subscriptionType == "FOUNDER" || isFounder
 
+    // isPremium = alias de isGold (ya no existe tier separado)
     val isPremium: Boolean
-        get() = isPremiumStored || subscriptionType == "PREMIUM" || subscriptionType == "GOLD" || isFounder // 🚀 Founder = Automatic Premium
+        get() = isGold
+
+    // 🚀 canBoostFree = solo suscriptores GOLD pagos (NO founders)
+    val canBoostFree: Boolean
+        get() = subscriptionType == "GOLD" && !isFounder
 
     // Helper para detectar Asistente Perfecto (Punto 5 sugerido)
     fun isPerfectAttendee(): Boolean {
@@ -107,16 +117,7 @@ data class UserProfile(
         }
     }
     
-    fun getRatingBadgeText(): String {
-        return when {
-            isPerfectAttendee() -> "Asistente Perfecto"
-            ratingCount == 0 -> "Nuevo Usuario"
-            averageRating >= 4.5 -> "Top Banana"
-            averageRating >= 4.0 -> "Confiable"
-            averageRating >= 3.0 -> "Bueno"
-            else -> "En Desarrollo"
-        }
-    }
+
 }
 // Enum removed to simplify Firestore mapping
 

@@ -5,17 +5,43 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep line numbers for crash reports
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep NotificationHelper to prevent stripping of channel constants
+-keep class com.eventos.banana.util.NotificationHelper { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Firebase
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+
+# Firebase App Check
+-keep class com.google.firebase.appcheck.** { *; }
+
+# Firestore model classes
+-keep class com.eventos.banana.domain.model.** { *; }
+
+# Google Maps
+-keep class com.google.android.gms.maps.** { *; }
+-dontwarn com.google.android.gms.maps.**
+
+# Google Places
+-keep class com.google.android.libraries.places.** { *; }
+-dontwarn com.google.android.libraries.places.**
+
+# Coil (Image Loading)
+-dontwarn coil.**
+
+# Keep Compose
+-dontwarn androidx.compose.**
+
+# Billing
+-keep class com.android.vending.billing.** { *; }
+
+# AdMob
+-keep class com.google.android.gms.ads.** { *; }
+
+# Keep Kotlin serialization (if used)
+-keepattributes *Annotation*
+-keep class kotlin.Metadata { *; }

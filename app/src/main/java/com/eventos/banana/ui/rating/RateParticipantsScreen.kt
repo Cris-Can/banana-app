@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,10 +55,10 @@ fun RateParticipantsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("⭐ Calificar Participantes") },
+                title = { Text(stringResource(com.eventos.banana.R.string.rate_participants_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(com.eventos.banana.R.string.common_back_nav))
                     }
                 }
             )
@@ -90,13 +91,13 @@ fun RateParticipantsScreen(
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Text(
-                                "Puntúa a los participantes",
+                                stringResource(com.eventos.banana.R.string.rate_participants_header),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "Califica su comportamiento y compromiso (1-5 estrellas)",
+                                stringResource(com.eventos.banana.R.string.rate_participants_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -107,13 +108,13 @@ fun RateParticipantsScreen(
                             val pending = totalUsers - rated
                             
                             Text(
-                                "Progreso: $rated / $totalUsers puntuados",
+                                stringResource(com.eventos.banana.R.string.rate_participants_progress, rated, totalUsers),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             
                             LinearProgressIndicator(
-                                progress = if (totalUsers > 0) rated.toFloat() / totalUsers else 0f,
+                                progress = { if (totalUsers > 0) rated.toFloat() / totalUsers else 0f },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 8.dp)
@@ -181,14 +182,14 @@ private fun ParticipantRatingCard(
                 
                 if (alreadyRated) {
                     Text(
-                        "✅ Puntuado",
+                        stringResource(com.eventos.banana.R.string.rate_participants_rated),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                 } else {
                     TextButton(onClick = { expanded = !expanded }) {
-                        Text(if (expanded) "Cancelar" else "Puntuar")
+                        Text(if (expanded) stringResource(com.eventos.banana.R.string.common_cancel) else stringResource(com.eventos.banana.R.string.rate_participants_rate))
                     }
                 }
             }
@@ -201,7 +202,7 @@ private fun ParticipantRatingCard(
                 
                 // Star rating
                 Text(
-                    "Selecciona puntuación:",
+                    stringResource(com.eventos.banana.R.string.rate_participants_select_score),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -216,7 +217,7 @@ private fun ParticipantRatingCard(
                         ) {
                             Icon(
                                 Icons.Default.Star,
-                                contentDescription = "$i estrella${if (i > 1) "s" else ""}",
+                                contentDescription = stringResource(com.eventos.banana.R.string.rating_stars, i),
                                 tint = if (i <= selectedScore) Color(0xFFFFD700) else MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(40.dp)
                             )
@@ -227,11 +228,11 @@ private fun ParticipantRatingCard(
                 if (selectedScore > 0) {
                     Text(
                         when (selectedScore) {
-                            1 -> "⚠️ Muy malo"
-                            2 -> "😕 Malo"
-                            3 -> "😐 Regular"
-                            4 -> "😊 Bueno"
-                            5 -> "🌟 Excelente"
+                            1 -> stringResource(com.eventos.banana.R.string.rate_participants_score_1)
+                            2 -> stringResource(com.eventos.banana.R.string.rate_participants_score_2)
+                            3 -> stringResource(com.eventos.banana.R.string.rate_participants_score_3)
+                            4 -> stringResource(com.eventos.banana.R.string.rate_participants_score_4)
+                            5 -> stringResource(com.eventos.banana.R.string.rate_participants_score_5)
                             else -> ""
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -246,12 +247,12 @@ private fun ParticipantRatingCard(
                 OutlinedTextField(
                     value = comment,
                     onValueChange = { comment = it },
-                    label = { Text("Comentario (Opcional)") },
-                    placeholder = { Text("Explica tu puntuación...") },
+                    label = { Text(stringResource(com.eventos.banana.R.string.rating_comment_label)) },
+                    placeholder = { Text(stringResource(com.eventos.banana.R.string.rate_participants_comment_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
                     supportingText = { 
-                        Text("Solo visible para usuarios Premium")
+                        Text(stringResource(com.eventos.banana.R.string.rate_participants_comment_visibility))
                     }
                 )
                 
@@ -268,7 +269,7 @@ private fun ParticipantRatingCard(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = selectedScore > 0
                 ) {
-                    Text("Enviar Puntuación")
+                    Text(stringResource(com.eventos.banana.R.string.rate_participants_submit))
                 }
             }
         }

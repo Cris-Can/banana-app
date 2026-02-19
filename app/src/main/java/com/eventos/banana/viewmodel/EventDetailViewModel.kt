@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eventos.banana.data.repository.EventRepository
 import com.eventos.banana.domain.model.EventDetailUiState
+import com.eventos.banana.domain.model.JoinRequest
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.eventos.banana.data.repository.UserRepository
@@ -22,6 +23,10 @@ class EventDetailViewModel(
     private val _joinSubmissionState = MutableStateFlow<JoinSubmissionState>(JoinSubmissionState.Idle)
     val joinSubmissionState: StateFlow<JoinSubmissionState> = _joinSubmissionState
 
+    // 🆕 Track approval/rejection results
+    private val _actionState = MutableStateFlow<ActionState>(ActionState.Idle)
+    val actionState: StateFlow<ActionState> = _actionState
+
     init {
         loadEvent()
     }
@@ -35,13 +40,27 @@ class EventDetailViewModel(
                     )
                 }
                 .collect { event ->
-                    // 1. Emit event immediately
-                    val currentProfiles = (_uiState.value as? EventDetailUiState.Success)?.userProfiles ?: emptyMap()
-                    _uiState.value = EventDetailUiState.Success(event, userProfiles = currentProfiles)
+                            // 🛡️ SANITIZE DATA: Filter out potential nulls from Firestore lists (Ghost data)
+                            @Suppress("UNCHECKED_CAST")
+                            val safePending = (event.pendingRequests as? List<JoinRequest?>)?.filterNotNull() ?: emptyList()
+                            @Suppress("UNCHECKED_CAST")
+                            val safeApproved = (event.approvedParticipants as? List<String?>)?.filterNotNull() ?: emptyList()
+                            @Suppress("UNCHECKED_CAST")
+                            val safeRejected = (event.rejectedParticipants as? List<String?>)?.filterNotNull() ?: emptyList()
+                            
+                            val sanitizedEvent = event.copy(
+                                pendingRequests = safePending,
+                                approvedParticipants = safeApproved,
+                                rejectedParticipants = safeRejected
+                            )
 
-                    // 2. Batch fetch profiles for creator + participants + APPLICANTS
-                    val applicants = event.pendingRequests.map { it.userId }
-                    val userIdsToFetch = (event.approvedParticipants + listOf(event.creatorId) + applicants).distinct()
+                            // 1. Emit event immediately (Sanitized)
+                            val currentProfiles = (_uiState.value as? EventDetailUiState.Success)?.userProfiles ?: emptyMap()
+                            _uiState.value = EventDetailUiState.Success(sanitizedEvent, userProfiles = currentProfiles)
+        
+                            // 2. Batch fetch profiles for creator + participants + APPLICANTS
+                            val applicants = sanitizedEvent.pendingRequests.map { it.userId }
+                            val userIdsToFetch = (sanitizedEvent.approvedParticipants + listOf(sanitizedEvent.creatorId) + applicants).distinct()
 
                     // Filter IDs that are missing or are just placeholders "Usuario"
                     val missingIds = userIdsToFetch.filter { uid ->
@@ -67,7 +86,7 @@ class EventDetailViewModel(
                                 }
                             }
 
-                            _uiState.value = EventDetailUiState.Success(event, userProfiles = newProfiles)
+                            _uiState.value = EventDetailUiState.Success(sanitizedEvent, userProfiles = newProfiles)
                             
                         } catch (e: Exception) {
                             android.util.Log.e("EventDetailVM", "Failed batch fetch", e)
@@ -80,10 +99,14 @@ class EventDetailViewModel(
     // ---------- SOLICITUDES ----------
     fun approveParticipant(userId: String) {
         viewModelScope.launch {
+            _actionState.value = ActionState.Loading
             val result = repository.approveParticipant(eventId, userId)
             if (result.isSuccess) {
                  // 📊 STATS: Increment "Requested" (now acting as "Approved") to track reliability
                  userRepository.incrementEventsRequested(userId)
+                 _actionState.value = ActionState.Success("Usuario aprobado")
+            } else {
+                 _actionState.value = ActionState.Error(result.exceptionOrNull()?.message ?: "Error al aprobar")
             }
             loadEvent()
         }
@@ -91,9 +114,19 @@ class EventDetailViewModel(
 
     fun rejectParticipant(userId: String) {
         viewModelScope.launch {
-            repository.rejectParticipant(eventId, userId)
+            _actionState.value = ActionState.Loading
+            val result = repository.rejectParticipant(eventId, userId)
+            if (result.isSuccess) {
+                _actionState.value = ActionState.Success("Usuario rechazado")
+            } else {
+                _actionState.value = ActionState.Error(result.exceptionOrNull()?.message ?: "Error al rechazar")
+            }
             loadEvent()
         }
+    }
+    
+    fun resetActionState() {
+        _actionState.value = ActionState.Idle
     }
 
     private val subscriptionRepository = com.eventos.banana.data.repository.SubscriptionRepository()
@@ -265,4 +298,10 @@ sealed interface CheckInState {
     object Loading : CheckInState
     object Success : CheckInState
     data class Error(val message: String) : CheckInState
+}
+sealed interface ActionState {
+    object Idle : ActionState
+    object Loading : ActionState
+    data class Success(val message: String) : ActionState
+    data class Error(val message: String) : ActionState
 }

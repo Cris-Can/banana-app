@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -29,10 +30,10 @@ fun CreateEventGuideOverlay(
                 .align(Alignment.TopStart)
                 .padding(start = 24.dp, top = 16.dp)
         ) {
-            Text("📝 Info Básica", 
+            Text(stringResource(com.eventos.banana.R.string.create_guide_basic_info), 
                 color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Define un título atractivo\ny una descripción clara.",
+                stringResource(com.eventos.banana.R.string.create_guide_basic_desc),
                 color = Color.LightGray, style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -43,10 +44,10 @@ fun CreateEventGuideOverlay(
                 .align(Alignment.CenterStart)
                 .padding(start = 24.dp)
         ) {
-            Text("📍 Ubicación y Tipo", 
+            Text(stringResource(com.eventos.banana.R.string.create_guide_location), 
                 color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Elige la categoría correcta\npara que te encuentren fácil.",
+                stringResource(com.eventos.banana.R.string.create_guide_location_desc),
                 color = Color.LightGray, style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -59,10 +60,10 @@ fun CreateEventGuideOverlay(
             horizontalAlignment = Alignment.End
         ) {
             Text("⬇️", style = MaterialTheme.typography.displayMedium)
-            Text("Publicar", 
+            Text(stringResource(com.eventos.banana.R.string.create_guide_publish), 
                 color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Cuando estés listo,\n¡lánzalo al mundo!",
+                stringResource(com.eventos.banana.R.string.create_guide_publish_desc),
                 color = Color.LightGray,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.End
@@ -71,7 +72,7 @@ fun CreateEventGuideOverlay(
         
         // Dismiss Hint
         Text(
-            "Toca para cerrar guía",
+            stringResource(com.eventos.banana.R.string.create_guide_dismiss),
             color = Color.White.copy(alpha = 0.5f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)

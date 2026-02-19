@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.Event
 
@@ -19,6 +20,7 @@ fun QuestionnaireScreen(
 ) {
     val answers = remember { mutableStateMapOf<String, String>() }
     var error by remember { mutableStateOf<String?>(null) }
+    val requiredErrorText = stringResource(com.eventos.banana.R.string.questionnaire_required_error)
 
     Column(
         modifier = Modifier
@@ -28,7 +30,7 @@ fun QuestionnaireScreen(
     ) {
 
         Text(
-            text = "Solicitud para: ${event.title}",
+            text = stringResource(com.eventos.banana.R.string.questionnaire_title, event.title),
             style = MaterialTheme.typography.titleLarge
         )
 
@@ -66,7 +68,7 @@ fun QuestionnaireScreen(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Obtener Premium 👑")
+                    Text(stringResource(com.eventos.banana.R.string.questionnaire_get_premium))
                 }
             }
         }
@@ -80,7 +82,7 @@ fun QuestionnaireScreen(
                 }
 
                 if (missingRequired) {
-                    error = "Responde todas las preguntas obligatorias"
+                    error = requiredErrorText
                     return@Button
                 }
 
@@ -96,7 +98,7 @@ fun QuestionnaireScreen(
                     strokeWidth = 2.dp
                 )
             } else {
-                Text("Enviar solicitud")
+                Text(stringResource(com.eventos.banana.R.string.questionnaire_submit))
             }
         }
 
@@ -104,7 +106,7 @@ fun QuestionnaireScreen(
             onClick = onCancel,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Cancelar")
+            Text(stringResource(com.eventos.banana.R.string.common_cancel))
         }
 
     }

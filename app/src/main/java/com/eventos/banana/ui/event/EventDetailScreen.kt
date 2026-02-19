@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
@@ -37,7 +38,7 @@ import coil.compose.AsyncImage
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventStatus
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun EventDetailScreen(
     event: Event,
@@ -62,6 +63,8 @@ fun EventDetailScreen(
     checkInState: com.eventos.banana.viewmodel.CheckInState = com.eventos.banana.viewmodel.CheckInState.Idle,
     onCheckInClick: () -> Unit = {},
     onResetCheckInState: () -> Unit = {},
+    actionState: com.eventos.banana.viewmodel.ActionState = com.eventos.banana.viewmodel.ActionState.Idle,
+    onResetActionState: () -> Unit = {},
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
@@ -81,6 +84,23 @@ fun EventDetailScreen(
     LaunchedEffect(Unit) {
         if (!sharedPreferences.getBoolean("event_detail_guide_seen", false)) {
             showGuide = true
+        }
+    }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Handle Action Results
+    LaunchedEffect(actionState) {
+        when (actionState) {
+            is com.eventos.banana.viewmodel.ActionState.Success -> {
+                snackbarHostState.showSnackbar(actionState.message)
+                onResetActionState()
+            }
+            is com.eventos.banana.viewmodel.ActionState.Error -> {
+                snackbarHostState.showSnackbar(actionState.message)
+                onResetActionState()
+            }
+            else -> {}
         }
     }
 
@@ -322,7 +342,7 @@ fun EventDetailScreen(
                                             contentColor = androidx.compose.ui.graphics.Color.Black
                                         )
                                     ) {
-                                        Text("Boost")
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_boost))
                                     }
                                 }
                             }
@@ -331,16 +351,30 @@ fun EventDetailScreen(
                         if (showBoostDialog) {
                             AlertDialog(
                                 onDismissRequest = { showBoostDialog = false },
-                                title = { Text("🚀 Destacar Evento") },
+                                title = { Text(stringResource(com.eventos.banana.R.string.event_detail_boost_title)) },
                                 text = {
+                                    val currentUserProfile = (eventState as? com.eventos.banana.domain.model.EventDetailUiState.Success)
+                                        ?.userProfiles?.get(currentUserId)
+                                    val isFounder = currentUserProfile?.isFounder == true
+                                    
                                     Column {
-                                        Text("Al destacar tu evento:")
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_boost_benefits))
                                         Spacer(Modifier.height(8.dp))
-                                        Text("✅ Aparecerá primero en el Feed.")
-                                        Text("✅ Tendrá un borde dorado llamativo.")
-                                        Text("✅ Duración: 24 horas.")
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_boost_bullet1))
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_boost_bullet2))
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_boost_bullet3))
                                         Spacer(Modifier.height(16.dp))
-                                        Text("¿Quieres continuar?", fontWeight = FontWeight.Bold)
+                                        
+                                        if (isFounder) {
+                                            Text(
+                                                "Precio especial para Founders: $1.000 CLP", 
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(Modifier.height(8.dp))
+                                        }
+                                        
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_boost_confirm), fontWeight = FontWeight.Bold)
                                     }
                                 },
                                 confirmButton = {
@@ -354,12 +388,12 @@ fun EventDetailScreen(
                                             contentColor = androidx.compose.ui.graphics.Color.Black
                                         )
                                     ) {
-                                        Text("Obtener Boost")
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_boost_get))
                                     }
                                 },
                                 dismissButton = {
                                     TextButton(onClick = { showBoostDialog = false }) {
-                                        Text("Cancelar")
+                                        Text(stringResource(com.eventos.banana.R.string.common_cancel))
                                     }
                                 }
                             )
@@ -409,7 +443,7 @@ fun EventDetailScreen(
                             AlertDialog(
                                 onDismissRequest = { showParticipantsDialog = false },
                                 title = {
-                                    Text("Participantes (${event.approvedParticipants.size})")
+                                    Text(stringResource(com.eventos.banana.R.string.event_detail_participants, event.approvedParticipants.size))
                                 },
                                 text = {
                                     Column(
@@ -449,7 +483,7 @@ fun EventDetailScreen(
                                 },
                                 confirmButton = {
                                     TextButton(onClick = { showParticipantsDialog = false }) {
-                                        Text("Cerrar")
+                                        Text(stringResource(com.eventos.banana.R.string.common_close))
                                     }
                                 }
                             )
@@ -589,11 +623,11 @@ fun EventDetailScreen(
                                             if (isVerifyingLocation || checkInState is com.eventos.banana.viewmodel.CheckInState.Loading) {
                                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                                 Spacer(Modifier.width(8.dp))
-                                                Text("Verificando...")
+                                                Text(stringResource(com.eventos.banana.R.string.event_detail_verifying))
                                             } else {
                                                 Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
                                                 Spacer(Modifier.width(8.dp))
-                                                Text("Check-in GPS (Estoy aquí)")
+                                                Text(stringResource(com.eventos.banana.R.string.event_detail_gps_checkin))
                                             }
                                         }
                                         
@@ -636,13 +670,13 @@ fun EventDetailScreen(
                                         Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.primary)
                                         Spacer(Modifier.width(8.dp))
                                         Text(
-                                            "Ubicación Exacta",
+                                            stringResource(com.eventos.banana.R.string.event_detail_exact_location),
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Spacer(Modifier.weight(1f))
                                         // "Open" hint text
-                                        Text("Toca para navegar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_tap_to_navigate), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                                     }
                                     
                                     Box(modifier = Modifier.fillMaxSize()) {
@@ -699,8 +733,8 @@ fun EventDetailScreen(
                                                     context.startActivity(fallbackIntent)
                                                 } 
                                             },
-                                            icon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Navegar") },
-                                            text = { Text("Cómo llegar") },
+                                            icon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, stringResource(com.eventos.banana.R.string.event_detail_navigate)) },
+                                            text = { Text(stringResource(com.eventos.banana.R.string.event_detail_how_to_get_there)) },
                                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                         )
@@ -748,25 +782,25 @@ fun EventDetailScreen(
                 Text(event.description)
                 HorizontalDivider()
 
-                Text("Cupos: ${event.approvedParticipants.size} / ${event.maxParticipants}")
+                Text(stringResource(com.eventos.banana.R.string.event_detail_spots, event.approvedParticipants.size, event.maxParticipants))
 
                 // ACCIONES USUARIO (NO CREADOR)
                 if (!isCreator) {
                     when {
                         event.status == EventStatus.CANCELLED ->
-                            DisabledButton("Evento cancelado")
+                            DisabledButton(stringResource(com.eventos.banana.R.string.event_detail_event_cancelled))
 
                         event.status == EventStatus.CLOSED ->
-                            DisabledButton("Evento cerrado")
+                            DisabledButton(stringResource(com.eventos.banana.R.string.event_detail_event_closed))
 
                         isApproved ->
-                            DisabledButton("Ya estás aceptado")
+                            DisabledButton(stringResource(com.eventos.banana.R.string.event_detail_already_accepted))
 
                         isPending ->
-                            DisabledButton("Solicitud enviada")
+                            DisabledButton(stringResource(com.eventos.banana.R.string.event_detail_request_sent))
 
                         isRejected ->
-                            DisabledButton("Solicitud rechazada")
+                            DisabledButton(stringResource(com.eventos.banana.R.string.event_detail_request_rejected))
 
                         else -> {
                             Button(
@@ -774,7 +808,7 @@ fun EventDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !isJoining
                             ) {
-                                Text(if (event.isPublic) "Entrar al Evento" else "Solicitar acceso")
+                                Text(if (event.isPublic) stringResource(com.eventos.banana.R.string.event_detail_join_public) else stringResource(com.eventos.banana.R.string.event_detail_join_private))
                             }
                         }
                     }
@@ -789,14 +823,15 @@ fun EventDetailScreen(
                         enabled = event.status == EventStatus.OPEN,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Cerrar evento")
+                        Text(stringResource(com.eventos.banana.R.string.event_detail_close_event))
                     }
 
+                    val cancelReason = stringResource(com.eventos.banana.R.string.event_detail_cancelled_reason)
                     OutlinedButton(
-                        onClick = { onCancelEvent("Cancelado por el organizador") },
+                        onClick = { onCancelEvent(cancelReason) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Cancelar evento")
+                        Text(stringResource(com.eventos.banana.R.string.event_detail_cancel_event))
                     }
                 }
 
@@ -823,8 +858,8 @@ fun EventDetailScreen(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                         ) {
                             Column(Modifier.padding(16.dp)) {
-                                Text("⚠️ Asistencia no verificada", fontWeight = FontWeight.Bold)
-                                Text("Para calificar, debiste confirmar tu asistencia con GPS.", style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(com.eventos.banana.R.string.event_detail_unverified_title), fontWeight = FontWeight.Bold)
+                                Text(stringResource(com.eventos.banana.R.string.event_detail_rate_requirement), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     } else {
@@ -836,7 +871,7 @@ fun EventDetailScreen(
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 Text(
-                                    "⭐ Calificar Participantes",
+                                    stringResource(com.eventos.banana.R.string.event_detail_rate_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -844,7 +879,7 @@ fun EventDetailScreen(
                                 
                                 val daysRemaining = ((ratingDeadline - now) / (24 * 60 * 60 * 1000)).toInt()
                                 Text(
-                                    "Tienes $daysRemaining ${if (daysRemaining == 1) "día" else "días"} para calificar.",
+                                    stringResource(com.eventos.banana.R.string.event_detail_days_remaining, daysRemaining, if (daysRemaining == 1) stringResource(com.eventos.banana.R.string.event_detail_day) else stringResource(com.eventos.banana.R.string.event_detail_days)),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
@@ -855,7 +890,7 @@ fun EventDetailScreen(
                                     onClick = { onRateParticipants(event) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Calificar ahora")
+                                    Text(stringResource(com.eventos.banana.R.string.event_detail_rate_now))
                                 }
                             }
                         }
@@ -865,7 +900,7 @@ fun EventDetailScreen(
                 // SOLICITUDES PENDIENTES
                 if (isCreator && event.pendingRequests.isNotEmpty()) {
                     HorizontalDivider()
-                    Text("Solicitudes pendientes", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(com.eventos.banana.R.string.event_detail_pending_requests), style = MaterialTheme.typography.titleMedium)
 
                     // ⚡ FAST PASS: Ordenar Gold primero
                     val sortedRequests = event.pendingRequests.sortedByDescending { request ->
@@ -918,7 +953,7 @@ fun EventDetailScreen(
                                     Spacer(Modifier.height(4.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "📊 $attended/$requested asignados ($reliability%)",
+                                            text = stringResource(com.eventos.banana.R.string.event_detail_stats_format, attended, requested, reliability),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -926,7 +961,7 @@ fun EventDetailScreen(
                                         if (requested >= 5 && reliability < 50) {
                                             Spacer(Modifier.width(8.dp))
                                             Text(
-                                                "⚠️ Fantasma",
+                                                stringResource(com.eventos.banana.R.string.event_detail_ghost),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.error
                                             )
@@ -935,7 +970,7 @@ fun EventDetailScreen(
                                         if (requesterProfile.isPerfectAttendee()) {
                                             Spacer(Modifier.width(8.dp))
                                             Text(
-                                                "💎 Perfecto",
+                                                stringResource(com.eventos.banana.R.string.event_detail_perfect),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -956,14 +991,14 @@ fun EventDetailScreen(
                                         onClick = { onRejectClick(request.userId) },
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("Rechazar")
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_reject))
                                     }
 
                                     Button(
                                         onClick = { onApproveClick(request.userId) },
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("Aceptar")
+                                        Text(stringResource(com.eventos.banana.R.string.event_detail_accept))
                                     }
                                 }
                             }
@@ -1040,7 +1075,7 @@ fun EventDetailScreen(
                     IconButton(onClick = onToggleSave) {
                          Icon(
                             imageVector = if (isSaved) androidx.compose.material.icons.Icons.Filled.Star else androidx.compose.material.icons.Icons.Filled.Add,
-                            contentDescription = "Guardar evento",
+                            contentDescription = stringResource(com.eventos.banana.R.string.event_detail_cd_save_event),
                             tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1048,7 +1083,7 @@ fun EventDetailScreen(
                     IconButton(onClick = { shareHelper.shareEvent(event) }) {
                         Icon(
                             imageVector = Icons.Default.Share,
-                            contentDescription = "Compartir evento",
+                            contentDescription = stringResource(com.eventos.banana.R.string.event_detail_cd_share_event),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -1106,6 +1141,14 @@ fun EventDetailScreen(
             visible = true,
             message = if (event.isPublic) "¡Te has unido!" else "Solicitud enviada",
             onDismiss = { showSuccess = false }
+        )
+    }
+
+    // Snackbar Host at the bottom
+    Box(modifier = Modifier.fillMaxSize()) {
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp)
         )
     }
 }

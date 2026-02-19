@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
+import com.eventos.banana.ui.util.*
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.eventos.banana.domain.model.Event
@@ -37,7 +39,9 @@ fun UnifiedSearchScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Eventos", "Usuarios")
+    val eventsTabLabel = stringResource(com.eventos.banana.R.string.search_tab_events)
+    val usersTabLabel = stringResource(com.eventos.banana.R.string.search_tab_users)
+    val tabs = listOf(eventsTabLabel, usersTabLabel)
 
     Scaffold(
         topBar = {
@@ -46,7 +50,7 @@ fun UnifiedSearchScreen(
                     TextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Buscar...") },
+                        placeholder = { Text(stringResource(com.eventos.banana.R.string.search_placeholder)) },
                         singleLine = true,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -58,7 +62,7 @@ fun UnifiedSearchScreen(
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Borrar")
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(com.eventos.banana.R.string.common_clear))
                                 }
                             }
                         },
@@ -67,7 +71,7 @@ fun UnifiedSearchScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(com.eventos.banana.R.string.common_back))
                     }
                 }
             )
@@ -145,13 +149,13 @@ fun EventsSearchTab(
              FilterChip(
                 selected = selectedEventType == null,
                 onClick = { selectedEventType = null },
-                label = { Text("Todos") }
+                label = { Text(stringResource(com.eventos.banana.R.string.common_all)) }
             )
             EventType.values().forEach { type ->
                 FilterChip(
                     selected = selectedEventType == type,
                     onClick = { selectedEventType = type },
-                    label = { Text("${type.emoji} ${type.displayName}") }
+                    label = { Text("${type.emoji} ${type.localizedName()}") }
                 )
             }
         }
@@ -245,7 +249,7 @@ fun UserSearchCard(user: UserProfile, onClick: () -> Unit) {
                 contentScale = ContentScale.Crop
             )
             Spacer(Modifier.width(12.dp))
-            Text(user.nickname ?: "Usuario", style = MaterialTheme.typography.bodyLarge)
+            Text(user.nickname ?: stringResource(com.eventos.banana.R.string.common_user), style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

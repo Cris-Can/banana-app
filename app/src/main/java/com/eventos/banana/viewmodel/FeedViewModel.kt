@@ -55,12 +55,27 @@ class FeedViewModel(
             try {
                 repository.getPosts(eventId).collect { posts ->
                     android.util.Log.d("FeedViewModel", "🟢 Collected ${posts.size} posts from repository")
-                    posts.forEachIndexed { index, post ->
+                    
+                    // 🛡️ BLOCKING LOGIC
+                    val currentUid = com.eventos.banana.data.repository.AuthRepository().currentUid()
+                    val blockedUsers = if (currentUid != null) {
+                        userRepository.getUserProfile(currentUid)?.blockedUsers ?: emptyList()
+                    } else {
+                        emptyList()
+                    }
+                    
+                    val filteredPosts = posts.filter { post ->
+                        !blockedUsers.contains(post.userId)
+                    }
+
+                    android.util.Log.d("FeedViewModel", "🛡️ Filtered ${posts.size - filteredPosts.size} blocked posts")
+
+                    filteredPosts.forEachIndexed { index, post ->
                         android.util.Log.d("FeedViewModel", "  ViewModel Post $index: content='${post.content}'")
                     }
                     
                     _uiState.value = _uiState.value.copy(
-                        posts = posts,
+                        posts = filteredPosts,
                         isLoading = false,
                         error = null
                     )

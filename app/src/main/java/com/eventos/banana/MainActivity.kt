@@ -18,6 +18,11 @@ import androidx.compose.runtime.getValue
 import android.widget.Toast
 import com.eventos.banana.utils.NetworkUtils
 
+import androidx.activity.enableEdgeToEdge
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
 class MainActivity : FragmentActivity() {
 
     private val requestLocationPermission =
@@ -28,29 +33,37 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
-        // 🔍 DIAGNÓSTICO: GMSS Security Patch
-        try {
-            com.google.android.gms.security.ProviderInstaller.installIfNeeded(this)
-        } catch (e: Exception) {
-            android.util.Log.e("BANANA_DIAG", "Failed to install GMS Provider", e)
+        // 🔍 DIAGNÓSTICO: GMSS Security Patch (Background)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                com.google.android.gms.security.ProviderInstaller.installIfNeeded(this@MainActivity)
+            } catch (e: Exception) {
+                android.util.Log.e("BANANA_DIAG", "Failed to install GMS Provider", e)
+            }
         }
 
-        // 🛡️ APP CHECK DEBUG (Permite writes en entornos de prueba - IMPORTANTE)
+        // 🛡️ APP CHECK — Debug uses Debug provider, Release uses Play Integrity
         try {
-            com.google.firebase.appcheck.FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-                com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance()
-            )
+            val appCheck = com.google.firebase.appcheck.FirebaseAppCheck.getInstance()
+            if (com.eventos.banana.BuildConfig.DEBUG) {
+                // Debug builds: use debug provider (doesn't block Storage/Firestore)
+                appCheck.installAppCheckProviderFactory(
+                    com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory.getInstance()
+                )
+                android.util.Log.d("BANANA_DIAG", "App Check: Debug provider installed")
+            } else {
+                // Release builds: use Play Integrity
+                appCheck.installAppCheckProviderFactory(
+                    com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance()
+                )
+            }
         } catch (e: Exception) {
             android.util.Log.e("BANANA_DIAG", "Failed to init App Check", e)
         }
         
-        // 📺 ADMOB INITIALIZATION
-        try {
-            com.eventos.banana.util.AdMobHelper.initialize(this)
-        } catch (e: Exception) {
-            android.util.Log.e("BANANA_ADS", "Failed to init AdMob", e)
-        }
+        // 📺 ADMOB INITIALIZATION (Removed Duplicate: Already in BananaApp)
 
         // 🔍 DIAGNÓSTICO DE RED MEJORADO
         NetworkUtils.checkRealConnectivity(this) { isConnected ->

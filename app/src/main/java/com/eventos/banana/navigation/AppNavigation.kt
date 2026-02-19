@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.eventos.banana.domain.model.EventDetailUiState
 import com.eventos.banana.domain.model.ExactLocation
 import com.eventos.banana.domain.model.SessionState
@@ -209,6 +210,7 @@ fun AppNavigation(startDestination: String = "splash") {
                     // It will init with default "Nearby" logic (Global or Cached Location).
                     // WorldMapScreen handles updating location on start.
                     com.eventos.banana.ui.maps.WorldMapScreen(
+                        currentUserId = sessionViewModel.currentUserId() ?: "",
                         onBack = { navController.popBackStack() },
                         onEventClick = { eventId ->
                             navController.navigate("event_detail/$eventId")
@@ -290,7 +292,10 @@ fun AppNavigation(startDestination: String = "splash") {
         // ---------- EVENT DETAIL ----------
         composable(
             route = "event_detail/{eventId}",
-            arguments = listOf(navArgument("eventId") { type = NavType.StringType })
+            arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "https://bananaapp-aa46e.web.app/event/{eventId}" }
+            )
         ) { backStackEntry ->
 
             val eventId =
@@ -316,6 +321,7 @@ fun AppNavigation(startDestination: String = "splash") {
             val isSaved by vm.isSaved.collectAsState()
             val hasAttended by vm.hasAttended.collectAsState()
             val checkInState by vm.checkInState.collectAsState()
+            val actionState by vm.actionState.collectAsState()
 
             LaunchedEffect(vm, sessionViewModel.currentUserId()) {
                  vm.loadUserInteractionState(sessionViewModel.currentUserId())
@@ -384,7 +390,9 @@ fun AppNavigation(startDestination: String = "splash") {
                 hasAttended = hasAttended,
                 checkInState = checkInState,
                 onCheckInClick = { vm.performCheckIn(sessionViewModel.currentUserId()) },
-                onResetCheckInState = vm::resetCheckInState
+                onResetCheckInState = vm::resetCheckInState,
+                actionState = actionState,
+                onResetActionState = vm::resetActionState
             )
         }
 
@@ -541,6 +549,16 @@ fun AppNavigation(startDestination: String = "splash") {
             )
         }
 
+
+        // ---------- LEADERBOARD ----------
+        composable("leaderboard") {
+            val profileViewModel: ProfileViewModel = viewModel()
+            com.eventos.banana.ui.screens.LeaderboardScreen(
+                viewModel = profileViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         // ---------- PROFILE ----------
         composable("profile") {
             ProfileScreen(
@@ -551,12 +569,19 @@ fun AppNavigation(startDestination: String = "splash") {
                     navController.navigate("event_detail/$eventId")
                 },
                 onSettingsClick = { navController.navigate("settings") },
-                onProfileViewsClick = { navController.navigate("profile_views") }
+                onProfileViewsClick = {
+                    navController.navigate("profile_views/${sessionViewModel.currentUserId() ?: ""}")
+                },
+                onLeaderboardClick = { navController.navigate("leaderboard") }
             )
         }
 
         // ---------- PROFILE VIEWS (Round 48) ----------
-        composable("profile_views") {
+        composable(
+            route = "profile_views/{userId}",
+            arguments = listOf(navArgument("userId") { type = NavType.StringType })
+        ) { backStackEntry ->
+             val targetUserId = backStackEntry.arguments?.getString("userId") ?: return@composable
              val profileViewModel: ProfileViewModel = viewModel()
              val profileUiState by sessionViewModel.profileUiState.collectAsState()
              val isGold = profileUiState.profile?.isGold == true
@@ -584,6 +609,7 @@ fun AppNavigation(startDestination: String = "splash") {
             com.eventos.banana.ui.settings.SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToGold = { navController.navigate("gold") },
+                onNavigateToAdmin = { navController.navigate("admin_dashboard") },
                 onLogout = { 
                     sessionViewModel.logout()
                     navController.navigate("login") { popUpTo(0) { inclusive = true } }
@@ -630,11 +656,32 @@ fun AppNavigation(startDestination: String = "splash") {
                     }
                 },
                 onNavigateToIcons = { navController.navigate("app_icons") },
+                onNavigateToBlockedUsers = { navController.navigate("blocked_users") },
                 onMigrateEvents = {
-                    profileViewModel.runMigration()
+                    profileViewModel.runMigration(context)
                 },
                 migrationStatus = profileViewModel.migrationStatus.collectAsState().value,
                 profileUiState = profileViewModelCallbackUiState
+            )
+        }
+
+        // ---------- BLOCKED USERS ----------
+        composable("blocked_users") {
+            com.eventos.banana.ui.settings.BlockedUsersScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { userId ->
+                    navController.navigate("public_profile/$userId")
+                }
+            )
+        }
+
+        // ---------- ADMIN DASHBOARD ----------
+        composable("admin_dashboard") {
+            com.eventos.banana.ui.screens.AdminDashboardScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToProfile = { userId ->
+                    navController.navigate("public_profile/$userId")
+                }
             )
         }
 
@@ -645,6 +692,8 @@ fun AppNavigation(startDestination: String = "splash") {
                 currentUserId = sessionViewModel.currentUserId() ?: ""
             )
         }
+
+        // Scanner route removed (missing dependencies)
 
         // ---------- FRIENDS LIST ----------
         composable("friends") {
@@ -677,12 +726,31 @@ fun AppNavigation(startDestination: String = "splash") {
         // ---------- CONVERSATIONS ----------
         composable("conversations") {
             val messageRepository = remember { MessageRepository() }
+            val userRepository = remember { com.eventos.banana.data.repository.UserRepository() }
             val currentUserId = sessionViewModel.currentUserId()
             val conversations by messageRepository.observeConversations(currentUserId)
                 .collectAsState(initial = emptyList())
 
+            // 🛡️ BLOCK FILTER: Hide conversations with blocked users
+            var blockedUsers by remember { mutableStateOf<List<String>>(emptyList()) }
+            LaunchedEffect(currentUserId) {
+                val profile = userRepository.getUserProfile(currentUserId)
+                blockedUsers = profile?.blockedUsers ?: emptyList()
+            }
+
+            val filteredConversations = remember(conversations, blockedUsers) {
+                if (blockedUsers.isEmpty()) {
+                    conversations
+                } else {
+                    conversations.filter { conv ->
+                        val otherUserId = conv.participants.firstOrNull { it != currentUserId }
+                        otherUserId == null || !blockedUsers.contains(otherUserId)
+                    }
+                }
+            }
+
             ConversationsScreen(
-                conversations = conversations,
+                conversations = filteredConversations,
                 currentUserId = currentUserId,
                 onConversationClick = { conversationId ->
                     navController.navigate("chat/$conversationId")
@@ -705,7 +773,10 @@ fun AppNavigation(startDestination: String = "splash") {
                 messageRepository.markConversationAsRead(conversationId, currentUserId)
             }
             
-            val messages by messageRepository.observeMessages(conversationId)
+            // 📄 DEBUG PAGINATION
+            var messageLimit by remember { mutableIntStateOf(30) }
+            
+            val messages by messageRepository.observeMessages(conversationId, messageLimit)
                 .collectAsState(initial = emptyList<com.eventos.banana.domain.model.Message>())
             
             // 🎨 CHAT THEME OBSERVATION
@@ -727,10 +798,16 @@ fun AppNavigation(startDestination: String = "splash") {
                 currentUserId = currentUserId,
                 themeColor = themeColor,
                 isGold = isGold,
+                otherUserIsTyping = conversationDetails?.typingUsers?.any { it != currentUserId } == true, // ⌨️ Check if other is typing
                 onSendMessage = { content ->
                     scope.launch {
                         messageRepository.sendMessage(conversationId, currentUserId, content)
                     }
+                },
+                onTyping = { isTyping ->
+                     scope.launch {
+                         messageRepository.setTypingStatus(conversationId, currentUserId, isTyping)
+                     }
                 },
                 onUpdateTheme = { color ->
                     scope.launch {
@@ -739,7 +816,6 @@ fun AppNavigation(startDestination: String = "splash") {
                 },
                 onBack = { navController.popBackStack() },
                 onReportUser = { reason ->
-                    // 🛡️ Quick inline reporting for now
                      scope.launch {
                          val userRepository = com.eventos.banana.data.repository.UserRepository()
                          userRepository.reportUser(currentUserId, conversationDetails?.participants?.firstOrNull { it != currentUserId } ?: "", reason)
@@ -751,9 +827,19 @@ fun AppNavigation(startDestination: String = "splash") {
                          val targetId = conversationDetails?.participants?.firstOrNull { it != currentUserId }
                          if (targetId != null) {
                              userRepository.blockUser(currentUserId, targetId)
+                             android.widget.Toast.makeText(context, "🚫 Usuario bloqueado", android.widget.Toast.LENGTH_SHORT).show()
                              navController.popBackStack() // Exit chat
                          }
                      }
+                },
+                onDeleteMessage = { msgId ->
+                    scope.launch { messageRepository.deleteMessage(conversationId, msgId) }
+                },
+                onEditMessage = { msgId, old, new ->
+                    scope.launch { messageRepository.editMessage(conversationId, msgId, old, new) }
+                },
+                onLoadMore = {
+                    messageLimit += 30
                 }
             )
         }

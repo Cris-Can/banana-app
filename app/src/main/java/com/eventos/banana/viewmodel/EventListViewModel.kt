@@ -90,9 +90,9 @@ class EventListViewModel(
         // ⚠️ CRITICAL OBS: Geohash query returns 0 results for existing data (likely missing 'geohash' field).
         // FIX: Force Global Search + Client Distance Filter for ALL radii temporarily.
         val radius = _searchRadiusKm.value
-        val useGeohash = false 
+        val useGeohash = true 
         
-        android.util.Log.d("EventListViewModel", "📍 updateLocation: $lat, $lng. Radius: $radius. UseGeohash: $useGeohash (FORCED FALSE)")
+        android.util.Log.d("EventListViewModel", "📍 updateLocation: $lat, $lng. Radius: $radius. UseGeohash: $useGeohash")
         
         val newHash = if (useGeohash) {
             val precision = com.eventos.banana.util.GeohashUtils.getPrecisionForRadius(radius)

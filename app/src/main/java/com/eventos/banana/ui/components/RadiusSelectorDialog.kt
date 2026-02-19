@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
@@ -21,7 +22,7 @@ fun RadiusSelectorDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Radio de Búsqueda",
+                stringResource(com.eventos.banana.R.string.radius_title),
                 style = MaterialTheme.typography.titleLarge
             )
         },
@@ -38,7 +39,7 @@ fun RadiusSelectorDialog(
                 )
                 
                 Text(
-                    text = "Ajusta la distancia para encontrar eventos cerca de ti.",
+                    text = stringResource(com.eventos.banana.R.string.radius_description),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -67,12 +68,12 @@ fun RadiusSelectorDialog(
                     onDismiss()
                 }
             ) {
-                Text("Aplicar")
+                Text(stringResource(com.eventos.banana.R.string.radius_apply))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar")
+                Text(stringResource(com.eventos.banana.R.string.common_cancel))
             }
         }
     )

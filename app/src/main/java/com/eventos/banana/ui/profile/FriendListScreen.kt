@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +49,7 @@ fun FriendListScreen(
                                  searchQuery = it
                                  viewModel.searchUsers(it, currentUserId)
                              },
-                             placeholder = { Text("Buscar personas...") },
+                             placeholder = { Text(stringResource(com.eventos.banana.R.string.friends_search_placeholder)) },
                              singleLine = true,
                              modifier = Modifier.fillMaxWidth(),
                              colors = TextFieldDefaults.colors(
@@ -65,7 +66,7 @@ fun FriendListScreen(
                             searchQuery = ""
                             viewModel.searchUsers("", currentUserId)
                         }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(com.eventos.banana.R.string.common_back))
                         }
                     },
                     actions = {
@@ -74,22 +75,22 @@ fun FriendListScreen(
                                 searchQuery = ""
                                 viewModel.searchUsers("", currentUserId)
                             }) {
-                                Icon(Icons.Default.Close, "Borrar")
+                                Icon(Icons.Default.Close, stringResource(com.eventos.banana.R.string.common_close))
                             }
                         }
                     }
                 )
             } else {
                 TopAppBar(
-                    title = { Text("Amigos y Comunidad") },
+                    title = { Text(stringResource(com.eventos.banana.R.string.friends_title)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(com.eventos.banana.R.string.common_back))
                         }
                     },
                     actions = {
                         IconButton(onClick = { isSearchActive = true }) {
-                            Icon(Icons.Default.Search, "Buscar")
+                            Icon(Icons.Default.Search, stringResource(com.eventos.banana.R.string.home_cd_search))
                         }
                     }
                 )
@@ -103,7 +104,7 @@ fun FriendListScreen(
                 LazyColumn(contentPadding = PaddingValues(16.dp)) {
                     item { 
                         Text(
-                            "Resultados de búsqueda", 
+                            stringResource(com.eventos.banana.R.string.friends_search_results), 
                             style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(bottom = 8.dp)
                         ) 
@@ -111,7 +112,7 @@ fun FriendListScreen(
                     
                     // 1. Found within Friends
                     if (uiState.friends.isNotEmpty()) {
-                        item { Text("Tus amigos", color = MaterialTheme.colorScheme.primary) }
+                        item { Text(stringResource(com.eventos.banana.R.string.friends_your_friends), color = MaterialTheme.colorScheme.primary) }
                         items(uiState.friends) { friend ->
                             FriendItem(user = friend, onClick = { onUserClick(friend.uid) }, action = null)
                         }
@@ -120,7 +121,7 @@ fun FriendListScreen(
                     // 2. Global Results
                     if (uiState.searchResults.isNotEmpty()) {
                         item { Spacer(Modifier.height(16.dp)) }
-                        item { Text("Comunidad", color = MaterialTheme.colorScheme.primary) }
+                        item { Text(stringResource(com.eventos.banana.R.string.friends_community), color = MaterialTheme.colorScheme.primary) }
                         items(uiState.searchResults) { user ->
                             FriendItem(
                                 user = user,
@@ -128,7 +129,7 @@ fun FriendListScreen(
                                 action = {
                                     com.eventos.banana.ui.components.BananaButton(
                                         onClick = { viewModel.sendFriendRequest(currentUserId, user.uid) },
-                                        text = "Agregar",
+                                        text = stringResource(com.eventos.banana.R.string.friends_add),
                                         modifier = Modifier.width(100.dp)
                                     )
                                 }
@@ -139,7 +140,7 @@ fun FriendListScreen(
                     if (uiState.friends.isEmpty() && uiState.searchResults.isEmpty() && !uiState.isLoading) {
                         item { 
                             Text(
-                                "No se encontraron usuarios.",
+                                stringResource(com.eventos.banana.R.string.friends_no_results),
                                 modifier = Modifier.padding(top = 24.dp).fillMaxWidth(),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -165,21 +166,21 @@ fun FriendListScreen(
                     Tab(
                         selected = selectedTab == 0, 
                         onClick = { selectedTab = 0 }, 
-                        text = { Text("Amigos", fontWeight = if(selectedTab == 0) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
+                        text = { Text(stringResource(com.eventos.banana.R.string.friends_tab_friends), fontWeight = if(selectedTab == 0) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
                         selectedContentColor = MaterialTheme.colorScheme.primary,
                         unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Tab(
                         selected = selectedTab == 1, 
                         onClick = { selectedTab = 1 }, 
-                        text = { Text("Solicitudes", fontWeight = if(selectedTab == 1) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
+                        text = { Text(stringResource(com.eventos.banana.R.string.friends_tab_requests), fontWeight = if(selectedTab == 1) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
                         selectedContentColor = MaterialTheme.colorScheme.primary,
                         unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Tab(
                         selected = selectedTab == 2, 
                         onClick = { selectedTab = 2 }, 
-                        text = { Text("Sugerencias", fontWeight = if(selectedTab == 2) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
+                        text = { Text(stringResource(com.eventos.banana.R.string.friends_tab_suggestions), fontWeight = if(selectedTab == 2) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal) },
                         selectedContentColor = MaterialTheme.colorScheme.primary,
                         unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -200,7 +201,7 @@ fun FriendListScreen(
                                 if (uiState.friends.isEmpty()) {
                                     item { 
                                         Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) {
-                                            Text("No tienes amigos confirmados aún.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(stringResource(com.eventos.banana.R.string.friends_empty_friends), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -213,8 +214,8 @@ fun FriendListScreen(
                                         action = {
                                             com.eventos.banana.ui.components.BananaButton(
                                                 onClick = { viewModel.acceptRequest(currentUserId, request.uid) },
-                                                text = "Aceptar",
-                                                modifier = Modifier.height(36.dp)
+                                                text = stringResource(com.eventos.banana.R.string.friends_accept),
+                                                modifier = Modifier.width(100.dp).height(36.dp)
                                             )
                                         }
                                     )
@@ -222,7 +223,7 @@ fun FriendListScreen(
                                  if (uiState.requests.isEmpty()) {
                                     item { 
                                         Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) {
-                                            Text("No tienes solicitudes pendientes.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(stringResource(com.eventos.banana.R.string.friends_empty_requests), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -235,8 +236,8 @@ fun FriendListScreen(
                                         action = {
                                             com.eventos.banana.ui.components.BananaButton(
                                                 onClick = { viewModel.sendFriendRequest(currentUserId, suggestion.uid) },
-                                                text = "Agregar",
-                                                modifier = Modifier.height(36.dp)
+                                                text = stringResource(com.eventos.banana.R.string.friends_add),
+                                                modifier = Modifier.width(120.dp).height(36.dp)
                                             )
                                         }
                                     )
@@ -244,9 +245,9 @@ fun FriendListScreen(
                                  if (uiState.suggestions.isEmpty()) {
                                     item {
                                         Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("No hay sugerencias en tu región por ahora.", textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                            Text(stringResource(com.eventos.banana.R.string.friends_empty_suggestions), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                             Spacer(Modifier.height(8.dp))
-                                            Text("Invita más gente a usar Banana!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(stringResource(com.eventos.banana.R.string.friends_invite), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }

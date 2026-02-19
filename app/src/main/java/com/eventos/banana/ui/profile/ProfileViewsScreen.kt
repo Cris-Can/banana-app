@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,10 +41,10 @@ fun ProfileViewsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Quién vio mi perfil") },
+                title = { Text(stringResource(com.eventos.banana.R.string.profile_views_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(com.eventos.banana.R.string.common_back_nav))
                     }
                 }
             )
@@ -56,7 +57,7 @@ fun ProfileViewsScreen(
                 if (views.isEmpty()) {
                     Box(Modifier.fillMaxSize(), Alignment.Center) {
                         Text(
-                            "Nadie ha visto tu perfil recientemente.\n¡Interactúa más para ser visible!",
+                            stringResource(com.eventos.banana.R.string.profile_views_empty),
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -66,7 +67,7 @@ fun ProfileViewsScreen(
                     LazyColumn(contentPadding = PaddingValues(16.dp)) {
                         item {
                             Text(
-                                "Últimas visitas (${views.size})",
+                                stringResource(com.eventos.banana.R.string.profile_views_recent, views.size),
                                 style = MaterialTheme.typography.labelLarge,
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
@@ -126,20 +127,20 @@ fun ProfileViewsScreen(
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text(
-                                "👁️ ¿Quién te está espiando?",
+                                "👁️ " + stringResource(com.eventos.banana.R.string.profile_views_spy_title),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Black,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             
                             Text(
-                                "Descubre quién visita tu perfil con Banana Gold. ¡No te quedes con la duda!",
+                                stringResource(com.eventos.banana.R.string.profile_views_spy_body),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                             
                             BananaButton(
                                 onClick = onNavigateToGold,
-                                text = "Obtener Banana Gold ->",
+                                text = stringResource(com.eventos.banana.R.string.profile_views_get_gold),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -197,7 +198,7 @@ fun ProfileViewItemRow(
                 )
                 
                 Text(
-                    text = "Visto $timeAgo",
+                    text = stringResource(com.eventos.banana.R.string.profile_views_seen, timeAgo),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

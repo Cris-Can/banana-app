@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape // 🆕
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
+import com.eventos.banana.ui.util.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +59,7 @@ fun UserStatsDialog(
                 
                 // Reputación Badge (Existing)
                 Text(
-                    text = "${userProfile.getRatingBadge()} ${userProfile.getRatingBadgeText()}",
+                    text = "${userProfile.getRatingBadge()} ${userProfile.localizedBadgeText()}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -70,12 +72,12 @@ fun UserStatsDialog(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     StatItem(
-                        label = "Solicitados",
+                        label = stringResource(com.eventos.banana.R.string.stats_requested),
                         value = userProfile.eventsRequestedCount.toString(),
                         icon = "📩"
                     )
                     StatItem(
-                        label = "Asistidos",
+                        label = stringResource(com.eventos.banana.R.string.stats_attended),
                         value = userProfile.eventsAttendedCount.toString(),
                         icon = "🎫"
                     )
@@ -92,7 +94,7 @@ fun UserStatsDialog(
                 
                 if (userProfile.eventsRequestedCount > 0) {
                     Text(
-                        text = "Tasa de Asistencia: $reliability%",
+                        text = stringResource(com.eventos.banana.R.string.stats_attendance_rate, reliability),
                         style = MaterialTheme.typography.labelLarge,
                         color = if (reliability >= 80) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
@@ -100,7 +102,7 @@ fun UserStatsDialog(
                 }
 
                 Button(onClick = onDismiss) {
-                    Text("Cerrar")
+                    Text(stringResource(com.eventos.banana.R.string.common_close))
                 }
             }
         }

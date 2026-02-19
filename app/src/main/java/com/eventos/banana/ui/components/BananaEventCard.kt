@@ -17,6 +17,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
+import com.eventos.banana.ui.util.*
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.eventos.banana.domain.model.Event
@@ -107,7 +109,7 @@ fun BananaEventCard(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ) {
                     Text(
-                        text = "${event.eventType.emoji} ${event.eventType.displayName}",
+                        text = "${event.eventType.emoji} ${event.eventType.localizedName()}",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -125,7 +127,7 @@ fun BananaEventCard(
                         contentColor = MaterialTheme.colorScheme.onErrorContainer
                     ) {
                         Text(
-                            text = if (event.status == EventStatus.FULL) "AGOTADO" else "FINALIZADO",
+                            text = if (event.status == EventStatus.FULL) stringResource(com.eventos.banana.R.string.event_status_full) else stringResource(com.eventos.banana.R.string.event_status_finished),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -209,7 +211,7 @@ fun BananaEventCard(
                 // Footer: Creator
                 Row(verticalAlignment = Alignment.CenterVertically) {
                      Text(
-                        text = "Por",
+                        text = stringResource(com.eventos.banana.R.string.event_card_by),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )

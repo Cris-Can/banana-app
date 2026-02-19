@@ -77,6 +77,10 @@ class CreateEventViewModel(
     private val _uiState = MutableStateFlow(CreateEventUiState())
     val uiState: StateFlow<CreateEventUiState> = _uiState
 
+    fun updateErrorMessage(message: String?) {
+        _uiState.value = _uiState.value.copy(errorMessage = message)
+    }
+
     private val subscriptionRepository = com.eventos.banana.data.repository.SubscriptionRepository()
 
     private val _limitDebugInfo = MutableStateFlow<String?>(null)
@@ -209,7 +213,7 @@ class CreateEventViewModel(
 
     fun setDebugSubscription(userId: String, isPremium: Boolean) {
         viewModelScope.launch {
-            val type = if (isPremium) "PREMIUM" else "FREE"
+            val type = if (isPremium) "GOLD" else "FREE"
             subscriptionRepository.updateSubscriptionType(userId, type)
             // Refresh info
             loadDebugInfo(userId)

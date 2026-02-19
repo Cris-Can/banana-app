@@ -13,9 +13,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert // Explicit import
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +67,7 @@ fun EventFeedSection(
             if (uiState.posts.isEmpty()) {
                 // Placeholder cuando no hay posts
                 Text(
-                    "No hay publicaciones aún",
+                    stringResource(com.eventos.banana.R.string.feed_no_posts),
                     modifier = Modifier
                         .align(Alignment.Center)
                         .padding(32.dp),
@@ -118,13 +119,13 @@ fun EventFeedSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { launcher.launch("image/*") }) {
-                Icon(Icons.Default.Add, contentDescription = "Agregar foto")
+                Icon(Icons.Default.Add, contentDescription = stringResource(com.eventos.banana.R.string.feed_add_photo))
             }
 
             OutlinedTextField(
                 value = postContent,
                 onValueChange = { postContent = it },
-                placeholder = { Text("Escribe algo...") },
+                placeholder = { Text(stringResource(com.eventos.banana.R.string.feed_write_something)) },
                 modifier = Modifier.weight(1f),
                 maxLines = 3
             )
@@ -142,7 +143,7 @@ fun EventFeedSection(
                 },
                 enabled = (postContent.isNotBlank() || selectedImageUri != null) && !uiState.isUploading
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Enviar")
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(com.eventos.banana.R.string.common_send))
             }
         }
 
@@ -152,7 +153,7 @@ fun EventFeedSection(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Imagen seleccionada", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(com.eventos.banana.R.string.feed_image_selected), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = { selectedImageUri = null }, colors = ButtonDefaults.textButtonColors()) {
                     Text("x")
@@ -190,7 +191,7 @@ fun PostItem(
                 if (post.isUserVerified) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Verificado",
+                        contentDescription = stringResource(com.eventos.banana.R.string.feed_verified),
                         tint = Color(0xFF2196F3),
                         modifier = Modifier
                             .size(16.dp)
@@ -208,16 +209,16 @@ fun PostItem(
                     Box {
                         IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
                             // Use imported MoreVert or fully qualified
-                            Icon(Icons.Filled.MoreVert, "Opciones", tint = Color.Gray)
+                            Icon(Icons.Filled.MoreVert, stringResource(com.eventos.banana.R.string.public_profile_options), tint = Color.Gray)
                         }
 
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(
-                                text = { Text("🚩 Reportar") },
+                                text = { Text(stringResource(com.eventos.banana.R.string.feed_report)) },
                                 onClick = { showMenu = false; showReportDialog = true }
                             )
                             DropdownMenuItem(
-                                text = { Text("🚫 Bloquear usuario") },
+                                text = { Text(stringResource(com.eventos.banana.R.string.feed_block_user)) },
                                 onClick = { showMenu = false; onBlock() }
                             )
                         }
@@ -226,16 +227,16 @@ fun PostItem(
                     if (showReportDialog) {
                         AlertDialog(
                             onDismissRequest = { showReportDialog = false },
-                            title = { Text("Reportar publicación") },
-                            text = { Text("¿Por qué quieres reportar esto?") },
+                            title = { Text(stringResource(com.eventos.banana.R.string.feed_report_post)) },
+                            text = { Text(stringResource(com.eventos.banana.R.string.feed_report_why)) },
                             confirmButton = {
                                 TextButton(onClick = {
                                     onReport("Contenido Inapropiado")
                                     showReportDialog = false
-                                }) { Text("Inapropiado", color = MaterialTheme.colorScheme.error) }
+                                }) { Text(stringResource(com.eventos.banana.R.string.feed_inappropriate), color = MaterialTheme.colorScheme.error) }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showReportDialog = false }) { Text("Cancelar") }
+                                TextButton(onClick = { showReportDialog = false }) { Text(stringResource(com.eventos.banana.R.string.common_cancel)) }
                             }
                         )
                     }
@@ -276,7 +277,7 @@ fun PostItem(
                                     .data(url)
                                     .crossfade(true)
                                     .build(),
-                                contentDescription = "Imagen completa",
+                                contentDescription = stringResource(com.eventos.banana.R.string.feed_full_image),
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier
                                     .fillMaxSize()

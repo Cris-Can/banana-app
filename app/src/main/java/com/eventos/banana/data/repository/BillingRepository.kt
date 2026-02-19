@@ -233,13 +233,13 @@ class BillingRepository(
                  CoroutineScope(Dispatchers.IO).launch {
                      val uid = authRepository.currentUid()
                      if (uid != null) {
-                        // 🛡️ PROTECTION: Don't downgrade Founders
-                         val profile = userRepository.getUserProfile(uid, forceRefresh = false)
+                        // 🛡️ PROTECTION: Don't downgrade Founders (force server read)
+                         val profile = userRepository.getUserProfile(uid, forceRefresh = true)
                          val isFounder = profile?.isFounder == true
                          
                          if (isFounder) {
-                             android.util.Log.d("BillingRepository", "User is Founder. Ignoring Google Play Sync. Forcing Gold.")
-                             userRepository.setGoldStatus(uid, true)
+                             android.util.Log.d("BillingRepository", "User is Founder. Skipping Google Play sync. Ensuring FOUNDER type.")
+                             userRepository.setGoldStatus(uid, true) // Will auto-repair to FOUNDER
                          } else {
                              userRepository.setGoldStatus(uid, hasGold)
                          }

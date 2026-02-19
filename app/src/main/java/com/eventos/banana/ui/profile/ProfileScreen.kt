@@ -11,6 +11,8 @@ import androidx.compose.ui.zIndex // ➕
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.stringResource // ➕
+import com.eventos.banana.ui.util.*
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.eventos.banana.util.LocationHelper
@@ -61,6 +63,7 @@ fun ProfileScreen(
     onFriendsClick: () -> Unit,
     onEventClick: (String) -> Unit = {},
     onProfileViewsClick: () -> Unit = {}, // 👁️ New Feature
+    onLeaderboardClick: () -> Unit = {}, // 🏆 Gamification
     onSettingsClick: () -> Unit, // ⚙️ Updated
     profileViewModel: ProfileViewModel = viewModel()
 ) {
@@ -96,27 +99,31 @@ fun ProfileScreen(
     var pickingCover by remember { mutableStateOf(false) } // 🆕 Cover Photo State
     var viewingImageUrl by remember { mutableStateOf<String?>(null) } // 🔍 Full Screen Viewer State
     
-    // 📸 A23 Fix: Switch to GetContent for maximum compatibility
-    // 📸 A23 Fix: Switch to PickVisualMedia for maximum compatibility (Android 13+ & backwards)
-    // 📸 MIUI Fix: Use GetContent (SAF) instead of PickVisualMedia to avoid ActivityThread NullPointerException
-    val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent(),
-        onResult = { uri ->
-            if (uri != null && profile != null) {
+    // 📸 Upload progress
+    val isUploadingPhoto by profileViewModel.isUploadingPhoto.collectAsState()
+    var showCoverRatioDialog by remember { mutableStateOf(false) }
+
+    // ✂️ Crop launcher — receives cropped image, uploads it
+    val cropLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = com.canhub.cropper.CropImageContract(),
+        onResult = { result ->
+            if (result.isSuccessful && profile != null) {
                 scope.launch {
                     try {
-                        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        if (bytes != null) {
-                            val uid = sessionViewModel.currentUserId() ?: return@launch
-                            // Detect type based on flags
-                            profileViewModel.uploadPhoto(
-                                uid, 
-                                bytes, 
-                                isProfilePicture = pickingAvatar,
-                                isCoverPhoto = pickingCover
-                            )
-                        } else {
-                            snackbarHostState.showSnackbar("Error: No se pudo leer la imagen")
+                        val croppedUri = result.uriContent
+                        if (croppedUri != null) {
+                            val bytes = context.contentResolver.openInputStream(croppedUri)?.use { it.readBytes() }
+                            if (bytes != null) {
+                                val uid = sessionViewModel.currentUserId() ?: return@launch
+                                profileViewModel.uploadPhoto(
+                                    uid,
+                                    bytes,
+                                    isProfilePicture = pickingAvatar,
+                                    isCoverPhoto = pickingCover
+                                )
+                            } else {
+                                snackbarHostState.showSnackbar("Error: No se pudo leer la imagen recortada")
+                            }
                         }
                     } catch (e: Exception) {
                         snackbarHostState.showSnackbar("Error al procesar imagen: ${e.message}")
@@ -132,6 +139,42 @@ fun ProfileScreen(
         }
     )
 
+    // Helper: launch crop with appropriate settings
+    fun launchCrop(
+        isAvatar: Boolean = false, 
+        isCover: Boolean = false,
+        ratioX: Int = 1,
+        ratioY: Int = 1
+    ) {
+        pickingAvatar = isAvatar
+        pickingCover = isCover
+        val options = com.canhub.cropper.CropImageContractOptions(
+            uri = null, // Let user pick source
+            cropImageOptions = com.canhub.cropper.CropImageOptions(
+                imageSourceIncludeCamera = false,
+                imageSourceIncludeGallery = true,
+                guidelines = com.canhub.cropper.CropImageView.Guidelines.ON,
+                cropShape = if (isAvatar) com.canhub.cropper.CropImageView.CropShape.OVAL 
+                           else com.canhub.cropper.CropImageView.CropShape.RECTANGLE,
+                fixAspectRatio = isAvatar || isCover,
+                aspectRatioX = if (isAvatar) 1 else if (isCover) ratioX else 1,
+                aspectRatioY = if (isAvatar) 1 else if (isCover) ratioY else 1,
+                outputCompressQuality = 80,
+                maxCropResultWidth = if (isAvatar) 800 else 1600,
+                maxCropResultHeight = if (isAvatar) 800 else if (isCover) 1600 else 1600,
+                activityTitle = when {
+                    isAvatar -> "Recortar foto de perfil"
+                    isCover -> "Recortar portada"
+                    else -> "Recortar foto"
+                },
+                toolbarColor = android.graphics.Color.BLACK,
+                activityBackgroundColor = android.graphics.Color.BLACK,
+                toolbarTintColor = android.graphics.Color.WHITE
+            )
+        )
+        cropLauncher.launch(options)
+    }
+
     // Config Section State
     var isConfigExpanded by remember { mutableStateOf(false) }
     var isNotificationsExpanded by remember { mutableStateOf(false) }
@@ -146,7 +189,7 @@ fun ProfileScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Perfil") },
+                title = { Text(stringResource(com.eventos.banana.R.string.profile_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Text("←")
@@ -154,7 +197,7 @@ fun ProfileScreen(
                 },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
-                        Icon(androidx.compose.material.icons.Icons.Default.Settings, contentDescription = "Configuración")
+                        Icon(androidx.compose.material.icons.Icons.Default.Settings, contentDescription = stringResource(com.eventos.banana.R.string.settings_title))
                     }
                 }
             )
@@ -209,7 +252,7 @@ fun ProfileScreen(
                                     .data(profile.coverPhotoUrl)
                                     .crossfade(true)
                                     .build(),
-                                contentDescription = "Portada",
+                                contentDescription = stringResource(com.eventos.banana.R.string.profile_cover_desc),
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .clickable { viewingImageUrl = profile.coverPhotoUrl },
@@ -248,7 +291,7 @@ fun ProfileScreen(
                                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                                         modifier = Modifier.size(32.dp)
                                     )
-                                    Text("Toca para agregar portada", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                    Text(stringResource(com.eventos.banana.R.string.profile_add_cover), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
                                 }
                             }
                         }
@@ -262,25 +305,22 @@ fun ProfileScreen(
                                 .padding(16.dp)
                                 .clip(androidx.compose.foundation.shape.CircleShape)
                                 .clickable { 
-                                    pickingCover = true
-                                    pickingAvatar = false 
-                                    photoPicker.launch("image/*")
+                                    showCoverRatioDialog = true
                                 }
                         ) {
                             Icon(
                                 imageVector = androidx.compose.material.icons.Icons.Default.Edit,
-                                contentDescription = "Editar Portada",
+                                contentDescription = stringResource(com.eventos.banana.R.string.profile_edit_cover),
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(8.dp).size(20.dp)
                             )
                         }
                     }
 
-                    // --- AVATAR ---
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .offset(y = 0.dp), // Anchored to bottom
+                            .offset(y = 50.dp), // POP OUT: Half outside cover
                         contentAlignment = Alignment.Center
                     ) {
                         val avatarSize = 140.dp
@@ -303,7 +343,7 @@ fun ProfileScreen(
                                         .data(profile.profilePictureUrl)
                                         .crossfade(true)
                                         .build(),
-                                    contentDescription = "Avatar",
+                                    contentDescription = stringResource(com.eventos.banana.R.string.profile_avatar_desc),
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clickable { viewingImageUrl = profile.profilePictureUrl },
@@ -315,15 +355,13 @@ fun ProfileScreen(
                                         .fillMaxSize()
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .clickable { 
-                                            pickingCover = false
-                                            pickingAvatar = true
-                                            photoPicker.launch("image/*")
+                                            launchCrop(isAvatar = true)
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = androidx.compose.material.icons.Icons.Default.Person,
-                                        contentDescription = "Agregar foto",
+                                        contentDescription = stringResource(com.eventos.banana.R.string.profile_add_photo),
                                         modifier = Modifier.size(48.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                     )
@@ -344,15 +382,13 @@ fun ProfileScreen(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clickable { 
-                                        pickingCover = false
-                                        pickingAvatar = true
-                                        photoPicker.launch("image/*")
+                                        launchCrop(isAvatar = true)
                                     }
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = androidx.compose.material.icons.Icons.Default.Edit,
-                                        contentDescription = "Editar Avatar",
+                                        contentDescription = stringResource(com.eventos.banana.R.string.profile_edit_avatar),
                                         tint = MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -373,7 +409,79 @@ fun ProfileScreen(
                                 .zIndex(1f)
                         )
                     }
+
+                    // 📸 Upload Progress Overlay
+                    if (isUploadingPhoto) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Color.Black.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 4.dp,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Text(
+                                    "Subiendo foto...",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
                 }
+
+                if (showCoverRatioDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showCoverRatioDialog = false },
+                        title = { Text("¿Cómo quieres recortar tu portada?") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                androidx.compose.material3.OutlinedButton(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showCoverRatioDialog = false
+                                        launchCrop(isCover = true, ratioX = 4, ratioY = 3)
+                                    }
+                                ) {
+                                    Text("Estándar (4:3) - Recomendado")
+                                }
+                                androidx.compose.material3.OutlinedButton(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showCoverRatioDialog = false
+                                        launchCrop(isCover = true, ratioX = 16, ratioY = 9)
+                                    }
+                                ) {
+                                    Text("Panorámico (16:9)")
+                                }
+                                androidx.compose.material3.OutlinedButton(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showCoverRatioDialog = false
+                                        launchCrop(isCover = true, ratioX = 1, ratioY = 1)
+                                    }
+                                ) {
+                                    Text("Cuadrado (1:1)")
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = { showCoverRatioDialog = false }) {
+                                Text("Cancelar")
+                            }
+                        }
+                    )
+                }
+
+                // Spacing after the popped-out avatar
+                Spacer(modifier = Modifier.height(55.dp))
 
                 // 2. USER INFO SECTION
                 Column(
@@ -389,7 +497,7 @@ fun ProfileScreen(
                             shadowElevation = 2.dp
                         ) {
                             Text(
-                                "🚀 Founder Edition", 
+                                stringResource(com.eventos.banana.R.string.profile_founder_edition), 
                                 color = Color.White, 
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
@@ -408,7 +516,7 @@ fun ProfileScreen(
                             .padding(8.dp)
                     ) {
                         Text(
-                            text = profile.nickname.ifBlank { "Sin Nombre" },
+                            text = profile.nickname.ifBlank { stringResource(com.eventos.banana.R.string.profile_no_name) },
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Black,
                             textAlign = TextAlign.Center
@@ -424,7 +532,7 @@ fun ProfileScreen(
                     
                     if (sessionViewModel.isEmailVerified) {
                         Text(
-                            "✅ Verificado", 
+                            stringResource(com.eventos.banana.R.string.profile_verified), 
                             style = MaterialTheme.typography.bodySmall, 
                             color = MaterialTheme.colorScheme.secondary
                         )
@@ -435,13 +543,13 @@ fun ProfileScreen(
                         var tempName by remember { mutableStateOf(profile.nickname) }
                         AlertDialog(
                             onDismissRequest = { showEditNameDialog = false },
-                            title = { Text("Cambiar Nickname") },
+                            title = { Text(stringResource(com.eventos.banana.R.string.profile_edit_nickname_title)) },
                             text = {
                                 OutlinedTextField(
                                     value = tempName,
                                     onValueChange = { tempName = it },
                                     singleLine = true,
-                                    label = { Text("Nuevo nombre") }
+                                    label = { Text(stringResource(com.eventos.banana.R.string.profile_new_nickname_label)) }
                                 )
                             },
                             confirmButton = {
@@ -453,10 +561,10 @@ fun ProfileScreen(
                                             showEditNameDialog = false
                                         }
                                     }
-                                ) { Text("Guardar") }
+                                ) { Text(stringResource(com.eventos.banana.R.string.common_save)) }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showEditNameDialog = false }) { Text("Cancelar") }
+                                TextButton(onClick = { showEditNameDialog = false }) { Text(stringResource(com.eventos.banana.R.string.common_cancel)) }
                             }
                         )
                     }
@@ -482,7 +590,7 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text("Amigos", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(com.eventos.banana.R.string.profile_friends), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         
                         Box(Modifier.height(24.dp).width(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)))
@@ -495,7 +603,7 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text("Asistidos", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(com.eventos.banana.R.string.profile_attended), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         
                         Box(Modifier.height(24.dp).width(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)))
@@ -508,9 +616,20 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text("Creados", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(com.eventos.banana.R.string.profile_created), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                }
+
+
+
+                // 🏆 LEADERBOARD BUTTON
+                OutlinedButton(
+                    onClick = onLeaderboardClick,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                ) {
+                    Text("🏆 Ver Ranking Global")
                 }
 
                 // 4. REPUTATION & RELIABILITY
@@ -535,12 +654,12 @@ fun ProfileScreen(
                             )
                             Column {
                                 Text(
-                                    text = profile.getRatingBadgeText(),
+                                    text = profile.localizedBadgeText(),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "⭐ ${String.format("%.1f", profile.averageRating)} (${profile.ratingCount} valoraciones)",
+                                    text = "⭐ ${String.format("%.1f", profile.averageRating)} " + stringResource(com.eventos.banana.R.string.profile_ratings_count_fmt, profile.ratingCount),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -560,7 +679,7 @@ fun ProfileScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Confiabilidad", style = MaterialTheme.typography.titleMedium)
+                                Text(stringResource(com.eventos.banana.R.string.profile_reliability), style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     text = "${(percentage * 100).toInt()}%",
                                     style = MaterialTheme.typography.titleMedium,
@@ -575,30 +694,28 @@ fun ProfileScreen(
                                 trackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                             Text(
-                                "Has asistido a $attended de $effectiveApproved eventos.",
+                                stringResource(com.eventos.banana.R.string.profile_reliability_desc, attended, effectiveApproved),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                }
-                
-                // 3. SOCIAL PROFILE
+                } // 3. SOCIAL PROFILE
                 com.eventos.banana.ui.components.BananaCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                      // Removed manual padding of 16.dp since BananaCard provides it
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Perfil Social", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(com.eventos.banana.R.string.profile_social_title), style = MaterialTheme.typography.titleMedium)
 
                         var aboutMe by remember(profile.aboutMe) { mutableStateOf(profile.aboutMe) }
                         OutlinedTextField(
                             value = aboutMe,
                             onValueChange = { aboutMe = it },
-                            label = { Text("Sobre mí") },
+                            label = { Text(stringResource(com.eventos.banana.R.string.profile_about_me)) },
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 3
                         )
 
-                        Text("Intereses", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(com.eventos.banana.R.string.profile_interests), style = MaterialTheme.typography.bodyMedium)
                         var newInterest by remember { mutableStateOf("") }
                         var interests by remember(profile.interests) { mutableStateOf(profile.interests) }
 
@@ -606,7 +723,7 @@ fun ProfileScreen(
                             OutlinedTextField(
                                 value = newInterest,
                                 onValueChange = { newInterest = it },
-                                label = { Text("Nuevo interés") },
+                                label = { Text(stringResource(com.eventos.banana.R.string.profile_new_interest)) },
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(onClick = {
@@ -637,23 +754,23 @@ fun ProfileScreen(
                         }
                         
                         // SUGGESTED INTERESTS (Subcategories)
-                        Text("Sugerencias por Categoría", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(com.eventos.banana.R.string.profile_suggestions), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         
                         com.eventos.banana.domain.model.EventType.values().forEach { type ->
                             if (type != com.eventos.banana.domain.model.EventType.OTRO) {
                                 var expanded by remember { mutableStateOf(false) }
                                 
-                                Column(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable { expanded = !expanded }
-                                            .padding(vertical = 4.dp),
+                                            .padding(vertical = 8.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            "${type.emoji} ${type.displayName}", 
+                                            "${type.emoji} ${type.localizedName()}", 
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -667,19 +784,25 @@ fun ProfileScreen(
                                     
                                     AnimatedVisibility(visible = expanded) {
                                         @OptIn(ExperimentalLayoutApi::class)
-                                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            type.subcategories.forEach { sub ->
-                                                val isSelected = interests.contains(sub)
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        ) {
+                                            val localizedSubs = type.localizedSubcategories()
+                                            val originalSubs = type.subcategories
+                                            localizedSubs.forEachIndexed { index, localizedSub ->
+                                                val originalKey = originalSubs[index]
+                                                val isSelected = interests.contains(originalKey)
                                                 FilterChip(
                                                     selected = isSelected,
                                                     onClick = {
                                                         interests = if (isSelected) {
-                                                            interests - sub
+                                                            interests - originalKey
                                                         } else {
-                                                            interests + sub
+                                                            interests + originalKey
                                                         }
                                                     },
-                                                    label = { Text(sub) },
+                                                    label = { Text(localizedSub) },
                                                     leadingIcon = if (isSelected) {
                                                         { Icon(androidx.compose.material.icons.Icons.Default.Check, null, Modifier.size(16.dp)) }
                                                     } else null
@@ -698,7 +821,7 @@ fun ProfileScreen(
                                 val uid = sessionViewModel.currentUserId() ?: return@BananaButton
                                 profileViewModel.updateSocialProfile(uid, aboutMe, interests)
                             },
-                            text = "Actualizar Social",
+                            text = stringResource(com.eventos.banana.R.string.profile_update_social),
                             enabled = aboutMe != profile.aboutMe || interests != profile.interests,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -708,7 +831,7 @@ fun ProfileScreen(
                 // 4. PHOTOS (Galeria)
                 com.eventos.banana.ui.components.BananaCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     Column { // Removed manual padding
-                        Text("Mis Fotos", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(com.eventos.banana.R.string.profile_photos), style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
 
                         @OptIn(ExperimentalLayoutApi::class)
@@ -729,7 +852,7 @@ fun ProfileScreen(
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .clickable {
                                             if (photoUrl == null) {
-                                                photoPicker.launch("image/*")
+                                                launchCrop()
                                             }
                                         },
                                     contentAlignment = Alignment.Center
@@ -746,7 +869,7 @@ fun ProfileScreen(
                                         Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                                             Icon(
                                                 imageVector = androidx.compose.material.icons.Icons.Default.Close,
-                                                contentDescription = "Eliminar",
+                                                contentDescription = stringResource(com.eventos.banana.R.string.profile_delete_photo),
                                                 tint = Color.White,
                                                 modifier = Modifier
                                                     .size(22.dp)
@@ -761,7 +884,7 @@ fun ProfileScreen(
                                     } else {
                                         Icon(
                                             imageVector = androidx.compose.material.icons.Icons.Default.Add,
-                                            contentDescription = "Agregar",
+                                            contentDescription = stringResource(com.eventos.banana.R.string.profile_add_photo),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -774,13 +897,13 @@ fun ProfileScreen(
                 // 4.5 MIS EVENTOS (History & Saved)
                 com.eventos.banana.ui.components.BananaCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     Column { // Removed padding(16.dp)
-                        Text("Mis Eventos", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(com.eventos.banana.R.string.profile_my_events), style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
 
                         var selectedEventTab by remember { mutableIntStateOf(0) }
                         TabRow(selectedTabIndex = selectedEventTab) {
-                            Tab(selected = selectedEventTab == 0, onClick = { selectedEventTab = 0 }, text = { Text("Historial") })
-                            Tab(selected = selectedEventTab == 1, onClick = { selectedEventTab = 1 }, text = { Text("Guardados") })
+                            Tab(selected = selectedEventTab == 0, onClick = { selectedEventTab = 0 }, text = { Text(stringResource(com.eventos.banana.R.string.profile_tab_history)) })
+                            Tab(selected = selectedEventTab == 1, onClick = { selectedEventTab = 1 }, text = { Text(stringResource(com.eventos.banana.R.string.profile_tab_saved)) })
                         }
                         
                         Spacer(Modifier.height(16.dp))
@@ -789,7 +912,7 @@ fun ProfileScreen(
                         
                         if (eventsToShow.isEmpty()) {
                             Text(
-                                text = if (selectedEventTab == 0) "No tienes eventos recientes" else "No tienes eventos guardados",
+                                text = if (selectedEventTab == 0) stringResource(com.eventos.banana.R.string.profile_no_history) else stringResource(com.eventos.banana.R.string.profile_no_saved),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(8.dp)
@@ -838,17 +961,30 @@ fun ProfileScreen(
                 Spacer(Modifier.height(24.dp))
 
                 // Instagram Link (Moved back here)
-                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { uriHandler.openUri("https://www.instagram.com/somosbananaapp/") }
+                        .clickable { 
+                            // 📸 Open Instagram profile: somosbananaapp
+                            val username = "somosbananaapp"
+                            val webUri = android.net.Uri.parse("https://www.instagram.com/$username/")
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, webUri)
+                            intent.setPackage("com.instagram.android")
+                            
+                            // Check if Instagram app can handle this intent
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: android.content.ActivityNotFoundException) {
+                                // Fallback: open in browser without package restriction
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, webUri))
+                            }
+                        }
                         .padding(8.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "📸 Síguenos en Instagram", 
+                        stringResource(com.eventos.banana.R.string.profile_instagram_follow), 
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -857,14 +993,15 @@ fun ProfileScreen(
 
                 Spacer(Modifier.height(32.dp))
             }
+            }
         }
-        
+
         // 🔍 Full Screen Viewer
         if (viewingImageUrl != null) {
             FullScreenImageViewer(imageUrl = viewingImageUrl!!, onDismiss = { viewingImageUrl = null })
         }
     }
-}
+
 
 @Composable
 fun FullScreenImageViewer(imageUrl: String, onDismiss: () -> Unit) {

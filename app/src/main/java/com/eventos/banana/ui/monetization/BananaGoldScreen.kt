@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eventos.banana.ui.theme.BananaGold
 import com.eventos.banana.viewmodel.BillingViewModel
+import androidx.compose.ui.res.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,7 +34,7 @@ fun BananaGoldScreen(
     val goldProduct = productDetails["banana_plus_monthly"]
     
     // Fallback price if loading or offline
-    val priceText = goldProduct?.subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice ?: "$2.990 / mes"
+    val priceText = goldProduct?.subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice ?: stringResource(com.eventos.banana.R.string.banana_gold_fallback_price)
 
     Scaffold(
         containerColor = Color.Black,
@@ -43,7 +44,7 @@ fun BananaGoldScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(com.eventos.banana.R.string.common_close), tint = Color.White)
                     }
                 }
             )
@@ -77,7 +78,7 @@ fun BananaGoldScreen(
             
             // TITLE
             Text(
-                "Banana Gold",
+                stringResource(com.eventos.banana.R.string.banana_gold_title),
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
                     color = BananaGold
@@ -87,25 +88,25 @@ fun BananaGoldScreen(
             Spacer(Modifier.height(8.dp))
             
             Text(
-                "La experiencia definitiva.",
+                stringResource(com.eventos.banana.R.string.banana_gold_subtitle),
                 style = MaterialTheme.typography.titleMedium.copy(color = Color.Gray)
             )
             
             Spacer(Modifier.height(40.dp))
             
             // BENEFITS
-            BenefitItem("🚀", "Fast Pass (Prioridad)", "Tus solicitudes aparecen primero.")
+            BenefitItem("🚀", stringResource(com.eventos.banana.R.string.banana_gold_fast_pass_title), stringResource(com.eventos.banana.R.string.banana_gold_fast_pass_desc))
             Spacer(Modifier.height(16.dp))
-            BenefitItem("👀", "¿Quién vio mi perfil?", "Descubre quién te está stalkeando.")
+            BenefitItem("👀", stringResource(com.eventos.banana.R.string.banana_gold_views_title), stringResource(com.eventos.banana.R.string.banana_gold_views_desc))
             Spacer(Modifier.height(16.dp))
             BenefitItem(
                 "🎨", 
-                "Iconos Exclusivos", 
-                "Personaliza el icono de tu App.",
+                stringResource(com.eventos.banana.R.string.banana_gold_icons_title), 
+                stringResource(com.eventos.banana.R.string.banana_gold_icons_desc),
                 onClick = onNavigateToIcons
             )
             Spacer(Modifier.height(16.dp))
-            BenefitItem("💬", "Temas de Chat", "Fondos exclusivos para tus mensajes.")
+            BenefitItem("💬", stringResource(com.eventos.banana.R.string.banana_gold_themes_title), stringResource(com.eventos.banana.R.string.banana_gold_themes_desc))
             
             Spacer(Modifier.weight(1f))
             
@@ -119,7 +120,7 @@ fun BananaGoldScreen(
             )
             
             Text(
-                "Cancela cuando quieras.",
+                stringResource(com.eventos.banana.R.string.banana_gold_cancel_anytime),
                 style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
             )
             
@@ -146,7 +147,7 @@ fun BananaGoldScreen(
                 enabled = goldProduct != null 
             ) {
                 Text(
-                    "OBTENER GOLD",
+                    stringResource(com.eventos.banana.R.string.banana_gold_cta_button),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -154,7 +155,7 @@ fun BananaGoldScreen(
             if (goldProduct == null) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Cargando precios de Google Play...",
+                    stringResource(com.eventos.banana.R.string.banana_gold_loading_price),
                     style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
                 )
             }

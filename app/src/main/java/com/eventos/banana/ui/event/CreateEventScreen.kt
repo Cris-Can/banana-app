@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
+import com.eventos.banana.ui.util.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -102,7 +104,7 @@ fun CreateEventScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Crear evento", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(com.eventos.banana.R.string.create_event_title), style = MaterialTheme.typography.headlineSmall)
 
         // Helper Text
         Text(
@@ -155,7 +157,7 @@ fun CreateEventScreen(
                     Box(Modifier.fillMaxSize()) {
                         coil.compose.SubcomposeAsyncImage(
                             model = formState.selectedImageUri,
-                            contentDescription = "Portada",
+                            contentDescription = stringResource(com.eventos.banana.R.string.create_event_cd_cover),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
                             loading = {
@@ -204,8 +206,8 @@ fun CreateEventScreen(
         }
 
         // ---------- DATOS BÁSICOS ----------
-        OutlinedTextField(formState.title, { viewModel.updateTitle(it) }, label = { Text("Título *") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(formState.description, { viewModel.updateDescription(it) }, label = { Text("Descripción *") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(formState.title, { viewModel.updateTitle(it) }, label = { Text(stringResource(com.eventos.banana.R.string.create_event_field_title)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(formState.description, { viewModel.updateDescription(it) }, label = { Text(stringResource(com.eventos.banana.R.string.create_event_field_description)) }, modifier = Modifier.fillMaxWidth())
 
         // ---------- TIPO DE EVENTO ----------
         val eventTypeExpanded = remember { mutableStateOf(false) }
@@ -214,10 +216,10 @@ fun CreateEventScreen(
             onExpandedChange = { eventTypeExpanded.value = !eventTypeExpanded.value }
         ) {
             OutlinedTextField(
-                value = "${formState.eventType.emoji} ${formState.eventType.displayName}",
+                value = "${formState.eventType.emoji} ${formState.eventType.localizedName()}",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Tipo de Evento *") },
+                label = { Text(stringResource(com.eventos.banana.R.string.create_event_field_type)) },
                 modifier = Modifier.menuAnchor().fillMaxWidth()
             )
 
@@ -227,7 +229,7 @@ fun CreateEventScreen(
             ) {
                 com.eventos.banana.domain.model.EventType.values().forEach { type ->
                     DropdownMenuItem(
-                        text = { Text("${type.emoji} ${type.displayName}") },
+                        text = { Text("${type.emoji} ${type.localizedName()}") },
                         onClick = {
                             viewModel.updateEventType(type)
                             eventTypeExpanded.value = false
@@ -272,7 +274,7 @@ fun CreateEventScreen(
                 value = scoreOptions[formState.minimumScore] ?: "Sin restricción",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Reputación Mínima (Opcional)") },
+                label = { Text(stringResource(com.eventos.banana.R.string.create_event_field_min_reputation)) },
                 modifier = Modifier.menuAnchor().fillMaxWidth(),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scoreExpanded.value) }
             )
@@ -322,7 +324,7 @@ fun CreateEventScreen(
                     value = formState.region,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Región *") },
+                    label = { Text(stringResource(com.eventos.banana.R.string.create_event_field_region)) },
                     modifier = Modifier.menuAnchor().fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         disabledTextColor = MaterialTheme.colorScheme.onSurface,
@@ -372,7 +374,7 @@ fun CreateEventScreen(
                     onValueChange = {},
                     readOnly = true,
                     enabled = communes.isNotEmpty(),
-                    label = { Text("Comuna * (${communes.size})") }, // Debug hint visual
+                    label = { Text(stringResource(com.eventos.banana.R.string.create_event_field_commune, communes.size)) }, // Debug hint visual
                     modifier = Modifier.menuAnchor().fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         disabledTextColor = MaterialTheme.colorScheme.onSurface,
@@ -424,10 +426,10 @@ fun CreateEventScreen(
         OutlinedTextField(
             value = formState.address,
             onValueChange = { viewModel.updateAddress(it) },
-            label = { Text("Dirección Exacta (Solo para aceptados) *") },
-            placeholder = { Text("Ej: Calle Falsa 123, Depto 401") },
+            label = { Text(stringResource(com.eventos.banana.R.string.create_event_field_address)) },
+            placeholder = { Text(stringResource(com.eventos.banana.R.string.create_event_field_address_placeholder)) },
             modifier = Modifier.fillMaxWidth(),
-            supportingText = { Text("Esta información NO es pública.") },
+            supportingText = { Text(stringResource(com.eventos.banana.R.string.create_event_field_address_note)) },
             singleLine = true
         )
 
@@ -479,7 +481,7 @@ fun CreateEventScreen(
 
                 Icon(
                     imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Ir",
+                    contentDescription = stringResource(com.eventos.banana.R.string.create_event_cd_go),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -488,7 +490,7 @@ fun CreateEventScreen(
         Spacer(Modifier.height(8.dp))
         
         // 🌍 PUBLIC EVENT SWITCH
-        Text("Visibilidad", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(com.eventos.banana.R.string.create_event_visibility), style = MaterialTheme.typography.titleMedium)
         Card(
              modifier = Modifier.fillMaxWidth(),
              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -499,7 +501,7 @@ fun CreateEventScreen(
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Evento Público", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(com.eventos.banana.R.string.create_event_public), style = MaterialTheme.typography.titleSmall)
                     Text(
                         "Cualquiera puede ver la ubicación y asistir sin aprobación.",
                         style = MaterialTheme.typography.bodySmall,
@@ -723,7 +725,7 @@ fun CreateEventScreen(
         }
 
 
-        Divider()
+        HorizontalDivider()
 
         // ---------- CREAR EVENTO ----------
         Button(
@@ -739,34 +741,39 @@ fun CreateEventScreen(
                         formState.address.isNotBlank() &&
                         formState.maxParticipants.toIntOrNull()?.let { it > 0 } == true,
             onClick = {
-                scope.launch {
-                    val imageBytes = formState.selectedImageUri?.let { uri ->
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                val safetyError = com.eventos.banana.util.TextSafetyUtils.validateEventContent(formState.title, formState.description)
+                if (safetyError != null) {
+                    viewModel.updateErrorMessage(safetyError) // Reuse existing error mechanism
+                } else {
+                    scope.launch {
+                        val imageBytes = formState.selectedImageUri?.let { uri ->
+                            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        }
+                        viewModel.createEvent(
+                            Event(
+                                creatorId = creatorId,
+                                title = formState.title,
+                                description = formState.description,
+                                eventType = formState.eventType,
+                                minimumScore = formState.minimumScore,
+                                region = formState.region,
+                                commune = formState.commune,
+                                address = formState.address,
+                                exactLatitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
+                                exactLongitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
+                                // ⚠️ CRITICAL FIX: Populate main lat/lng fields too!
+                                latitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
+                                longitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
+                                exactAddress = formState.exactLocation?.address ?: formState.address,
+                                maxParticipants = formState.maxParticipants.toInt(),
+                                startAt = formState.startAt!!,
+                                endAt = formState.endAt!!,
+                                eventTimestamp = formState.startAt!!,
+                                joinQuestions = formState.questions
+                            ),
+                            imageBytes
+                        )
                     }
-                    viewModel.createEvent(
-                        Event(
-                            creatorId = creatorId,
-                            title = formState.title,
-                            description = formState.description,
-                            eventType = formState.eventType,
-                            minimumScore = formState.minimumScore,
-                            region = formState.region,
-                            commune = formState.commune,
-                            address = formState.address,
-                             exactLatitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
-                             exactLongitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
-                             // ⚠️ CRITICAL FIX: Populate main lat/lng fields too!
-                             latitude = formState.exactLocation?.latitude ?: formState.currentLatitude,
-                             longitude = formState.exactLocation?.longitude ?: formState.currentLongitude,
-                             exactAddress = formState.exactLocation?.address ?: formState.address,
-                             maxParticipants = formState.maxParticipants.toInt(),
-                             startAt = formState.startAt!!,
-                             endAt = formState.endAt!!,
-                             eventTimestamp = formState.startAt!!,
-                             joinQuestions = formState.questions
-                        ),
-                        imageBytes
-                    )
                 }
             },
             modifier = Modifier.fillMaxWidth()

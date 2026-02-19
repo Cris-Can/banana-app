@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.eventos.banana",
+            "sha256_cert_fingerprints": [
+                "49:E6:23:7E:39:2C:59:60:EC:FC:DF:F5:A2:9A:6F:53:D6:8A:EA:39:9E:A2:3A:10:A0:59:16:4B:50:A3:80:37"
+            ]
+        }
+    }
+]

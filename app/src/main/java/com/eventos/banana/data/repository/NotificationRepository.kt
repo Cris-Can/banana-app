@@ -37,18 +37,23 @@ class NotificationRepository {
 
     // ✅ A9 — enviar notificación
     suspend fun sendNotification(notification: AppNotification) {
-        val doc = notificationsCollection.document()
-        val data = hashMapOf(
-            "id" to doc.id,
-            "userId" to notification.userId,
-            "title" to notification.title,
-            "message" to notification.message,
-            "eventId" to notification.eventId,
-            "read" to notification.read,
-            "type" to notification.type.name,
-            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-        )
-        doc.set(data).await()
+        try {
+            val doc = notificationsCollection.document()
+            val data = hashMapOf(
+                "id" to doc.id,
+                "userId" to notification.userId,
+                "title" to notification.title,
+                "message" to notification.message,
+                "eventId" to notification.eventId,
+                "read" to notification.read,
+                "type" to notification.type.name,
+                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            )
+            doc.set(data).await()
+        } catch (e: Exception) {
+            // Log error, but don't crash app if notification fails
+            android.util.Log.e("NotificationRepo", "Failed to send notification: ${e.message}")
+        }
     }
 
     // ✅ A9.5 — marcar como leídas

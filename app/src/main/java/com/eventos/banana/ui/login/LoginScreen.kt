@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource // ➕
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.LoginUiState
@@ -91,7 +92,7 @@ fun LoginScreen(
             isRegistering = false
             // Show success message
             snackbarHostState.showSnackbar(
-                "✅ Cuenta creada exitosamente! Revisa tu email para verificar tu cuenta antes de iniciar sesión.",
+                context.getString(com.eventos.banana.R.string.auth_register_success),
                 duration = SnackbarDuration.Long
             )
         }
@@ -103,9 +104,9 @@ fun LoginScreen(
 
     // Password validation function
     fun validatePassword(pass: String): String? {
-        if (pass.length < 8) return "Mínimo 8 caracteres"
-        if (!pass.any { it.isUpperCase() }) return "Debe tener 1 mayúscula"
-        if (!pass.any { it.isDigit() }) return "Debe tener 1 número"
+        if (pass.length < 8) return context.getString(com.eventos.banana.R.string.auth_password_error_short)
+        if (!pass.any { it.isUpperCase() }) return context.getString(com.eventos.banana.R.string.auth_password_error_upper)
+        if (!pass.any { it.isDigit() }) return context.getString(com.eventos.banana.R.string.auth_password_error_digit)
         return null
     }
 
@@ -152,7 +153,7 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = if (isRegistering) "Crear Cuenta" else "Iniciar Sesión",
+                    text = if (isRegistering) stringResource(com.eventos.banana.R.string.auth_register_title) else stringResource(com.eventos.banana.R.string.auth_login_title),
                     style = MaterialTheme.typography.headlineMedium
                 )
 
@@ -160,9 +161,9 @@ fun LoginScreen(
                     value = email,
                     onValueChange = { 
                         email = it
-                        emailError = if (validateEmail(it)) null else "Email inválido"
+                        emailError = if (validateEmail(it)) null else context.getString(com.eventos.banana.R.string.auth_invalid_email)
                     },
-                    label = { Text("Email") },
+                    label = { Text(stringResource(com.eventos.banana.R.string.auth_email_hint)) },
                     isError = emailError != null,
                     supportingText = {
                         if (emailError != null) Text(emailError!!)
@@ -180,13 +181,13 @@ fun LoginScreen(
                             passwordError = validatePassword(it)
                         }
                     },
-                    label = { Text("Contraseña") },
+                    label = { Text(stringResource(com.eventos.banana.R.string.auth_password_hint)) },
                     visualTransformation = PasswordVisualTransformation(),
                     isError = passwordError != null,
                     supportingText = {
                         if (isRegistering) {
                             Text(
-                                passwordError ?: "Mínimo 8 caracteres, 1 mayúscula, 1 número",
+                                passwordError ?: stringResource(com.eventos.banana.R.string.auth_password_requirements),
                                 color = if (passwordError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -200,7 +201,7 @@ fun LoginScreen(
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                         TextButton(onClick = { showForgotPasswordDialog = true }) {
                             Text(
-                                "¿Olvidaste tu contraseña?",
+                                stringResource(com.eventos.banana.R.string.auth_forgot_password),
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -219,9 +220,9 @@ fun LoginScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                Text("Recuperar Contraseña", style = MaterialTheme.typography.titleLarge)
+                                Text(stringResource(com.eventos.banana.R.string.auth_recover_title), style = MaterialTheme.typography.titleLarge)
                                 Text(
-                                    "Ingresa tu email y te enviaremos un enlace para restablecerla.",
+                                    stringResource(com.eventos.banana.R.string.auth_recover_body),
                                     style = MaterialTheme.typography.bodyMedium,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
@@ -229,7 +230,7 @@ fun LoginScreen(
                                 OutlinedTextField(
                                     value = forgotPasswordEmail,
                                     onValueChange = { forgotPasswordEmail = it },
-                                    label = { Text("Email") },
+                                    label = { Text(stringResource(com.eventos.banana.R.string.auth_email_hint)) },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -239,7 +240,7 @@ fun LoginScreen(
                                     horizontalArrangement = Arrangement.End
                                 ) {
                                     TextButton(onClick = { showForgotPasswordDialog = false }) {
-                                        Text("Cancelar")
+                                        Text(stringResource(com.eventos.banana.R.string.common_cancel))
                                     }
                                     Spacer(Modifier.width(8.dp))
                                     Button(
@@ -252,7 +253,7 @@ fun LoginScreen(
                                                     if (success) {
                                                         snackbarHostState.currentSnackbarData?.dismiss()
                                                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                                                             snackbarHostState.showSnackbar("✅ Correo enviado. Revisa tu bandeja de entrada.")
+                                                             snackbarHostState.showSnackbar(context.getString(com.eventos.banana.R.string.auth_recover_success))
                                                         }
                                                     } else {
                                                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
@@ -267,7 +268,7 @@ fun LoginScreen(
                                         if (isSendingReset) {
                                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                                         } else {
-                                            Text("Enviar")
+                                            Text(stringResource(com.eventos.banana.R.string.common_send))
                                         }
                                     }
                                 }
@@ -280,7 +281,7 @@ fun LoginScreen(
                     TextField(
                         value = nickname,
                         onValueChange = { nickname = it },
-                        label = { Text("Nickname (Nombre visible)") },
+                        label = { Text(stringResource(com.eventos.banana.R.string.auth_nickname_label)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -291,7 +292,7 @@ fun LoginScreen(
                         calendar.timeInMillis = birthDate!!
                         "📅 ${calendar.get(java.util.Calendar.DAY_OF_MONTH)}/${calendar.get(java.util.Calendar.MONTH) + 1}/${calendar.get(java.util.Calendar.YEAR)}"
                     } else {
-                        "📅 Seleccionar Fecha de Nacimiento"
+                        stringResource(com.eventos.banana.R.string.auth_select_birthdate)
                     }
                     
                     com.eventos.banana.ui.components.BananaOutlinedButton(
@@ -316,8 +317,8 @@ fun LoginScreen(
                             value = commune,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Ciudad / Comuna (Auto)") },
-                            placeholder = { Text("Toca para buscar...") },
+                            label = { Text(stringResource(com.eventos.banana.R.string.auth_city_label)) },
+                            placeholder = { Text(stringResource(com.eventos.banana.R.string.auth_city_placeholder)) },
                             trailingIcon = { Text("📍") },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -364,7 +365,7 @@ fun LoginScreen(
                     }
                     
                     if (commune.isNotBlank()) {
-                         Text("📍 Ubicación seleccionada: $commune ($selectedRegion)", style = MaterialTheme.typography.bodySmall)
+                         Text(stringResource(com.eventos.banana.R.string.auth_location_selected, commune, selectedRegion), style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
@@ -383,17 +384,17 @@ fun LoginScreen(
                                         birthDate = selectedDate
                                         ageError = null
                                     } else {
-                                        ageError = "❌ Debes ser mayor de 18 años para usar esta app"
+                                        ageError = context.getString(com.eventos.banana.R.string.auth_age_error)
                                     }
                                 }
                                 showDatePicker = false
                             }) {
-                                Text("Confirmar")
+                                Text(stringResource(com.eventos.banana.R.string.common_confirm))
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { showDatePicker = false }) {
-                                Text("Cancelar")
+                                Text(stringResource(com.eventos.banana.R.string.common_cancel))
                             }
                         }
                     ) {
@@ -407,11 +408,11 @@ fun LoginScreen(
                             if (isRegistering) {
                                 // Validación final de edad
                                 if (birthDate == null) {
-                                    ageError = "Debes seleccionar tu fecha de nacimiento"
+                                    ageError = context.getString(com.eventos.banana.R.string.auth_birthdate_required)
                                     return@BananaButton
                                 }
                                 if (!com.eventos.banana.util.AgeCalculator.isAdult(birthDate!!)) {
-                                    ageError = "❌ Debes ser mayor de 18 años"
+                                    ageError = context.getString(com.eventos.banana.R.string.auth_age_error)
                                     return@BananaButton
                                 }
                                 if (commune.isBlank()) {
@@ -424,7 +425,7 @@ fun LoginScreen(
                             }
                         }
                     },
-                    text = if (isRegistering) "Registrarse" else "Entrar",
+                    text = if (isRegistering) stringResource(com.eventos.banana.R.string.auth_register_button) else stringResource(com.eventos.banana.R.string.auth_login_button),
                     enabled = !isLoading && email.isNotBlank() && password.isNotBlank() && 
                               emailError == null && passwordError == null && ageError == null &&
                               (!isRegistering || (nickname.isNotBlank() && birthDate != null && commune.isNotBlank())),
@@ -435,8 +436,8 @@ fun LoginScreen(
                 // Toggle Button
                 com.eventos.banana.ui.components.BananaTextButton(
                     onClick = { isRegistering = !isRegistering },
-                    text = if (isRegistering) "¿Ya tienes cuenta? Inicia Sesión" 
-                           else "¿No tienes cuenta? Regístrate aquí",
+                    text = if (isRegistering) stringResource(com.eventos.banana.R.string.auth_has_account) 
+                           else stringResource(com.eventos.banana.R.string.auth_no_account),
                     enabled = !isLoading
                 )
             }

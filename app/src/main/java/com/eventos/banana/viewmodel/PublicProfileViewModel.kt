@@ -130,7 +130,17 @@ class PublicProfileViewModel(
         viewModelScope.launch {
             try {
                 userRepository.blockUser(currentUid, targetUid)
-                // Optionally update UI or navigate back
+            } catch (e: Exception) {
+                // Log
+            }
+        }
+    }
+
+    fun unblockUser(targetUid: String) {
+        val currentUid = authRepository.currentUid() ?: return
+        viewModelScope.launch {
+            try {
+                userRepository.unblockUser(currentUid, targetUid)
             } catch (e: Exception) {
                 // Log
             }

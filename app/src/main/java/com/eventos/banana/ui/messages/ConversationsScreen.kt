@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.Conversation
 import kotlinx.coroutines.tasks.await
@@ -30,10 +31,10 @@ fun ConversationsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mensajes") },
+                title = { Text(stringResource(com.eventos.banana.R.string.messages_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(com.eventos.banana.R.string.common_back))
                     }
                 }
             )
@@ -46,7 +47,7 @@ fun ConversationsScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No tienes conversaciones aún", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(com.eventos.banana.R.string.messages_no_conversations), style = MaterialTheme.typography.bodyLarge)
             }
         } else {
             LazyColumn(
@@ -76,7 +77,7 @@ private fun ConversationItem(
     val otherUserId = conversation.participants.firstOrNull { it != currentUserId } ?: ""
     
     // Fallback info
-    val storedNickname = conversation.participantNicknames[otherUserId] ?: "Usuario"
+    val storedNickname = conversation.participantNicknames[otherUserId] ?: stringResource(com.eventos.banana.R.string.common_user)
     
     // Real-time fetch state
     var displayNickname by remember { mutableStateOf(storedNickname) }

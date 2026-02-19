@@ -67,95 +67,49 @@ export const onEventCreatedNotifyCommune = onDocumentCreated(
     const snapshot = event.data;
     if (!snapshot) return;
 
-    // ---------- FLAG GLOBAL ----------
-    const configSnap = await admin
-      .firestore()
-      .collection("app_config")
-      .doc("notifications")
-      .get();
-
-    const notifyEnabled =
-      configSnap.exists &&
-      configSnap.data()?.notifyEventsByCommune === true;
-
-    if (!notifyEnabled) {
-      console.log("Notificaciones por comuna DESACTIVADAS (flag global)");
-      return;
-    }
-
     // ---------- EVENT DATA ----------
     const eventData = snapshot.data();
     const eventId = event.params.eventId;
     const title = eventData.title;
     const commune = eventData.commune;
-    const creatorId = eventData.creatorId;
 
     if (!commune) {
       console.log("Evento sin comuna, no se notifica:", eventId);
       return;
     }
 
-    console.log(`Evento nuevo en ${commune}. Buscando usuarios...`);
+    // Normalizar tópico igual que en Android: events_Comuna_Con_Guiones_Bajos
+    const topicName = `events_${commune.replace(/ /g, "_")}`;
 
-    // ---------- USERS QUERY ----------
-    const usersSnapshot = await admin
-      .firestore()
-      .collection("users")
-      .where("commune", "==", commune)
-      .get();
+    console.log(`Evento nuevo en ${commune}. Enviando push al tópico: ${topicName}`);
 
-    if (usersSnapshot.empty) {
-      console.log("No hay usuarios en la comuna:", commune);
-      return;
-    }
-
-    const batch = admin.firestore().batch();
-    let notificationsCreated = 0;
-
-    usersSnapshot.forEach((doc) => {
-      const user = doc.data();
-      const userId = user.uid;
-
-      // ❌ No notificar al creador
-      if (userId === creatorId) return;
-
-      // ❌ Usuario sin token
-      if (!user.fcmToken) return;
-
-      // 🔔 Preferencia por usuario (A14.3)
-      if (user.notifyEventsByCommune !== true) return;
-
-      const notificationRef = admin
-        .firestore()
-        .collection("notifications")
-        .doc();
-
-      batch.set(notificationRef, {
-        userId: userId,
+    // Construir mensaje FCM
+    const message: admin.messaging.Message = {
+      topic: topicName,
+      notification: {
         title: "Nuevo evento cerca de ti 📍",
-        message: `Se creó un nuevo evento en tu comuna: ${title}`,
+        body: `Se creó un nuevo evento en tu comuna: ${title}`,
+      },
+      data: {
         eventId: eventId,
-        createdAt: Date.now(),
-        read: false,
         type: "EVENT_CREATED",
-      });
+        click_action: "FLUTTER_NOTIFICATION_CLICK" // Estándar para muchos plugins, aunque Android nativo lo maneja con el Intent Filter
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "banana_events_channel", // Debe coincidir con BananaApp.kt
+          clickAction: "FLUTTER_NOTIFICATION_CLICK"
+        }
+      }
+    };
 
-      notificationsCreated++;
-    });
-
-    if (notificationsCreated === 0) {
-      console.log(
-        "No se crearon notificaciones (nadie opt-in) para evento:",
-        eventId
-      );
-      return;
+    try {
+      const response = await admin.messaging().send(message);
+      console.log("Mensaje enviado exitosamente al tópico:", response);
+    } catch (error) {
+      console.error("Error enviando mensaje al tópico:", error);
     }
-
-    await batch.commit();
-
-    console.log(
-      `Notificaciones creadas (${notificationsCreated}) para evento ${eventId}`
-    );
   }
 );
 /**

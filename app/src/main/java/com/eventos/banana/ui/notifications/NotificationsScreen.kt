@@ -6,13 +6,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
+import com.eventos.banana.ui.util.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.AppNotification
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Notifications
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,10 +27,10 @@ fun NotificationsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Notificaciones") },
+                title = { Text(stringResource(com.eventos.banana.R.string.notifications_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(com.eventos.banana.R.string.common_back))
                     }
                 }
             )
@@ -50,7 +52,7 @@ fun NotificationsScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.3f)
                     )
                     Spacer(Modifier.height(16.dp))
-                    Text("No tienes notificaciones", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(com.eventos.banana.R.string.notifications_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -88,14 +90,14 @@ fun NotificationsScreen(
                             
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    notification.title,
+                                    notification.localizedTitle(),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = if (!notification.read) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    notification.message,
+                                    notification.localizedMessage(),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

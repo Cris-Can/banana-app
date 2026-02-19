@@ -6,6 +6,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.eventos.banana.viewmodel.SessionViewModel
@@ -18,6 +20,7 @@ fun EmailVerificationScreen(
     onLogout: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     
@@ -53,13 +56,13 @@ fun EmailVerificationScreen(
                 )
                 
                 Text(
-                    text = "Verifica tu correo",
+                    text = stringResource(com.eventos.banana.R.string.email_verify_title),
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center
                 )
                 
                 Text(
-                    text = "Hemos enviado un enlace de confirmación a tu email. Debes verificarlo para poder usar Banana.",
+                    text = stringResource(com.eventos.banana.R.string.email_verify_body),
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -78,30 +81,30 @@ fun EmailVerificationScreen(
                                 if (sessionViewModel.isEmailVerified) {
                                     onVerified()
                                 } else {
-                                    message = "Aún no verificado. Intenta de nuevo."
+                                    message = context.getString(com.eventos.banana.R.string.email_verify_not_yet)
                                     isLoading = false
                                 }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Ya lo verifiqué")
+                        Text(stringResource(com.eventos.banana.R.string.email_verify_already))
                     }
                     
                     OutlinedButton(
                         onClick = {
                             scope.launch {
                                 sessionViewModel.sendEmailVerification()
-                                message = "Correo reenviado (revisa Spam)"
+                                message = context.getString(com.eventos.banana.R.string.email_verify_resent)
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Reenviar correo")
+                        Text(stringResource(com.eventos.banana.R.string.email_verify_resend))
                     }
                     
                     TextButton(onClick = onLogout) {
-                        Text("Cerrar Sesión / Cambiar cuenta")
+                        Text(stringResource(com.eventos.banana.R.string.email_verify_logout))
                     }
                 }
                 

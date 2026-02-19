@@ -5,8 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import com.google.maps.android.compose.*
 fun WorldMapScreen(
     onBack: () -> Unit,
     onEventClick: (String) -> Unit,
+    currentUserId: String, // ➕ Pass ID explicitly
     viewModel: EventListViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -57,10 +59,10 @@ fun WorldMapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mapa de Eventos") },
+                title = { Text(stringResource(com.eventos.banana.R.string.map_events_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(com.eventos.banana.R.string.common_back_nav))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -86,19 +88,60 @@ fun WorldMapScreen(
                     isMyLocationEnabled = true
                 )
             ) {
-                // 🔴 Draw Circles for Radius?
-                // Optional: Draw a circle around user location representing searchRadiusKm
+                // 🔴 Draw Circles for Radius
+                val userLocation = (uiState as? EventListUiState.Success)?.currentUserLocation
+                if (userLocation != null) {
+                    Circle(
+                        center = LatLng(userLocation.latitude, userLocation.longitude),
+                        radius = searchRadiusKm * 1000.0, // Convert km to meters
+                        strokeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        strokeWidth = 2f,
+                        fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    )
+                }
 
                 // 📍 Event Markers
                 events.forEach { event ->
                     if (event.latitude != null && event.longitude != null) {
+                        // 🔒 PRIVACY LOGIC:
+                        // Show exact location if:
+                        // 1. User is Creator
+                        // 2. User is Approved Participant
+                        // 3. Event is PUBLIC (Open)
+                         // currentUserId is passed as param now
+                        val isExactVisible = event.isPublic || 
+                                             event.creatorId == currentUserId || 
+                                             event.approvedParticipants.contains(currentUserId)
+
+                        val displayLatLng = if (isExactVisible) {
+                            LatLng(event.latitude, event.longitude)
+                        } else {
+                            // 🎲 Fuzzing: Add stable random offset based on Event ID
+                            // Offset approx +/- 200-500m to hide exact house
+                            val seed = event.id.hashCode()
+                            val offsetLat = (seed % 100) / 10000.0 // +/- 0.01 deg max
+                            val offsetLng = ((seed / 100) % 100) / 10000.0 
+                            LatLng(event.latitude + offsetLat, event.longitude + offsetLng)
+                        }
+
                         Marker(
-                            state = MarkerState(position = LatLng(event.latitude, event.longitude)),
+                            state = MarkerState(position = displayLatLng),
                             title = event.title,
-                            snippet = "${event.eventType.emoji} ${event.commune}",
+                            snippet = if (isExactVisible) "${event.eventType.emoji} ${event.commune}" else stringResource(com.eventos.banana.R.string.map_approximate_zone),
                             onClick = {
                                 onEventClick(event.id)
                                 true
+                            },
+                             icon = if (!isExactVisible) {
+                                // Optional: Use a generic circle or different color for approximate?
+                                // For now keep default marker but maybe semi-transparent or different hue if possible
+                                com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(
+                                    com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_AZURE
+                                )
+                            } else {
+                                com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(
+                                    com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_RED
+                                )
                             }
                         )
                     }
@@ -114,14 +157,21 @@ fun WorldMapScreen(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                 shadowElevation = 4.dp
             ) {
-               Row(
+                Column(
                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                   verticalAlignment = Alignment.CenterVertically
+                   horizontalAlignment = Alignment.CenterHorizontally
                ) {
                    Text(
-                       "Radio: $searchRadiusKm km",
+                       stringResource(com.eventos.banana.R.string.map_radius_label, searchRadiusKm),
                        style = MaterialTheme.typography.labelLarge,
                        fontWeight = FontWeight.Bold
+                   )
+                   Slider(
+                       value = searchRadiusKm.toFloat(),
+                       onValueChange = { viewModel.updateRadius(it.toInt()) },
+                       valueRange = 1f..100f,
+                       steps = 9,
+                       modifier = Modifier.width(200.dp)
                    )
                }
             }

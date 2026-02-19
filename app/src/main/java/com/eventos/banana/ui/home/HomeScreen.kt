@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.Done
 
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
+import com.eventos.banana.ui.util.*
 import androidx.compose.runtime.*
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -173,12 +175,8 @@ fun HomeScreen(
     
     val effectiveCommune = if (selectedRegion == null) null else (selectedCommune ?: userCommune)
     
-    // Map Toggle Logic
-    val onMapClick = {
-        // Navigate to World Map
-        // We could also pass current filters if needed? 
-        // For now, World Map is "Global/Nearby" focused.
-    }
+    // Map Toggle Logic - Removed shadowing variable
+    // onMapClick parameter is now used directly to navigate to World Map
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -198,7 +196,7 @@ fun HomeScreen(
                                 if (!photoUrl.isNullOrBlank()) {
                                     AsyncImage(
                                         model = photoUrl,
-                                        contentDescription = "Foto de perfil",
+                                        contentDescription = stringResource(com.eventos.banana.R.string.home_cd_profile_photo),
                                         modifier = Modifier
                                             .size(40.dp)
                                             .clip(androidx.compose.foundation.shape.CircleShape)
@@ -241,17 +239,17 @@ fun HomeScreen(
                     actions = {
                         // 🌍 MAP TOGGLE
                         IconButton(onClick = onMapClick) {
-                            Icon(Icons.Filled.LocationOn, contentDescription = "Mapa")
+                            Icon(Icons.Filled.LocationOn, contentDescription = stringResource(com.eventos.banana.R.string.home_cd_map))
                         }
 
                         // 🔍 SEARCH
                         IconButton(onClick = onSearchClick) {
-                            Icon(Icons.Filled.Search, contentDescription = "Buscar")
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(com.eventos.banana.R.string.home_cd_search))
                         }
 
                         // 👥 FRIENDS
                         IconButton(onClick = onFriendsClick) {
-                            Icon(Icons.Filled.Person, contentDescription = "Amigos")
+                            Icon(Icons.Filled.Person, contentDescription = stringResource(com.eventos.banana.R.string.home_cd_friends))
                         }
 
                         // Messages button
@@ -299,7 +297,7 @@ fun HomeScreen(
                         FilterChip(
                             selected = selectedCategory == null,
                             onClick = { eventListViewModel.selectCategory(null) },
-                            label = { Text("Todo") },
+                            label = { Text(stringResource(com.eventos.banana.R.string.home_filter_all)) },
                             colors = FilterChipDefaults.filterChipColors(
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 labelColor = MaterialTheme.colorScheme.onSurface,
@@ -320,7 +318,7 @@ fun HomeScreen(
                         FilterChip(
                             selected = isSelected,
                             onClick = { eventListViewModel.selectCategory(type) },
-                            label = { Text("${type.emoji} ${type.displayName}") },
+                            label = { Text("${type.emoji} ${type.localizedName()}") },
                             colors = FilterChipDefaults.filterChipColors(
                                 containerColor = MaterialTheme.colorScheme.surface, // Clean unselected
                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -386,7 +384,7 @@ fun HomeScreen(
                         FilterChip(
                             selected = selectedDateFilter == filter,
                             onClick = { eventListViewModel.selectDateFilter(filter) },
-                            label = { Text(filter.displayName) },
+                            label = { Text(filter.localizedName()) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -409,10 +407,10 @@ fun HomeScreen(
                     onExpandedChange = { regionExpanded = !regionExpanded }
                 ) {
                     OutlinedTextField(
-                        value = selectedRegion ?: "Todas las regiones",
+                        value = selectedRegion ?: stringResource(com.eventos.banana.R.string.home_filter_all_regions),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Región") },
+                        label = { Text(stringResource(com.eventos.banana.R.string.home_filter_region)) },
                         modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                     )
@@ -422,7 +420,7 @@ fun HomeScreen(
                         onDismissRequest = { regionExpanded = false }
                     ) {
                             DropdownMenuItem(
-                                text = { Text("Todas las regiones") },
+                                text = { Text(stringResource(com.eventos.banana.R.string.home_filter_all_regions)) },
                                 onClick = {
                                     selectedRegion = null
                                     selectedCommune = null
@@ -458,10 +456,10 @@ fun HomeScreen(
                         }
                     ) {
                         OutlinedTextField(
-                            value = selectedCommune ?: "Todas las comunas",
+                            value = selectedCommune ?: stringResource(com.eventos.banana.R.string.home_filter_all_communes),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Comuna") },
+                            label = { Text(stringResource(com.eventos.banana.R.string.home_filter_commune)) },
                             modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                         )
@@ -471,7 +469,7 @@ fun HomeScreen(
                             onDismissRequest = { communeExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Todas las comunas") },
+                                text = { Text(stringResource(com.eventos.banana.R.string.home_filter_all_communes)) },
                                 onClick = {
                                     selectedCommune = null
                                     communeExpanded = false

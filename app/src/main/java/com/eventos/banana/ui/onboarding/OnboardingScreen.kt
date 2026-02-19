@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -35,23 +36,23 @@ fun OnboardingScreen(
     // 4 Slides: Events, Security, Ratings, Location
     val pages = listOf(
         OnboardingPage(
-            title = "Eventos Exclusivos",
-            description = "Descubre panoramas únicos cerca de ti o crea los tuyos en segundos. ¡Sin complicaciones!",
+            title = stringResource(com.eventos.banana.R.string.onboarding_title_1),
+            description = stringResource(com.eventos.banana.R.string.onboarding_desc_1),
             icon = Icons.Filled.DateRange
         ),
         OnboardingPage(
-            title = "Comunidad Real",
-            description = "Solo perfiles verdaderos. Tu seguridad es nuestra prioridad para que disfrutes con tranquilidad.",
+            title = stringResource(com.eventos.banana.R.string.onboarding_title_2),
+            description = stringResource(com.eventos.banana.R.string.onboarding_desc_2),
             icon = Icons.Filled.CheckCircle
         ),
         OnboardingPage(
-            title = "Tu Reputación Vale",
-            description = "Sé un buen asistente, recibe calificaciones y destaca como un 'Top Banana' en tu ciudad.",
+            title = stringResource(com.eventos.banana.R.string.onboarding_title_3),
+            description = stringResource(com.eventos.banana.R.string.onboarding_desc_3),
             icon = Icons.Filled.Star
         ),
         OnboardingPage(
-            title = "Tu Ciudad, Tu Muro",
-            description = "Banana usa tu ubicación para mostrarte lo que pasa en tu comuna. ¡Actívala para la mejor experiencia!",
+            title = stringResource(com.eventos.banana.R.string.onboarding_title_4),
+            description = stringResource(com.eventos.banana.R.string.onboarding_desc_4),
             icon = Icons.Filled.LocationOn
         )
     )
@@ -86,7 +87,7 @@ fun OnboardingScreen(
                     // Skip onboarding without asking permissions (User opted out of intro)
                     onFinish()
                 }) {
-                    Text("Omitir", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(com.eventos.banana.R.string.common_skip), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -142,7 +143,7 @@ fun OnboardingScreen(
                         permissionLauncher.launch(permissions.toTypedArray())
                     }
                 },
-                text = if (pagerState.currentPage == pages.size - 1) "Habilitar y Comenzar" else "Siguiente"
+                text = if (pagerState.currentPage == pages.size - 1) stringResource(com.eventos.banana.R.string.onboarding_enable_start) else stringResource(com.eventos.banana.R.string.common_next)
             )
             
             Spacer(modifier = Modifier.height(16.dp))

@@ -32,14 +32,14 @@ class SubscriptionRepository {
             val user = getUser(userId) ?: return Result.failure(Exception("User not found"))
             
             // LOGGING PRO: Check what we actually have
-            android.util.Log.e("SubscriptionRepo", ">> CHECKING LIMITS FOR: ${user.subscriptionType}")
+            android.util.Log.e("SubscriptionRepo", ">> CHECKING LIMITS FOR: ${user.subscriptionType} | isFounder=${user.isFounder} | isGold=${user.isGold}")
             android.util.Log.e("SubscriptionRepo", ">> COUNTS: Created=${user.eventsCreatedInCycle}, Joined=${user.joinRequestsInCycle}")
             android.util.Log.e("SubscriptionRepo", ">> DATE: CycleStart=${java.util.Date(user.currentCycleStartDate)}")
 
             val updatedUser = checkAndResetCycle(user)
 
-            if (updatedUser.subscriptionType == "PREMIUM" || updatedUser.subscriptionType == "GOLD" || updatedUser.isFounder) {
-                android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (PREMIUM/GOLD/FOUNDER)")
+            if (updatedUser.subscriptionType == "GOLD" || updatedUser.subscriptionType == "FOUNDER" || updatedUser.isFounder) {
+                android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (GOLD/FOUNDER)")
                 Result.success(true)
             } else {
                 val effectiveLimit = FREE_LIMIT_CREATE_EVENT + updatedUser.adEventsUnlocked
@@ -89,7 +89,7 @@ class SubscriptionRepository {
             val user = getUser(userId) ?: return Result.failure(Exception("User not found"))
             val updatedUser = checkAndResetCycle(user)
 
-            if (updatedUser.subscriptionType == "PREMIUM" || updatedUser.subscriptionType == "GOLD" || updatedUser.isFounder) {
+            if (updatedUser.subscriptionType == "GOLD" || updatedUser.subscriptionType == "FOUNDER" || updatedUser.isFounder) {
                 Result.success(true)
             } else {
                 if (updatedUser.joinRequestsInCycle < FREE_LIMIT_JOIN_REQUEST) {
@@ -185,6 +185,13 @@ class SubscriptionRepository {
 
     suspend fun updateSubscriptionType(userId: String, type: String) {
         try {
+            // 🛡️ FOUNDER PROTECTION: Never downgrade a founder
+            val snapshot = usersCollection.document(userId).get().await()
+            val isFounder = snapshot.getBoolean("isFounder") == true
+            if (isFounder && type != "FOUNDER") {
+                android.util.Log.w("SubscriptionRepo", "Blocked attempt to change Founder $userId to $type")
+                return
+            }
             usersCollection.document(userId).update("subscriptionType", type).await()
         } catch (e: Exception) {
             e.printStackTrace()

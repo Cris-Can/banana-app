@@ -5,13 +5,17 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import android.util.Log
 
-class RatingRepository(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+import javax.inject.Inject
+
+class RatingRepository @Inject constructor(
+    private val db: FirebaseFirestore,
+    private val encounterRepo: EncounterRepository
 ) {
     companion object {
         private const val TAG = "RatingRepository"
         private const val COLLECTION_RATINGS = "ratings"
         private const val COLLECTION_USERS = "users"
+        private const val COLLECTION_SKIPS = "rating_skips" // Nueva colección de saltos
         private const val EDIT_WINDOW_MS = 10 * 60 * 1000L // 10 minutos
         private const val RATING_DEADLINE_DAYS = 5L
     }
@@ -78,6 +82,26 @@ class RatingRepository(
         }
     }
 
+    suspend fun getAlreadyRatedUsers(eventId: String, fromUserId: String): Result<Set<String>> {
+        return try {
+            val existingRatings = db.collection(COLLECTION_RATINGS)
+                .whereEqualTo("eventId", eventId)
+                .whereEqualTo("fromUserId", fromUserId)
+                .get()
+                .await()
+
+            val alreadyRated = existingRatings.documents.mapNotNull { doc ->
+                doc.getString("toUserId")?.trim()
+            }.toSet()
+
+            Log.d(TAG, "Direct fetch already rated: $alreadyRated for event $eventId")
+            Result.success(alreadyRated)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error directly fetching already rated users", e)
+            Result.failure(e)
+        }
+    }
+
     /**
      * Editar una puntuación (solo si está dentro de los 10 minutos)
      */
@@ -126,28 +150,34 @@ class RatingRepository(
         }
     }
 
-    /**
-     * Obtener todas las puntuaciones recibidas por un usuario
-     * isPremium determina si se incluyen comentarios
-     */
     suspend fun getUserRatings(
         userId: String,
         isPremium: Boolean,
-        limit: Int = 20
-    ): Result<List<UserRating>> {
+        limit: Int = 20,
+        startAfter: com.google.firebase.firestore.DocumentSnapshot? = null
+    ): Result<Pair<List<UserRating>, com.google.firebase.firestore.DocumentSnapshot?>> {
         return try {
-            val snapshot = db.collection(COLLECTION_RATINGS)
+            var query = db.collection(COLLECTION_RATINGS)
                 .whereEqualTo("toUserId", userId)
                 .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(limit.toLong())
-                .get()
-                .await()
+
+            startAfter?.let {
+                query = query.startAfter(it)
+            }
+
+            val snapshot = query.get().await()
+
+            val lastVisible = if (snapshot.documents.isNotEmpty()) {
+                snapshot.documents[snapshot.size() - 1]
+            } else null
 
             val ratings = snapshot.documents.mapNotNull { doc ->
                 UserRating.fromMap(doc.data ?: emptyMap()).let { rating ->
-                    // Si no es premium, quitar comentarios
+                    // Si no es premium, ocultar quién calificó (fromUserId)
+                    // Los comentarios ahora son visibles para todos según requerimiento
                     if (!isPremium) {
-                        rating.copy(comment = null)
+                        rating.copy(fromUserId = "anonymous")
                     } else {
                         rating
                     }
@@ -155,7 +185,7 @@ class RatingRepository(
             }
 
             Log.d(TAG, "Fetched ${ratings.size} ratings for user $userId")
-            Result.success(ratings)
+            Result.success(Pair(ratings, lastVisible))
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching user ratings", e)
             Result.failure(e)
@@ -211,7 +241,6 @@ class RatingRepository(
             }
 
             // NUEVO (Round 12): Verificar encuentro físico si el evento lo requiere
-            val encounterRepo = EncounterRepository()
             val shouldEnforce = encounterRepo.shouldEnforceEncounters(eventId).getOrDefault(false)
             
             if (shouldEnforce) {
@@ -331,6 +360,17 @@ class RatingRepository(
                 (doc.data?.get("toUserId") as? String)
             }.toSet()
 
+            // Verificar si el usuario ha decidido PASAR de calificar este evento
+            val skipResult = db.collection(COLLECTION_SKIPS)
+                .document("${currentUserId}_$eventId")
+                .get()
+                .await()
+            
+            if (skipResult.exists()) {
+                Log.d(TAG, "User $currentUserId skipped rating for event $eventId")
+                return Result.success(emptyList()) // Nada pendiente si saltó
+            }
+
             // Filtrar los ya puntuados
             val pending = usersToRate.filter { it !in alreadyRated }
 
@@ -351,6 +391,44 @@ class RatingRepository(
             result == false // If can't rate, means already rated
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /**
+     * Omitir las calificaciones pendientes de un evento
+     */
+    suspend fun skipRating(userId: String, eventId: String): Result<Unit> {
+        return try {
+            db.collection(COLLECTION_SKIPS)
+                .document("${userId}_$eventId")
+                .set(mapOf(
+                    "userId" to userId,
+                    "eventId" to eventId,
+                    "timestamp" to System.currentTimeMillis()
+                ))
+                .await()
+            
+            Log.d(TAG, "User $userId skipped event $eventId")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error skipping rating", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Comprobar si un usuario omitió las calificaciones pendientes de un evento
+     */
+    suspend fun hasSkippedRating(userId: String, eventId: String): Result<Boolean> {
+        return try {
+            val skipResult = db.collection(COLLECTION_SKIPS)
+                .document("${userId}_$eventId")
+                .get()
+                .await()
+            Result.success(skipResult.exists())
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking skipped rating", e)
+            Result.failure(e)
         }
     }
 }

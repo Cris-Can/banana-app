@@ -3,6 +3,8 @@ package com.eventos.banana.ui.rating
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
@@ -11,31 +13,32 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
+import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.EventType
 import com.eventos.banana.domain.model.UserProfile
-import com.eventos.banana.viewmodel.RatingViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RateParticipantsScreen(
     eventId: String,
     eventType: EventType,
     currentUserId: String,
     participantIds: List<String>,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onUserClick: (String) -> Unit,
+    viewModel: RatingViewModel = hiltViewModel<RatingViewModel, RatingViewModel.Factory>(
+        creationCallback = { factory -> 
+            factory.create(eventId, eventType, currentUserId, participantIds) 
+        }
+    )
 ) {
-    val viewModel = remember {
-        RatingViewModel(
-            eventId = eventId,
-            eventType = eventType,
-            currentUserId = currentUserId,
-            participantIds = participantIds
-        )
-    }
-    
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -48,6 +51,13 @@ fun RateParticipantsScreen(
         uiState.successMessage?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessages()
+        }
+    }
+
+    // Efecto para salir si ya se saltó o completó
+    LaunchedEffect(uiState.isSkipped) {
+        if (uiState.isSkipped) {
+            onBackClick()
         }
     }
 
@@ -103,9 +113,8 @@ fun RateParticipantsScreen(
                             )
                             Spacer(Modifier.height(8.dp))
                             
-                            val totalUsers = uiState.usersToRate.size
+                            val totalUsers = uiState.usersToRate.size + uiState.alreadyRated.size
                             val rated = uiState.alreadyRated.size
-                            val pending = totalUsers - rated
                             
                             Text(
                                 stringResource(com.eventos.banana.R.string.rate_participants_progress, rated, totalUsers),
@@ -119,15 +128,31 @@ fun RateParticipantsScreen(
                                     .fillMaxWidth()
                                     .padding(top = 8.dp)
                             )
+                            
+                            Spacer(Modifier.height(16.dp))
+                            
+                            OutlinedButton(
+                                onClick = { viewModel.skipRating() },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            ) {
+                                Text("Omitir calificaciones de este evento")
+                            }
                         }
                     }
                 }
 
                 // Participants list
-                items(uiState.usersToRate) { user ->
+                items(
+                    items = uiState.usersToRate,
+                    key = { it.uid }
+                ) { user ->
                     ParticipantRatingCard(
                         user = user,
-                        alreadyRated = user.uid in uiState.alreadyRated,
+                        alreadyRated = false,
+                        onUserClick = { onUserClick(user.uid) },
                         onSubmitRating = { score, comment ->
                             viewModel.submitRating(user.uid, score, comment)
                         }
@@ -142,11 +167,13 @@ fun RateParticipantsScreen(
 private fun ParticipantRatingCard(
     user: UserProfile,
     alreadyRated: Boolean,
+    onUserClick: () -> Unit,
     onSubmitRating: (Int, String?) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     var selectedScore by remember { mutableStateOf(0) }
     var comment by remember { mutableStateOf("") }
+    var showCustomComment by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -161,15 +188,53 @@ private fun ParticipantRatingCard(
         Column(Modifier.padding(16.dp)) {
             // User info
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onUserClick() },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                // Avatar o Iniciales
+                Box {
+                    if (!user.profilePictureUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = user.profilePictureUrl,
+                            contentDescription = user.nickname,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        // Initials fallback
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                user.nickname.take(1).uppercase(),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                // Info Usuario
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         user.nickname,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     if (user.ratingCount > 0) {
                         Text(
@@ -180,6 +245,9 @@ private fun ParticipantRatingCard(
                     }
                 }
                 
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                // Acción
                 if (alreadyRated) {
                     Text(
                         stringResource(com.eventos.banana.R.string.rate_participants_rated),
@@ -188,8 +256,14 @@ private fun ParticipantRatingCard(
                         fontWeight = FontWeight.Bold
                     )
                 } else {
-                    TextButton(onClick = { expanded = !expanded }) {
-                        Text(if (expanded) stringResource(com.eventos.banana.R.string.common_cancel) else stringResource(com.eventos.banana.R.string.rate_participants_rate))
+                    if (expanded) {
+                        OutlinedButton(onClick = { expanded = false }) {
+                            Text(stringResource(com.eventos.banana.R.string.common_cancel))
+                        }
+                    } else {
+                        Button(onClick = { expanded = true }) {
+                            Text(stringResource(com.eventos.banana.R.string.rate_participants_rate))
+                        }
                     }
                 }
             }
@@ -241,20 +315,56 @@ private fun ParticipantRatingCard(
                     )
                 }
                 
-                Spacer(Modifier.height(16.dp))
-                
-                // Comment (optional)
-                OutlinedTextField(
-                    value = comment,
-                    onValueChange = { comment = it },
-                    label = { Text(stringResource(com.eventos.banana.R.string.rating_comment_label)) },
-                    placeholder = { Text(stringResource(com.eventos.banana.R.string.rate_participants_comment_placeholder)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3,
-                    supportingText = { 
-                        Text(stringResource(com.eventos.banana.R.string.rate_participants_comment_visibility))
+                if (selectedScore in 1..3) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Motivo (opcional):",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val reasons = listOf("No asistió", "Mal comportamiento", "Otro")
+                        reasons.forEach { reason ->
+                            val isSelected = if (reason == "Otro") showCustomComment else comment.contains(reason)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    if (reason == "Otro") {
+                                        showCustomComment = !showCustomComment
+                                    } else {
+                                        if (comment.contains(reason)) {
+                                            comment = comment.replace(reason, "").replace(Regex("[, ]+"), " ").trim()
+                                        } else {
+                                            comment = if (comment.isEmpty()) reason else "$comment, $reason"
+                                        }
+                                    }
+                                },
+                                label = { Text(reason) }
+                            )
+                        }
                     }
-                )
+                }
+                
+                if (selectedScore > 3 || showCustomComment) {
+                    Spacer(Modifier.height(16.dp))
+                    
+                    // Comment (optional)
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it },
+                        label = { Text(stringResource(com.eventos.banana.R.string.rating_comment_label)) },
+                        placeholder = { Text(stringResource(com.eventos.banana.R.string.rate_participants_comment_placeholder)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        supportingText = { 
+                            Text(stringResource(com.eventos.banana.R.string.rate_participants_comment_visibility))
+                        }
+                    )
+                }
                 
                 Spacer(Modifier.height(16.dp))
                 

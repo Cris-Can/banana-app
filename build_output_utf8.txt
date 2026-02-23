@@ -1,0 +1,443 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:injectCrashlyticsMappingFileIdDebug UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:kspDebugKotlin
+
+> Task :app:compileDebugKotlin FAILED
+.\gradlew : e: file:///
+C:/Users/crist/AndroidS
+tudioProjects/Banana%20
+-%20copia/app/src/main/
+java/com/eventos/banana
+/ui/event/EventFeedSect
+ion.kt:42:16 
+Unresolved reference 
+'FeedViewModel'.
+En línea: 1 Carácter: 1
++ .\gradlew 
+assembleDebug > 
+build_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (e: file:///C:   
+ /U...FeedViewModel    
+'.:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:42:46
+ Unresolved reference 
+'FeedViewModel'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:42:61
+ Unresolved reference 
+'FeedViewModel'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:43:28
+ Argument type 
+mismatch: actual type 
+is 
+'kotlin.Function1<VMF, 
+VM>', but 
+'kotlin.Function1<VMF, 
+VM>' was expected.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:43:30
+ Cannot infer type for 
+this parameter. Please 
+specify it explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:43:49
+ Unresolved reference 
+'create'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:46:20
+ Cannot infer type for 
+this parameter. Please 
+specify it explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:46:20
+ Property delegate 
+must have a 
+'getValue(Nothing?, 
+KProperty0<ERROR 
+CLASS: Cannot infer 
+argument for type 
+parameter T>)' method. 
+None of the following 
+functions is 
+applicable:
+fun <T> State<T>.getVal
+ue(thisObj: Any?, 
+property: 
+KProperty<*>): T
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:46:30
+ Unresolved reference 
+'uiState'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:46:38
+ Cannot infer type for 
+this parameter. Please 
+specify it explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:68:25
+ Unresolved reference 
+'posts'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:85:41
+ Unresolved reference 
+'posts'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:86:42
+ Cannot infer type for 
+this parameter. Please 
+specify it explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:86:50
+ Unresolved reference 
+'posts'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:86:63
+ Unresolved reference 
+'id'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:88:36
+ Cannot infer type for 
+this parameter. Please 
+specify it explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:88:44
+ Unresolved reference 
+'posts'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:92:62
+ Unresolved reference 
+'userId'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:93:51
+ Unresolved reference 
+'blockUser'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:93:81
+ Unresolved reference 
+'userId'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:94:62
+ Unresolved reference 
+'reportPost'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:101:1
+7 Unresolved reference 
+'error'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:101:2
+4 Cannot infer type 
+for this parameter. 
+Please specify it 
+explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:101:2
+8 Cannot infer type 
+for this parameter. 
+Please specify it 
+explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:104:3
+9 @Composable 
+invocations can only 
+happen from the 
+context of a 
+@Composable function
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:106:3
+9 @Composable 
+invocations can only 
+happen from the 
+context of a 
+@Composable function
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:110:2
+1 Unresolved reference 
+'isLoading'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:110:4
+2 Unresolved reference 
+'isUploading'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:140:3
+5 Unresolved reference 
+'createPost'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/event/Ev
+entFeedSection.kt:145:9
+4 Unresolved reference 
+'isUploading'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+140:37 Unresolved 
+reference 'AsyncImage'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+146:46 Unresolved 
+reference 'clip'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+147:46 Cannot infer 
+type for this 
+parameter. Please 
+specify it explicitly.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+156:46 Unresolved 
+reference. None of the 
+following candidates 
+is applicable because 
+of a receiver type 
+mismatch:
+fun Modifier.clickable(
+interactionSource: Muta
+bleInteractionSource?, 
+indication: 
+Indication?, enabled: 
+Boolean = ..., 
+onClickLabel: String? 
+= ..., role: Role? = 
+..., onClick: () -> 
+Unit): Modifier
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+186:46 Unresolved 
+reference 'clip'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+190:41 Unresolved 
+reference 'AsyncImage'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+337:37 Unresolved 
+reference 'AsyncImage'.
+e: file:///C:/Users/cri
+st/AndroidStudioProject
+s/Banana%20-%20copia/ap
+p/src/main/java/com/eve
+ntos/banana/ui/profile/
+PublicProfileScreen.kt:
+361:41 Unresolved 
+reference 'AsyncImage'.
+
+FAILURE: Build failed 
+with an exception.
+
+* What went wrong:
+Execution failed for 
+task ':app:compileDebug
+Kotlin'.
+> A failure occurred 
+while executing org.jet
+brains.kotlin.compilerR
+unner.GradleCompilerRun
+nerWithWorkers$GradleKo
+tlinCompilerWorkAction
+   > Compilation 
+error. See log for 
+more details
+
+* Try:
+> Run with 
+--stacktrace option to 
+get the stack trace.
+> Run with --info or 
+--debug option to get 
+more log output.
+> Run with --scan to 
+get full insights.
+> Get more help at http
+s://help.gradle.org.
+
+BUILD FAILED in 14s
+34 actionable tasks: 2 executed, 32 up-to-date

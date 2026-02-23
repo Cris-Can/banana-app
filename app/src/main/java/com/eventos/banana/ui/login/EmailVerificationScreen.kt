@@ -10,7 +10,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.eventos.banana.viewmodel.SessionViewModel
+import com.eventos.banana.ui.auth.SessionViewModel
 import kotlinx.coroutines.launch
 
 @Composable

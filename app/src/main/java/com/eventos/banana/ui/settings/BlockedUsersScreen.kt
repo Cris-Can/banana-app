@@ -19,15 +19,17 @@ import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.UserProfile
 import kotlinx.coroutines.launch
 
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.eventos.banana.ui.profile.UserViewModel
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BlockedUsersScreen(
     onBack: () -> Unit,
-    onUserClick: (String) -> Unit = {}
+    onUserClick: (String) -> Unit = {},
+    userViewModel: UserViewModel = hiltViewModel()
 ) {
-    val userRepository = remember { UserRepository() }
-    val authRepository = remember { AuthRepository() }
-    val currentUid = authRepository.currentUid() ?: ""
+    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
     val scope = rememberCoroutineScope()
 
     var blockedProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
@@ -36,7 +38,7 @@ fun BlockedUsersScreen(
     // Load blocked users
     LaunchedEffect(currentUid) {
         isLoading = true
-        blockedProfiles = userRepository.getBlockedUsersProfiles(currentUid)
+        blockedProfiles = userViewModel.getBlockedUsersProfiles(currentUid)
         isLoading = false
     }
 
@@ -88,7 +90,7 @@ fun BlockedUsersScreen(
                             profile = profile,
                             onUnblock = {
                                 scope.launch {
-                                    userRepository.unblockUser(currentUid, profile.uid)
+                                    userViewModel.unblockUser(currentUid, profile.uid)
                                     // Refresh list
                                     blockedProfiles = blockedProfiles.filter { it.uid != profile.uid }
                                 }

@@ -24,5 +24,9 @@ data class Message(
     val isDeleted: Boolean = false, // 🗑️ Soft delete
     val isEdited: Boolean = false, // ✏️ Has been edited
     val editHistory: List<String> = emptyList(), // 📜 Previous content versions
-    val replyToId: String? = null // ↩️ Reply to message ID
+    val replyToId: String? = null, // ↩️ Reply to message ID
+    val audioUrl: String? = null, // 🎤 Audio message URL
+    val audioDurationMs: Int? = null, // 🕒 Audio duration in milliseconds
+    val audioWaveform: List<Float>? = null, // 🌊 Waveform data
+    val reactions: Map<String, List<String>> = emptyMap() // ❤️ emoji -> list of user UIDs
 )

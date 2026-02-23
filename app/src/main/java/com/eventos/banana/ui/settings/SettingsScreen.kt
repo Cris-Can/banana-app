@@ -67,7 +67,7 @@ fun SettingsScreen(
     onNavigateToBlockedUsers: () -> Unit, // 🛡️ Blocked Users
     onMigrateEvents: () -> Unit, // New
     migrationStatus: String?,    // New
-    profileUiState: com.eventos.banana.viewmodel.ProfileUiState
+    profileUiState: com.eventos.banana.ui.profile.ProfileUiState
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current

@@ -1,5 +1,7 @@
 package com.eventos.banana.ui.search
 
+import androidx.hilt.navigation.compose.hiltViewModel
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,8 +22,8 @@ import androidx.navigation.NavController
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventType
 import com.eventos.banana.domain.model.UserProfile
-import com.eventos.banana.viewmodel.EventListViewModel
-import com.eventos.banana.viewmodel.UserViewModel
+import com.eventos.banana.ui.event.EventListViewModel
+import com.eventos.banana.ui.profile.UserViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
@@ -33,8 +35,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun UnifiedSearchScreen(
     navController: NavController,
-    eventListViewModel: EventListViewModel = viewModel(),
-    userViewModel: UserViewModel = viewModel(),
+    eventListViewModel: EventListViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel(),
     currentUserId: String
 ) {
     var searchQuery by remember { mutableStateOf("") }

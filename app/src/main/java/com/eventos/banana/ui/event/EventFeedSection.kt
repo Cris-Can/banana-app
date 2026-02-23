@@ -32,15 +32,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.eventos.banana.domain.model.FeedPost
-import com.eventos.banana.viewmodel.FeedViewModel
-import com.eventos.banana.viewmodel.FeedViewModelFactory
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.eventos.banana.ui.home.FeedViewModel
+import com.eventos.banana.ui.home.FeedUiState
 
 @Composable
 fun EventFeedSection(
     eventId: String,
     currentUserId: String, // Restored parameter
     onUserClick: (String) -> Unit,
-    viewModel: FeedViewModel = viewModel(factory = FeedViewModelFactory(eventId))
+    viewModel: FeedViewModel = hiltViewModel<FeedViewModel, FeedViewModel.Factory>(
+        creationCallback = { factory -> factory.create(eventId) }
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var postContent by remember { mutableStateOf("") }

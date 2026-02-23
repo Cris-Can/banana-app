@@ -11,11 +11,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BillingRepository(
-    private val context: Context,
-    private val userRepository: UserRepository = UserRepository(),
-    private val authRepository: com.eventos.banana.data.repository.AuthRepository = com.eventos.banana.data.repository.AuthRepository(),
-    private val eventRepository: com.eventos.banana.data.repository.EventRepository = com.eventos.banana.data.repository.EventRepository()
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+
+class BillingRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val userRepository: UserRepository,
+    private val authRepository: com.eventos.banana.data.repository.AuthRepository,
+    private val eventRepository: com.eventos.banana.data.repository.EventRepository
 ) : PurchasesUpdatedListener {
 
     private val _billingSetupComplete = MutableStateFlow(false)

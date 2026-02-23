@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt.android.plugin)
     id("kotlin-parcelize")
 }
 
@@ -14,6 +16,14 @@ android {
     namespace = "com.eventos.banana"
     compileSdk = 36
 
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localProperties.load(FileInputStream(localPropertiesFile))
+    }
+    val mapsKey = localProperties.getProperty("PLACES_API_KEY") ?: ""
+    val admobId = localProperties.getProperty("ADMOB_APP_ID") ?: ""
+
     defaultConfig {
         applicationId = "com.eventos.banana"
         minSdk = 26
@@ -22,6 +32,11 @@ android {
         versionName = "1.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        buildConfigField("String", "PLACES_API_KEY", "\"$mapsKey\"")
+        
+        manifestPlaceholders["MAPS_API_KEY"] = mapsKey
+        manifestPlaceholders["ADMOB_APP_ID"] = admobId
     }
 
     signingConfigs {
@@ -35,6 +50,20 @@ android {
             storePassword = keystoreProperties.getProperty("storePassword")
             keyAlias = keystoreProperties.getProperty("keyAlias")
             keyPassword = keystoreProperties.getProperty("keyPassword")
+        }
+    }
+
+    flavorDimensions += "env"
+
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            versionNameSuffix = "-dev"
+            manifestPlaceholders["appName"] = "Banana Dev"
+        }
+        create("prod") {
+            dimension = "env"
+            manifestPlaceholders["appName"] = "Banana"
         }
     }
 
@@ -74,6 +103,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)
+    testImplementation("io.mockk:mockk:1.13.9")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("app.cash.turbine:turbine:1.0.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -81,7 +113,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("androidx.navigation:navigation-compose:2.9.6")
-    implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
+    implementation(platform(libs.firebase.bom))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-auth-ktx")
@@ -104,7 +136,14 @@ dependencies {
     implementation("com.google.android.gms:play-services-ads:23.0.0")
     implementation("com.google.android.libraries.places:places:3.3.0") // 🌍 Global Expansion v2.0
     implementation("com.vanniktech:android-image-cropper:4.6.0") // ✂️ Image Crop
-    }
+    // 🏗️ Dagger Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.hilt.navigation.compose)
+    implementation(libs.timber)
+    implementation(project(":core:ui"))
+    implementation(project(":core:data"))
+}
 
 
 

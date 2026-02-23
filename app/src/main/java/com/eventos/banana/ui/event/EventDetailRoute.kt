@@ -18,6 +18,7 @@ fun EventDetailRoute(
     uiState: EventDetailUiState,
     currentUserId: String,
     isEmailVerified: Boolean,
+    initialTab: Int = 0,
     onJoinClick: () -> Unit,
     onApproveClick: (String) -> Unit,
     onRejectClick: (String) -> Unit,
@@ -32,10 +33,10 @@ fun EventDetailRoute(
     isSaved: Boolean,
     onToggleSave: () -> Unit,
     hasAttended: Boolean,
-    checkInState: com.eventos.banana.viewmodel.CheckInState,
+    checkInState: com.eventos.banana.ui.event.CheckInState,
     onCheckInClick: () -> Unit,
     onResetCheckInState: () -> Unit,
-    actionState: com.eventos.banana.viewmodel.ActionState = com.eventos.banana.viewmodel.ActionState.Idle,
+    actionState: com.eventos.banana.ui.event.ActionState = com.eventos.banana.ui.event.ActionState.Idle,
     onResetActionState: () -> Unit = {},
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
@@ -111,6 +112,7 @@ fun EventDetailRoute(
                 onUserClick = onUserClick,
                 onRateParticipants = onRateParticipants,
                 onBoostClick = onBoostClick,
+                initialTab = initialTab,
                 eventState = uiState, // Pass full state
                 isSaved = isSaved,
                 onToggleSave = onToggleSave,

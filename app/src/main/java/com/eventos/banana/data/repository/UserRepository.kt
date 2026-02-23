@@ -7,59 +7,25 @@ import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.ListenerRegistration
 
-class UserRepository(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+import javax.inject.Inject
+
+class UserRepository @Inject constructor(
+    private val firestore: FirebaseFirestore,
+    private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository
 ) {
 
     private val users = firestore.collection("users")
 
     // ---------- CREATE PROFILE ----------
     // ---------- CREATE PROFILE (With First 50 Check) ----------
-    suspend fun createUserProfile(profile: UserProfile) {
-        android.util.Log.d("UserRepository", "Starting transaction for: ${profile.nickname}")
-        
-        try {
-            firestore.runTransaction { transaction ->
-                val statsRef = firestore.collection("config").document("stats")
-                val statsSnapshot = transaction.get(statsRef)
-                
-                // Get current count (default to 0 if not exists)
-                val currentCount = if (statsSnapshot.exists()) {
-                    statsSnapshot.getLong("userCount") ?: 0L
-                } else {
-                    0L
-                }
-                
-                val newCount = currentCount + 1
-                
-                // Update stats
-                transaction.set(
-                    statsRef, 
-                    mapOf("userCount" to newCount), 
-                    SetOptions.merge()
-                )
-                
-                
-                // Check if lucky < 40 (User Request: Free access for first 40)
-                val finalProfile = if (newCount <= 40) {
-                    profile.copy(
-                        isGoldStored = true,
-                        isPremiumStored = true, // Legacy field
-                        subscriptionType = "FOUNDER",
-                        isFounder = true // 🚀 Automatic Founder Badge for first 40
-                    )
-                } else {
-                    profile
-                }
-                
-                // Save Profile
-                transaction.set(users.document(profile.uid), finalProfile)
-            }.await()
-            
-            android.util.Log.d("UserRepository", "Transaction success. User created.")
+    // ---------- CREATE PROFILE (Simple Save) ----------
+    suspend fun saveUserProfile(profile: UserProfile): Result<Unit> {
+        return try {
+            users.document(profile.uid).set(profile).await()
+            Result.success(Unit)
         } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Transaction failed", e)
-            throw e
+            android.util.Log.e("UserRepository", "Error saving profile", e)
+            Result.failure(e)
         }
     }
 
@@ -598,6 +564,18 @@ class UserRepository(
         batch.commit().await()
     }
 
+    // 🗑️ ELIMINAR AMIGO
+    suspend fun removeFriend(currentUid: String, friendUid: String) {
+        val batch = firestore.batch()
+        val currentUserRef = users.document(currentUid)
+        val friendUserRef = users.document(friendUid)
+
+        batch.update(currentUserRef, "friends", com.google.firebase.firestore.FieldValue.arrayRemove(friendUid))
+        batch.update(friendUserRef, "friends", com.google.firebase.firestore.FieldValue.arrayRemove(currentUid))
+
+        batch.commit().await()
+    }
+
     // =====================================================
     // 🔍 SEARCH & SUGGESTIONS
     // =====================================================
@@ -731,7 +709,7 @@ class UserRepository(
             
             // 3. Send Notification if needed
             if (shouldNotify) {
-                val notifRepo = NotificationRepository()
+                val notifRepo = notificationRepository
                 notifRepo.sendNotification(
                     com.eventos.banana.domain.model.AppNotification(
                         userId = targetUid, // Recipient

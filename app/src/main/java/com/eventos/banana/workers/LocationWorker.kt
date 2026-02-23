@@ -35,7 +35,10 @@ class LocationWorker(
             
             if (location != null) {
                 // 4. Update Firestore
-                val userRepository = UserRepository()
+                val userRepository = UserRepository(
+                com.google.firebase.firestore.FirebaseFirestore.getInstance(),
+                com.eventos.banana.data.repository.NotificationRepository(com.google.firebase.firestore.FirebaseFirestore.getInstance())
+            )
                 val geohash = com.eventos.banana.util.GeohashUtils.encode(location.latitude, location.longitude, 9)
                 
                 userRepository.updateLocation(

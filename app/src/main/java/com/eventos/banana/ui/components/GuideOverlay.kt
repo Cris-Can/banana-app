@@ -11,8 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.eventos.banana.viewmodel.GuideStep
-import com.eventos.banana.viewmodel.GuideViewModel
+import com.eventos.banana.ui.onboarding.GuideStep
+import com.eventos.banana.ui.onboarding.GuideViewModel
 
 @Composable
 fun GuideOverlay(

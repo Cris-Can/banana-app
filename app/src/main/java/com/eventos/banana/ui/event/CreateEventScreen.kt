@@ -39,7 +39,7 @@ import com.eventos.banana.ui.components.shimmerEffect
 @Composable
 fun CreateEventScreen(
     creatorId: String,
-    viewModel: com.eventos.banana.viewmodel.CreateEventViewModel,
+    viewModel: com.eventos.banana.ui.event.CreateEventViewModel,
     onSuccess: () -> Unit,
     onSelectExactLocation: () -> Unit,
     onNavigateToPremium: () -> Unit
@@ -822,7 +822,7 @@ fun CreateEventScreen(
         
         AlertDialog(
             onDismissRequest = { 
-                if (adUnlockState !is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd) {
+                if (adUnlockState !is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.LoadingAd) {
                     showAdDialog = false 
                     viewModel.resetState() 
                 }
@@ -832,7 +832,7 @@ fun CreateEventScreen(
                      Text("Límite Total Alcanzado")
                  } else {
                      when (adUnlockState) {
-                         is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked -> Text("¡Evento Desbloqueado! 🎉")
+                         is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Unlocked -> Text("¡Evento Desbloqueado! 🎉")
                          else -> Text("Límite Mensual Alcanzado")
                      }
                  }
@@ -844,27 +844,27 @@ fun CreateEventScreen(
                         Text("Para crear más eventos, vuélvete Banana Gold 🍌✨.")
                     } else {
                         when (val state = adUnlockState) {
-                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Idle -> {
+                            is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Idle -> {
                                 Text("Has usado tu cupo gratuito. Puedes desbloquear 1 evento extra viendo 2 anuncios.")
                             }
-                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd -> {
+                            is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.LoadingAd -> {
                                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                                     Spacer(Modifier.width(8.dp))
                                     Text("Cargando anuncio...")
                                 }
                             }
-                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Progress -> {
+                            is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Progress -> {
                                 LinearProgressIndicator(
                                     progress = { state.watched.toFloat() / state.required.toFloat() },
                                     modifier = Modifier.fillMaxWidth().height(8.dp)
                                 )
                                 Text("Has visto ${state.watched} de ${state.required} anuncios. ¡Falta poco!")
                             }
-                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked -> {
+                            is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Unlocked -> {
                                 Text("¡Ya tienes un cupo extra! Puedes crear tu evento ahora.")
                             }
-                            is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Error -> {
+                            is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Error -> {
                                 Text("Hubo un problema: ${state.message}", color = MaterialTheme.colorScheme.error)
                             }
                         }
@@ -882,7 +882,7 @@ fun CreateEventScreen(
                     }
                 } else {
                     when (val state = adUnlockState) {
-                        is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked -> {
+                        is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Unlocked -> {
                             Button(onClick = { 
                                 showAdDialog = false 
                                 viewModel.resetState()
@@ -890,7 +890,7 @@ fun CreateEventScreen(
                                 Text("Continuar")
                             }
                         }
-                        is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd -> { } 
+                        is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.LoadingAd -> { } 
                         else -> {
                             Button(onClick = {
                                 val activity = context as? android.app.Activity
@@ -898,14 +898,14 @@ fun CreateEventScreen(
                                     viewModel.watchAd(activity, creatorId)
                                 }
                             }) {
-                                Text(if (state is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Progress) "Ver Siguiente" else "Ver Anuncio (Gratis)")
+                                Text(if (state is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Progress) "Ver Siguiente" else "Ver Anuncio (Gratis)")
                             }
                         }
                     }
                 }
             },
             dismissButton = {
-                if (adUnlockState !is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.LoadingAd && adUnlockState !is com.eventos.banana.viewmodel.CreateEventViewModel.UnlockState.Unlocked) {
+                if (adUnlockState !is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.LoadingAd && adUnlockState !is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Unlocked) {
                     TextButton(onClick = { 
                         showAdDialog = false 
                         viewModel.resetState()

@@ -14,11 +14,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.eventos.banana.viewmodel.FriendStatus
-import com.eventos.banana.viewmodel.PublicProfileViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import androidx.compose.ui.draw.clip
+import androidx.compose.animation.animateContentSize
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +26,9 @@ fun PublicProfileScreen(
     onBack: () -> Unit,
     onMessageClick: (String) -> Unit = {},  // userId to start chat with
     isCurrentUserVerified: Boolean = false, // 🔒 Restriction check
-    viewModel: PublicProfileViewModel = viewModel()
+    viewModel: PublicProfileViewModel = hiltViewModel<PublicProfileViewModel, PublicProfileViewModel.Factory>(
+        creationCallback = { factory -> factory.create(targetUserId) }
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -35,10 +36,9 @@ fun PublicProfileScreen(
     // 🛡️ Track blocked state
     var isBlocked by remember { mutableStateOf(false) }
     LaunchedEffect(targetUserId) {
-        viewModel.loadProfile(targetUserId)
-        // Check if user is blocked
-        val userRepo = com.eventos.banana.data.repository.UserRepository()
-        val authRepo = com.eventos.banana.data.repository.AuthRepository()
+        // block check moved here, profile load is now in VM init
+        val userRepo = viewModel.userRepository
+        val authRepo = viewModel.authRepository
         val currentUid = authRepo.currentUid()
         if (currentUid != null) {
             val blockedList = userRepo.getBlockedUsers(currentUid)
@@ -121,18 +121,53 @@ fun PublicProfileScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Box(modifier = Modifier
+            .padding(padding)
+            .fillMaxSize()
+            .animateContentSize()
+        ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(androidx.compose.ui.Alignment.Center))
             } else {
                 val profile = uiState.profile
                 if (profile != null) {
-                    Column(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
+                    // Check if it's the Ghost Profile (Deleted/Not Found)
+                    val isDeletedAccount = profile.nickname == "Usuario" && profile.aboutMe == "Perfil no disponible"
+                    
+                    if (isDeletedAccount) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
+                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text("👻", style = MaterialTheme.typography.displayLarge)
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "Cuenta no disponible",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Este usuario ha eliminado su cuenta o el perfil ya no existe.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(24.dp))
+                            Button(onClick = onBack) {
+                                Text("Volver")
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
                         // Header: Avatar + Stats
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             // Estado para expandir avatar
@@ -370,8 +405,9 @@ fun PublicProfileScreen(
                                     }
                                 }
                             }
-                        }
-                    }
+                        } // ends if(profile.photos.isNotEmpty())
+                    } // ends Column
+                } // ends else (Ghost Profile)
                 } else if (uiState.error != null) {
                     Text("Error: ${uiState.error}", modifier = Modifier.align(androidx.compose.ui.Alignment.Center))
                 }

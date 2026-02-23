@@ -17,8 +17,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.eventos.banana.domain.model.EventListUiState
-import com.eventos.banana.viewmodel.EventListViewModel
+import com.eventos.banana.ui.event.EventListViewModel
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -30,7 +31,7 @@ fun WorldMapScreen(
     onBack: () -> Unit,
     onEventClick: (String) -> Unit,
     currentUserId: String, // ➕ Pass ID explicitly
-    viewModel: EventListViewModel = viewModel()
+    viewModel: EventListViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()

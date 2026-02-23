@@ -13,6 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource // ➕
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.LoginUiState
 import kotlinx.coroutines.launch
@@ -169,6 +172,10 @@ fun LoginScreen(
                         if (emailError != null) Text(emailError!!)
                     },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -193,6 +200,10 @@ fun LoginScreen(
                         }
                     },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -288,7 +299,7 @@ fun LoginScreen(
                     
                 // 🎂 FECHA DE NACIMIENTO
                     val dateText = if (birthDate != null) {
-                        val calendar = java.util.Calendar.getInstance()
+                        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
                         calendar.timeInMillis = birthDate!!
                         "📅 ${calendar.get(java.util.Calendar.DAY_OF_MONTH)}/${calendar.get(java.util.Calendar.MONTH) + 1}/${calendar.get(java.util.Calendar.YEAR)}"
                     } else {

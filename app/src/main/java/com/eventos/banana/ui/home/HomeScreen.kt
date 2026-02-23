@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Done
 
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.res.stringResource
 import com.eventos.banana.ui.util.*
 import androidx.compose.runtime.*
@@ -37,13 +38,13 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.eventos.banana.data.ChileCommunesList
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventListUiState
 import com.eventos.banana.domain.model.EventStatus
-import com.eventos.banana.viewmodel.EventListViewModel
-import com.eventos.banana.viewmodel.SessionViewModel
+import com.eventos.banana.ui.event.EventListViewModel
+import com.eventos.banana.ui.auth.SessionViewModel
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +61,7 @@ fun HomeScreen(
     unreadMessages: Int = 0,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    eventListViewModel: EventListViewModel = viewModel(),
+    eventListViewModel: EventListViewModel = hiltViewModel(),
     onMapClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -97,7 +98,10 @@ fun HomeScreen(
         
         // Round 11: Auto-mark finished events as ratable
         try {
-            com.eventos.banana.data.repository.EventRepository().markFinishedEventsAsRatable()
+            com.eventos.banana.data.repository.EventRepository(
+                com.google.firebase.firestore.FirebaseFirestore.getInstance(),
+                com.eventos.banana.data.repository.NotificationRepository(com.google.firebase.firestore.FirebaseFirestore.getInstance())
+            ).markFinishedEventsAsRatable()
         } catch (e: Exception) {
             android.util.Log.e("HomeScreen", "Failed to mark events", e)
         }
@@ -128,6 +132,15 @@ fun HomeScreen(
     }
     
     val uiState by eventListViewModel.uiState.collectAsState()
+    val isLoadingMore by eventListViewModel.isLoadingMore.collectAsState()
+
+    var isRefreshing by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(uiState) {
+        if (uiState !is EventListUiState.Loading) {
+            isRefreshing = false
+        }
+    }
     val profileUiState by sessionViewModel.profileUiState.collectAsState()
 
     val userCommune = profileUiState.profile?.commune
@@ -590,16 +603,24 @@ fun HomeScreen(
                             }
                         }
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth().weight(1f),
-                            contentPadding = PaddingValues(
-                                start = 16.dp, 
-                                end = 16.dp, 
-                                top = 16.dp, 
-                                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 80.dp // Space for FAB + Nav Bar
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        PullToRefreshBox(
+                            isRefreshing = isRefreshing,
+                            onRefresh = {
+                                isRefreshing = true
+                                eventListViewModel.refresh()
+                            },
+                            modifier = Modifier.fillMaxWidth().weight(1f)
                         ) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    start = 16.dp, 
+                                    end = 16.dp, 
+                                    top = 16.dp, 
+                                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 80.dp // Space for FAB + Nav Bar
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp) // Rule 5: 12dp separation between cards
+                            ) {
                             items(events, key = { it.id }) { event ->
                                 // Calculate Creator Info
                                 val creatorProfile = (uiState as EventListUiState.Success).creatorProfiles[event.creatorId]
@@ -620,12 +641,31 @@ fun HomeScreen(
                                 )
                             }
 
-                        }
-                    }
+                            // 📄 Paginación: Botón "Cargar más"
+                            val successState = uiState as EventListUiState.Success
+                            if (successState.canLoadMore) {
+                                item {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isLoadingMore) {
+                                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                        } else {
+                                            OutlinedButton(onClick = { eventListViewModel.loadMore() }) {
+                                                Text("Cargar más eventos")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } // LazyColumn closing
+                    } // PullToRefreshBox closing
                 }
-            }
+            } // Box closing
+        } // Column closing
+    } // AnimatedVisibilityScope closing o Column closing
         }
-        
     } // End Scaffold
              
         if (showGuide) {
@@ -635,4 +675,3 @@ fun HomeScreen(
             })
         }
     }
-}

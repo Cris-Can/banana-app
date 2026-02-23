@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.eventos.banana.R
 import com.eventos.banana.domain.model.UserProfile
-import com.eventos.banana.viewmodel.ProfileViewModel
+import com.eventos.banana.ui.profile.ProfileViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
@@ -62,7 +62,7 @@ fun LeaderboardScreen(
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-            if (leaderboardUsers.isEmpty() && uiState is com.eventos.banana.viewmodel.ProfileUiState.Loading) {
+            if (leaderboardUsers.isEmpty() && uiState is com.eventos.banana.ui.profile.ProfileUiState.Loading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
                 LazyColumn(

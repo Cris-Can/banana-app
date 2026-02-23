@@ -20,7 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eventos.banana.ui.theme.BananaGold
-import com.eventos.banana.viewmodel.BillingViewModel
+import com.eventos.banana.ui.monetization.BillingViewModel
 import androidx.compose.ui.res.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)

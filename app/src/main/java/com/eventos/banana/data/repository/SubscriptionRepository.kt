@@ -5,8 +5,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 
-class SubscriptionRepository {
-    private val firestore = FirebaseFirestore.getInstance()
+import javax.inject.Inject
+
+class SubscriptionRepository @Inject constructor(
+    private val firestore: FirebaseFirestore
+) {
     private val usersCollection = firestore.collection("users")
 
     // Limits
@@ -30,30 +33,15 @@ class SubscriptionRepository {
     suspend fun canCreateEvent(userId: String): Result<Boolean> {
         return try {
             val user = getUser(userId) ?: return Result.failure(Exception("User not found"))
-            
-            // LOGGING PRO: Check what we actually have
-            android.util.Log.e("SubscriptionRepo", ">> CHECKING LIMITS FOR: ${user.subscriptionType} | isFounder=${user.isFounder} | isGold=${user.isGold}")
-            android.util.Log.e("SubscriptionRepo", ">> COUNTS: Created=${user.eventsCreatedInCycle}, Joined=${user.joinRequestsInCycle}")
-            android.util.Log.e("SubscriptionRepo", ">> DATE: CycleStart=${java.util.Date(user.currentCycleStartDate)}")
-
             val updatedUser = checkAndResetCycle(user)
 
             if (updatedUser.subscriptionType == "GOLD" || updatedUser.subscriptionType == "FOUNDER" || updatedUser.isFounder) {
-                android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (GOLD/FOUNDER)")
                 Result.success(true)
             } else {
                 val effectiveLimit = FREE_LIMIT_CREATE_EVENT + updatedUser.adEventsUnlocked
-                
-                if (updatedUser.eventsCreatedInCycle < effectiveLimit) {
-                    android.util.Log.e("SubscriptionRepo", ">> RESULT: ALLOWED (${updatedUser.eventsCreatedInCycle} < $effectiveLimit)")
-                    Result.success(true)
-                } else {
-                    android.util.Log.e("SubscriptionRepo", ">> RESULT: BLOCKED (${updatedUser.eventsCreatedInCycle} >= $effectiveLimit)")
-                    Result.success(false)
-                }
+                Result.success(updatedUser.eventsCreatedInCycle < effectiveLimit)
             }
         } catch (e: Exception) {
-            android.util.Log.e("SubscriptionRepo", "Error checking limits", e)
             Result.failure(e)
         }
     }
@@ -64,18 +52,9 @@ class SubscriptionRepository {
     
     suspend fun getUser(userId: String): UserProfile? {
         return try {
-            // FORCE SERVER to avoid stale cache
             val snapshot = usersCollection.document(userId).get(com.google.firebase.firestore.Source.SERVER).await()
-            
-            // LOG RAW DATA
-            android.util.Log.e("SubscriptionRepo", ">> RAW FIRESTORE DATA: ${snapshot.data}")
-            
-            val profile = snapshot.toObject(UserProfile::class.java)?.copy(uid = userId)
-            android.util.Log.e("SubscriptionRepo", ">> MAPPED OBJECT: type=${profile?.subscriptionType}, events=${profile?.eventsCreatedInCycle}")
-            
-            profile
+            snapshot.toObject(UserProfile::class.java)?.copy(uid = userId)
         } catch (e: Exception) {
-            android.util.Log.e("SubscriptionRepo", "GetUser Failed", e)
             null
         }
     }

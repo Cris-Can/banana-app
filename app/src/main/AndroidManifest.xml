@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- 🎤 AUDIO (Mensajes de voz en chat) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- 🌐 INTERNET & RED (Requerido para Firebase) -->
@@ -26,7 +29,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="${appName}"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Banana">
@@ -34,12 +37,12 @@
         <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyCoCzzjj6ZIO6a-RH-9c-5JlYm2VlzRKCY" />
+            android:value="${MAPS_API_KEY}" />
 
         <!-- AdMob App ID (Production) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-5515224074639337~5766187054"/>
+            android:value="${ADMOB_APP_ID}"/>
 
         <activity
             android:name=".MainActivity"
@@ -65,7 +68,7 @@
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
-            android:label="@string/app_name"
+            android:label="${appName}"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -80,7 +83,7 @@
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_launcher_gold"
             android:roundIcon="@mipmap/ic_launcher_gold"
-            android:label="@string/app_name"
+            android:label="${appName}"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -95,7 +98,7 @@
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_launcher_neon"
             android:roundIcon="@mipmap/ic_launcher_neon"
-            android:label="@string/app_name"
+            android:label="${appName}"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -110,7 +113,7 @@
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_launcher_dark"
             android:roundIcon="@mipmap/ic_launcher_dark"
-            android:label="@string/app_name"
+            android:label="${appName}"
             android:enabled="false"
             android:exported="true">
             <intent-filter>

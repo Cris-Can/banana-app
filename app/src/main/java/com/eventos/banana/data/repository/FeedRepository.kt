@@ -11,9 +11,11 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
-class FeedRepository(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val storage: FirebaseStorage = FirebaseStorage.getInstance()
+import javax.inject.Inject
+
+class FeedRepository @Inject constructor(
+    private val firestore: FirebaseFirestore,
+    private val storage: FirebaseStorage
 ) {
 
     fun getPosts(eventId: String): Flow<List<FeedPost>> = callbackFlow {

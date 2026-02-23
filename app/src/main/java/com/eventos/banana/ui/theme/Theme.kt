@@ -15,47 +15,46 @@ import androidx.compose.ui.platform.LocalContext
 
 // 🎨 ESQUEMAS DE COLOR
 
-// 1. BANANA (Alto Impacto - Dark Slate/Yellow)
-// 1. BANANA (Harmonic Dark)
+// 1. BANANA (Harmonic Dark - Premium Gold)
 private val BananaScheme = darkColorScheme(
-    primary = BananaGold, // Premium Gold
+    primary = BananaGold,
     onPrimary = Color.Black,
     primaryContainer = BananaGoldDim, 
     onPrimaryContainer = Color.White,
-    secondary = BananaGold, // Unified Gold
+    secondary = BananaGold,
     onSecondary = Color.Black,
-    tertiary = BananaGold, // Minimalist Palette
+    tertiary = BananaGold,
     background = BananaDarkBackground,
     surface = BananaDarkSurface,
     onBackground = BananaWhite,
     onSurface = BananaWhite,
     surfaceVariant = BananaDarkSurfaceVariant,
     onSurfaceVariant = BananaGrey,
-    error = ErrorRed
+    error = ErrorSoft
 )
 
-// 2. DARK (Standard OLED Black)
+// 2. DARK (Standard OLED)
 private val DarkScheme = darkColorScheme(
-    primary = BananaYellow,     // Keep brand accent
+    primary = BananaGold,
     onPrimary = Color.Black,
-    secondary = BananaOrange,
-    background = StandardDarkBackground, // #121212
-    surface = StandardDarkSurface,       // #1E1E1E
+    secondary = BananaGoldDim,
+    background = StandardDarkBackground,
+    surface = StandardDarkSurface,
     onBackground = Color.White,
     onSurface = Color.White,
-    error = ErrorRed
+    error = ErrorSoft
 )
 
-// 3. LIGHT (Fresco - White/Orange/Black)
+// 3. LIGHT (Fresh & Clean)
 private val LightScheme = lightColorScheme(
-    primary = BananaOrange,
+    primary = BananaGold,
     onPrimary = Color.Black,
-    secondary = BananaYellow,
-    tertiary = BananaLeaf,
+    secondary = BananaGoldDim,
     background = BananaLightBackground,
     surface = BananaLightBackground,
     onBackground = BananaBlack,
-    onSurface = BananaBlack
+    onSurface = BananaBlack,
+    error = ErrorSoft
 )
 
 @Composable

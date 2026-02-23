@@ -42,6 +42,16 @@
 # AdMob
 -keep class com.google.android.gms.ads.** { *; }
 
+# Timber
+-keep class timber.log.** { *; }
+
+# Hilt
+-keep class dagger.hilt.** { *; }
+-keep class com.google.dagger.hilt.** { *; }
+
+# BuildConfig (Secrets)
+-keep class com.eventos.banana.BuildConfig { *; }
+
 # Keep Kotlin serialization (if used)
 -keepattributes *Annotation*
 -keep class kotlin.Metadata { *; }

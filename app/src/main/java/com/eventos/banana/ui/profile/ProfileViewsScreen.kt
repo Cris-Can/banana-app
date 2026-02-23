@@ -19,7 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.eventos.banana.ui.components.BananaButton
-import com.eventos.banana.viewmodel.ProfileViewModel
+import com.eventos.banana.ui.profile.ProfileViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,7 +148,7 @@ fun ProfileViewsScreen(
                 }
             }
             
-            if (uiState is com.eventos.banana.viewmodel.ProfileUiState.Loading) {
+            if (uiState is com.eventos.banana.ui.profile.ProfileUiState.Loading) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
             }
         }
@@ -157,7 +157,7 @@ fun ProfileViewsScreen(
 
 @Composable
 fun ProfileViewItemRow(
-    item: com.eventos.banana.viewmodel.ProfileViewModel.ProfileViewItem,
+    item: com.eventos.banana.ui.profile.ProfileViewModel.ProfileViewItem,
     onClick: (String) -> Unit
 ) {
     Card(

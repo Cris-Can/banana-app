@@ -56,14 +56,15 @@ fun EventDetailScreen(
     onUserClick: (String) -> Unit,
     onRateParticipants: (Event) -> Unit,
     onBoostClick: () -> Unit,
+    initialTab: Int = 0,
     eventState: com.eventos.banana.domain.model.EventDetailUiState, // Pass full state to access nicknames
     isSaved: Boolean = false,
     onToggleSave: () -> Unit = {},
     hasAttended: Boolean = false,
-    checkInState: com.eventos.banana.viewmodel.CheckInState = com.eventos.banana.viewmodel.CheckInState.Idle,
+    checkInState: com.eventos.banana.ui.event.CheckInState = com.eventos.banana.ui.event.CheckInState.Idle,
     onCheckInClick: () -> Unit = {},
     onResetCheckInState: () -> Unit = {},
-    actionState: com.eventos.banana.viewmodel.ActionState = com.eventos.banana.viewmodel.ActionState.Idle,
+    actionState: com.eventos.banana.ui.event.ActionState = com.eventos.banana.ui.event.ActionState.Idle,
     onResetActionState: () -> Unit = {},
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
@@ -92,11 +93,11 @@ fun EventDetailScreen(
     // Handle Action Results
     LaunchedEffect(actionState) {
         when (actionState) {
-            is com.eventos.banana.viewmodel.ActionState.Success -> {
+            is com.eventos.banana.ui.event.ActionState.Success -> {
                 snackbarHostState.showSnackbar(actionState.message)
                 onResetActionState()
             }
-            is com.eventos.banana.viewmodel.ActionState.Error -> {
+            is com.eventos.banana.ui.event.ActionState.Error -> {
                 snackbarHostState.showSnackbar(actionState.message)
                 onResetActionState()
             }
@@ -104,7 +105,7 @@ fun EventDetailScreen(
         }
     }
 
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableStateOf(initialTab) }
     val tabs = listOf("Detalles", "Muro")
 
     // 📏 Header Measurement
@@ -466,9 +467,36 @@ fun EventDetailScreen(
                                                     .padding(vertical = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
+                                                if (!participantProfile?.profilePictureUrl.isNullOrEmpty()) {
+                                                    AsyncImage(
+                                                        model = participantProfile?.profilePictureUrl,
+                                                        contentDescription = nickname,
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .clip(androidx.compose.foundation.shape.CircleShape),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                } else {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            nickname.take(1).uppercase(),
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(Modifier.width(12.dp))
                                                 Text(
                                                     nickname,
-                                                    style = MaterialTheme.typography.bodyLarge
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = FontWeight.Medium
                                                 )
                                                 if (isGold) {
                                                     Spacer(Modifier.width(4.dp))
@@ -618,9 +646,9 @@ fun EventDetailScreen(
                                             colors = ButtonDefaults.outlinedButtonColors(
                                                 contentColor = MaterialTheme.colorScheme.primary
                                             ),
-                                            enabled = !isVerifyingLocation && checkInState !is com.eventos.banana.viewmodel.CheckInState.Loading
+                                            enabled = !isVerifyingLocation && checkInState !is com.eventos.banana.ui.event.CheckInState.Loading
                                         ) {
-                                            if (isVerifyingLocation || checkInState is com.eventos.banana.viewmodel.CheckInState.Loading) {
+                                            if (isVerifyingLocation || checkInState is com.eventos.banana.ui.event.CheckInState.Loading) {
                                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(stringResource(com.eventos.banana.R.string.event_detail_verifying))
@@ -844,17 +872,16 @@ fun EventDetailScreen(
                 val now = System.currentTimeMillis()
                 val eventEnded = event.endAt < now || event.status == EventStatus.CLOSED
                 val canRate = (isCreator || isApproved) && eventEnded
-                val ratingDeadline = event.ratingDeadline ?: (event.endAt + (5 * 24 * 60 * 60 * 1000)) // 5 días después
+                val ratingDeadline = event.ratingDeadline ?: (event.endAt + 432000000L) // 5 días después
                 val withinRatingWindow = now <= ratingDeadline
 
                 if (canRate && withinRatingWindow) {
                     Spacer(Modifier.height(8.dp))
                     
-                    // 🔒 VALIDACIÓN DE ASISTENCIA (New Logic)
-                    // Si no es creador y no ha asistido (GPS/NFC) -> Bloquear o Advertir
+                    // 🔒 VALIDACIÓN DE ASISTENCIA (Advertencia, no bloqueo)
                     if (!isCreator && !hasAttended) {
                          Card(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                         ) {
                             Column(Modifier.padding(16.dp)) {
@@ -862,36 +889,36 @@ fun EventDetailScreen(
                                 Text(stringResource(com.eventos.banana.R.string.event_detail_rate_requirement), style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                    } else {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                stringResource(com.eventos.banana.R.string.event_detail_rate_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
-                        ) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text(
-                                    stringResource(com.eventos.banana.R.string.event_detail_rate_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                
-                                val daysRemaining = ((ratingDeadline - now) / (24 * 60 * 60 * 1000)).toInt()
-                                Text(
-                                    stringResource(com.eventos.banana.R.string.event_detail_days_remaining, daysRemaining, if (daysRemaining == 1) stringResource(com.eventos.banana.R.string.event_detail_day) else stringResource(com.eventos.banana.R.string.event_detail_days)),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                
-                                Spacer(Modifier.height(12.dp))
-                                
-                                Button(
-                                    onClick = { onRateParticipants(event) },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(stringResource(com.eventos.banana.R.string.event_detail_rate_now))
-                                }
+                            Spacer(Modifier.height(4.dp))
+                            
+                            val daysRemaining = ((ratingDeadline - now) / 86400000L).toInt()
+                            Text(
+                                stringResource(com.eventos.banana.R.string.event_detail_days_remaining, daysRemaining, if (daysRemaining == 1) stringResource(com.eventos.banana.R.string.event_detail_day) else stringResource(com.eventos.banana.R.string.event_detail_days)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            
+                            Spacer(Modifier.height(12.dp))
+                            
+                            Button(
+                                onClick = { onRateParticipants(event) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(com.eventos.banana.R.string.event_detail_rate_now))
                             }
                         }
                     }

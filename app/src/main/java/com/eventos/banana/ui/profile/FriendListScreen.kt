@@ -14,10 +14,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import androidx.compose.ui.draw.clip
-import com.eventos.banana.viewmodel.FriendListViewModel
+import com.eventos.banana.ui.profile.FriendListViewModel
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.foundation.background
 
@@ -26,9 +26,10 @@ import androidx.compose.foundation.background
 fun FriendListScreen(
     currentUserId: String,
     onBack: () -> Unit,
-    onUserClick: (String) -> Unit
+    onUserClick: (String) -> Unit,
+    initialTab: Int = 0,
+    viewModel: FriendListViewModel = hiltViewModel()
 ) {
-    val viewModel: FriendListViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -151,7 +152,9 @@ fun FriendListScreen(
 
             } else {
                 // 📋 TABS VIEW (Friends / Requests / Suggestions)
-                var selectedTab by remember { mutableIntStateOf(0) }
+                var selectedTab by remember { mutableIntStateOf(initialTab) }
+                // 🔢 Paginación: mostrar de 30 en 30
+                var displayLimit by remember { mutableIntStateOf(30) }
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -195,8 +198,52 @@ fun FriendListScreen(
                     ) {
                         when (selectedTab) {
                             0 -> { // Friends
-                                items(uiState.friends) { friend ->
-                                    FriendItem(user = friend, onClick = { onUserClick(friend.uid) }, action = null)
+                                val visibleFriends = uiState.friends.take(displayLimit)
+                                items(visibleFriends) { friend ->
+                                    var showRemoveDialog by remember { mutableStateOf(false) }
+
+                                    FriendItem(
+                                        user = friend,
+                                        onClick = { onUserClick(friend.uid) },
+                                        action = {
+                                            IconButton(onClick = { showRemoveDialog = true }) {
+                                                Icon(
+                                                    androidx.compose.material.icons.Icons.Default.Close,
+                                                    contentDescription = "Eliminar amigo",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                    )
+
+                                    if (showRemoveDialog) {
+                                        AlertDialog(
+                                            onDismissRequest = { showRemoveDialog = false },
+                                            title = { Text("Eliminar amigo") },
+                                            text = { Text("¿Estás seguro de que deseas eliminar a ${friend.nickname} de tu lista de amigos?") },
+                                            confirmButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        viewModel.removeFriend(currentUserId, friend.uid)
+                                                        showRemoveDialog = false
+                                                    }
+                                                ) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
+                                            },
+                                            dismissButton = {
+                                                TextButton(onClick = { showRemoveDialog = false }) { Text("Cancelar") }
+                                            }
+                                        )
+                                    }
+                                }
+                                if (uiState.friends.size > displayLimit) {
+                                    item {
+                                        OutlinedButton(
+                                            onClick = { displayLimit += 30 },
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                                        ) {
+                                            Text("Cargar más (${uiState.friends.size - displayLimit} restantes)")
+                                        }
+                                    }
                                 }
                                 if (uiState.friends.isEmpty()) {
                                     item { 

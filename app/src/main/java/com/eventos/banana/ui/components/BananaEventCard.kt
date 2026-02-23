@@ -59,12 +59,13 @@ fun BananaEventCard(
         Card(
             modifier = modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                .animateContentSize(),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface,
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp) // Slightly more elevation for premium feel
         ) {
             Column {
                 // 🖼️ Header Image
@@ -139,16 +140,15 @@ fun BananaEventCard(
             // 📝 Content
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp) // Grid Fixed: 12dp
             ) {
                 // Title
                 Text(
                     text = event.title,
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold, // More punch
-                    maxLines = 2, // Allow 2 lines for title
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = MaterialTheme.typography.titleLarge.lineHeight * 1.1 
+                    lineHeight = MaterialTheme.typography.titleLarge.lineHeight
                 )
 
                 Spacer(Modifier.height(4.dp))

@@ -7,12 +7,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
-class EventRepository {
+import javax.inject.Inject
 
-    private val firestore = FirebaseFirestore.getInstance()
+class EventRepository @Inject constructor(
+    private val firestore: FirebaseFirestore,
+    private val notificationRepository: NotificationRepository
+) {
+
     private val eventsCollection = firestore.collection("events")
-
-    private val notificationRepository = NotificationRepository()
 
     suspend fun createEvent(event: Event, imageBytes: ByteArray? = null): Result<Unit> {
         val docRef = eventsCollection.document()
@@ -379,11 +381,11 @@ class EventRepository {
                     )
                 )
                 
-                // Collect existing participants + creator
-                participantsToNotify = event.approvedParticipants + event.creatorId
+                // Collect existing participants + creator, sin duplicados
+                participantsToNotify = (event.approvedParticipants + event.creatorId).distinct()
             }.await()
 
-            // 1. Notify the JOINER
+            // 1. Notify the JOINER (solo al usuario aceptado)
             notificationRepository.sendNotification(
                 AppNotification(
                     userId = userId,
@@ -394,7 +396,7 @@ class EventRepository {
                 )
             )
             
-            // 2. Notify OTHER participants
+            // 2. Notify OTHER participants (NO al usuario recién aceptado)
             participantsToNotify.forEach { participantId ->
                 if (participantId != userId) {
                     notificationRepository.sendNotification(
@@ -403,7 +405,7 @@ class EventRepository {
                             title = "Nuevo participante",
                             message = "¡Un nuevo usuario se ha unido al evento \"$eventTitle\"!",
                             eventId = eventId,
-                            type = NotificationType.JOIN_APPROVED
+                            type = NotificationType.EVENT_UPDATE
                         )
                     )
                 }
@@ -549,7 +551,7 @@ class EventRepository {
     // =========================================================
     // OBSERVAR EVENTOS (REALTIME) - GEOHASH SUPPORT
     // =========================================================
-    fun observeNearbyEvents(geohashPrefix: String? = null, commune: String? = null, region: String? = null): Flow<List<Event>> = callbackFlow {
+    fun observeNearbyEvents(geohashPrefix: String? = null, commune: String? = null, region: String? = null, limit: Long = 20): Flow<List<Event>> = callbackFlow {
 
         val collectionRef = eventsCollection
 
@@ -559,12 +561,12 @@ class EventRepository {
             // 🏙️ 1. Filter by Commune (Highest Priority)
             query = query.whereEqualTo("commune", commune)
                 .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(100)
+                .limit(limit)
         } else if (!region.isNullOrBlank()) {
             // 🗺️ 2. Filter by Region (New)
             query = query.whereEqualTo("region", region)
                 .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(100)
+                .limit(limit)
         } else if (!geohashPrefix.isNullOrEmpty()) {
             // 📍 3. Filter by Geohash (GPS)
             val endParams = geohashPrefix + "~"
@@ -572,11 +574,11 @@ class EventRepository {
                 .orderBy("geohash")
                 .startAt(geohashPrefix)
                 .endAt(endParams)
-                .limit(100)
+                .limit(limit)
         } else {
             // 🌍 4. Global Fallback
             query = query.orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(500) // Increased limit to support "All Radius" global search strategy
+                .limit(limit)
         }
 
         val listener = query.addSnapshotListener { snapshot, error ->
@@ -610,6 +612,55 @@ class EventRepository {
     
     // Deprecated: Kept for compatibility if needed, but pointing to new logic
     fun observeEvents() = observeNearbyEvents(null, null, null)
+
+    // =========================================================
+    // LISTAR EVENTOS (PAGINADOS)
+    // =========================================================
+    suspend fun fetchEventsBatch(
+        geohashPrefix: String? = null,
+        commune: String? = null,
+        region: String? = null,
+        limit: Long = 20,
+        lastSnapshot: com.google.firebase.firestore.DocumentSnapshot? = null
+    ): Result<Pair<List<Event>, com.google.firebase.firestore.DocumentSnapshot?>> {
+        return try {
+            var query: com.google.firebase.firestore.Query = eventsCollection
+
+            if (!commune.isNullOrBlank()) {
+                query = query.whereEqualTo("commune", commune)
+                    .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            } else if (!region.isNullOrBlank()) {
+                query = query.whereEqualTo("region", region)
+                    .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            } else if (!geohashPrefix.isNullOrEmpty()) {
+                query = query.orderBy("geohash")
+                    .startAt(geohashPrefix)
+                    .endAt(geohashPrefix + "~")
+            } else {
+                query = query.orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            }
+
+            if (lastSnapshot != null) {
+                query = query.startAfter(lastSnapshot)
+            }
+
+            val snapshot = query.limit(limit).get().await()
+            val now = System.currentTimeMillis()
+            
+            val filteredEvents = snapshot.toObjects(Event::class.java).filter { 
+                it.status == EventStatus.OPEN && it.endAt > now 
+            }.sortedWith(
+                compareByDescending<Event> { it.isBoosted && it.boostExpiry > now }
+                    .thenByDescending { it.createdAt }
+            )
+
+            val newLastDoc = if (snapshot.documents.isNotEmpty()) snapshot.documents.last() else null
+            Result.success(Pair(filteredEvents, newLastDoc))
+        } catch (e: Exception) {
+            android.util.Log.e("EventRepository", "fetchEventsBatch error: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
 
     // =========================================================
     // AUTO-MARK EVENTS AS RATABLE (Round 11)

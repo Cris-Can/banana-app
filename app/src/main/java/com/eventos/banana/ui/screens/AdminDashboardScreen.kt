@@ -1,5 +1,10 @@
 package com.eventos.banana.ui.screens
 
+import kotlinx.coroutines.launch
+import java.util.Date
+import java.text.SimpleDateFormat
+import java.util.Locale
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,29 +22,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.eventos.banana.data.repository.UserRepository
-import com.eventos.banana.ui.components.BananaButton
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.eventos.banana.ui.profile.UserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboardScreen(
     onBack: () -> Unit,
-    onNavigateToProfile: (String) -> Unit
+    onNavigateToProfile: (String) -> Unit,
+    userViewModel: UserViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val userRepo = remember { UserRepository() }
     
     var reports by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     
     // Load Reports
     LaunchedEffect(Unit) {
-        reports = userRepo.getPendingReports()
+        reports = userViewModel.getPendingReports()
         isLoading = false
     }
     
@@ -78,15 +79,15 @@ fun AdminDashboardScreen(
                             report = report,
                             onResolve = { id, action ->
                                 scope.launch {
-                                    userRepo.resolveReport(id, action)
+                                    userViewModel.resolveReport(id, action)
                                     // Refresh list locally
                                     reports = reports.filter { it["id"] != id }
                                 }
                             },
                             onBan = { uid, reportId ->
                                 scope.launch {
-                                    userRepo.banUser(uid)
-                                    userRepo.resolveReport(reportId, "BANNED")
+                                    userViewModel.banUser(uid)
+                                    userViewModel.resolveReport(reportId, "BANNED")
                                     reports = reports.filter { it["id"] != reportId }
                                 }
                             },

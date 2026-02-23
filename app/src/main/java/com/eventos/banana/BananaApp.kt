@@ -6,11 +6,22 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import dagger.hilt.android.HiltAndroidApp
+import timber.log.Timber
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 
+@HiltAndroidApp
 class BananaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // 0. Timber Logging Init 🪵
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        } else {
+            Timber.plant(CrashlyticsTree())
+        }
 
         // 1. CRITICAL: Firestore Settings (Fast, keep on Main)
         val settings = FirebaseFirestoreSettings.Builder()
@@ -25,7 +36,7 @@ class BananaApp : Application() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             // 🌍 Places API (Network/Disk IO)
             if (!com.google.android.libraries.places.api.Places.isInitialized()) {
-                com.google.android.libraries.places.api.Places.initialize(applicationContext, "AIzaSyCoCzzjj6ZIO6a-RH-9c-5JlYm2VlzRKCY")
+                com.google.android.libraries.places.api.Places.initialize(applicationContext, BuildConfig.PLACES_API_KEY)
             }
 
             // 📺 AdMob (Heavy Reflection/IPC)
@@ -37,6 +48,26 @@ class BananaApp : Application() {
 
             // 🔔 Notification Channels (System Service IPC)
             com.eventos.banana.util.NotificationHelper.createChannels(this@BananaApp)
+        }
+    }
+}
+
+/**
+ * 🌲 Custom Timber Tree to report non-fatal errors to Crashlytics in Production
+ */
+class CrashlyticsTree : Timber.Tree() {
+    override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+        if (priority == android.util.Log.VERBOSE || priority == android.util.Log.DEBUG) {
+            return
+        }
+
+        val crashlytics = FirebaseCrashlytics.getInstance()
+        crashlytics.setCustomKey("priority", priority)
+        tag?.let { crashlytics.setCustomKey("tag", it) }
+        crashlytics.log(message)
+
+        if (t != null) {
+            crashlytics.recordException(t)
         }
     }
 }

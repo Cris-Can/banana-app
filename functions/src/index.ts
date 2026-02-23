@@ -1,9 +1,30 @@
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 
 
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
+
+/**
+ * 🧹 Helper to cleanup invalid FCM tokens
+ */
+async function cleanupInvalidToken(userId: string, error: any) {
+  const adminCodes = [
+    "messaging/registration-token-not-registered",
+    "messaging/invalid-registration-token",
+  ];
+
+  if (error.code && adminCodes.includes(error.code)) {
+    console.log(`Cleaning up invalid token for user ${userId} due to ${error.code}`);
+    try {
+      await admin.firestore().collection("users").doc(userId).update({
+        fcmToken: admin.firestore.FieldValue.delete(),
+      });
+    } catch (e) {
+      console.error(`Failed to delete token for ${userId}`, e);
+    }
+  }
+}
 
 /**
  * =====================================================
@@ -49,8 +70,13 @@ export const onNotificationCreated = onDocumentCreated(
       },
     };
 
-    await admin.messaging().send(message);
-    console.log("Push enviado a:", userId);
+    try {
+      await admin.messaging().send(message);
+      console.log("Push enviado a:", userId);
+    } catch (e: any) {
+      console.error(`Error enviando notificación a ${userId}:`, e);
+      await cleanupInvalidToken(userId, e);
+    }
   }
 );
 
@@ -182,8 +208,99 @@ export const onRatingCreated = onDocumentCreated(
       });
 
       console.log(`Profile updated for ${toUserId}`);
+
+      // 3. 🔔 PUSH NOTIFICATION (Favorable Rating >= 4.0) (Round 6)
+      const numericScore = Number(score);
+      console.log(`Evaluating notification for ${toUserId}: NumericScore=${numericScore}`);
+
+      if (numericScore >= 4.0) {
+        const userDoc = await db.collection("users").doc(toUserId).get();
+        const userData = userDoc.data();
+
+        if (userData && userData.fcmToken) {
+          const payload = {
+            notification: {
+              title: "¡Nueva calificación positiva! ⭐",
+              body: "Un organizador o participante te ha valorado positivamente.",
+            },
+            data: {
+              type: "RATING",
+              targetId: toUserId
+            },
+            token: userData.fcmToken,
+          };
+
+          try {
+            await admin.messaging().send(payload);
+            console.log(`Push notification successfully sent to ${toUserId} for good rating.`);
+          } catch (e: any) {
+            console.error(`Failed to send push to ${toUserId}. Error:`, e);
+            await cleanupInvalidToken(toUserId, e);
+          }
+        } else {
+          console.warn(`User ${toUserId} has no fcmToken or data. Notification skipped.`);
+        }
+      } else {
+        console.log(`Rating for ${toUserId} is not high enough for a notification (${numericScore} < 4.0).`);
+      }
     } catch (error) {
       console.error("Error updating user rating stats:", error);
+    }
+  }
+);
+
+
+/**
+ * =====================================================
+ * 🔔 A45 — RATING REMINDER (Round 9)
+ * Trigger: When an event's 'canBeRated' is set to true
+ * Action: Notify all participants to rate
+ * =====================================================
+ */
+export const onEventRatableReminder = onDocumentUpdated(
+  "events/{eventId}",
+  async (event) => {
+    const change = event.data;
+    if (!change) return;
+
+    const before = change.before.data();
+    const after = change.after.data();
+
+    // Trigger ONLY when canBeRated changes from false to true
+    if (after.canBeRated === true && before.canBeRated !== true) {
+      console.log(`Event ${event.params.eventId} is now ratable. Sending reminders...`);
+      const db = admin.firestore();
+
+      const participantIds: string[] = after.participants || [];
+      const creatorId: string = after.creatorId;
+      const allConcerned = Array.from(new Set([...participantIds, creatorId]));
+
+      for (const userId of allConcerned) {
+        const userDoc = await db.collection("users").doc(userId).get();
+        const userData = userDoc.data();
+
+        if (userData && userData.fcmToken) {
+          const payload = {
+            notification: {
+              title: "¡Evento finalizado! ⭐",
+              body: "Ya puedes calificar a los demás asistentes de " + (after.title || "el evento"),
+            },
+            data: {
+              type: "RATING_REMINDER",
+              eventId: event.params.eventId,
+            },
+            token: userData.fcmToken,
+          };
+
+          try {
+            await admin.messaging().send(payload);
+            console.log(`Reminder sent to ${userId}`);
+          } catch (e: any) {
+            console.error(`Failed reminder for ${userId}`, e);
+            await cleanupInvalidToken(userId, e);
+          }
+        }
+      }
     }
   }
 );
@@ -314,6 +431,155 @@ export const onFeedPostCreated = onDocumentCreated(
 
     } catch (error) {
       console.error("Error sending wall notifications:", error);
+    }
+  }
+);
+
+
+/**
+ * =====================================================
+ * 📊 STATS — INCREMENT COUNTERS ON PARTICIPANT APPROVAL
+ * Trigger: When event.approvedParticipants changes
+ * Actions:
+ *   - Increment eventsRequestedCount (reliability stat)
+ *   - Increment joinRequestsInCycle (subscription limit tracking)
+ * =====================================================
+ */
+export const onParticipantApproved = onDocumentUpdated(
+  "events/{eventId}",
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+
+    const oldApproved: string[] = before.approvedParticipants || [];
+    const newApproved: string[] = after.approvedParticipants || [];
+
+    // Detect newly approved users (in new list but not in old)
+    const newlyApproved = newApproved.filter(
+      (uid) => !oldApproved.includes(uid)
+    );
+
+    if (newlyApproved.length === 0) return;
+
+    const db = admin.firestore();
+
+    for (const uid of newlyApproved) {
+      try {
+        await db.collection("users").doc(uid).update({
+          eventsRequestedCount: admin.firestore.FieldValue.increment(1),
+          joinRequestsInCycle: admin.firestore.FieldValue.increment(1),
+        });
+        console.log(`Stats incremented for approved user ${uid}`);
+      } catch (error) {
+        console.error(`Failed to increment stats for ${uid}:`, error);
+      }
+    }
+  }
+);
+
+
+/**
+ * =====================================================
+ * 🛡️ SERVER-SIDE VALIDATION — EVENT CREATION LIMITS
+ * Trigger: When a new event is created
+ * Actions:
+ *   - Check if creator exceeded free tier limits
+ *   - Reset cycle if 30+ days passed
+ *   - Increment eventsCreatedInCycle counter
+ *   - Delete event if limit exceeded (enforcement)
+ * =====================================================
+ */
+export const onEventCreatedValidation = onDocumentCreated(
+  "events/{eventId}",
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const eventData = snapshot.data();
+    const eventId = event.params.eventId;
+    const creatorId = eventData.creatorId;
+
+    if (!creatorId) {
+      console.error("Event without creatorId, deleting:", eventId);
+      await snapshot.ref.delete();
+      return;
+    }
+
+    const db = admin.firestore();
+
+    try {
+      const userDoc = await db.collection("users").doc(creatorId).get();
+      if (!userDoc.exists) {
+        console.error("Creator not found, deleting event:", eventId);
+        await snapshot.ref.delete();
+        return;
+      }
+
+      const userData = userDoc.data()!;
+      const subscriptionType = userData.subscriptionType || "FREE";
+      const isFounder = userData.isFounder === true;
+
+      // Gold/Founder: unlimited creation
+      if (subscriptionType === "GOLD" || subscriptionType === "FOUNDER" || isFounder) {
+        // Just increment the counter, no limit enforced
+        await db.collection("users").doc(creatorId).update({
+          eventsCreatedInCycle: admin.firestore.FieldValue.increment(1),
+        });
+        console.log(`Event ${eventId} created by premium user ${creatorId}`);
+        return;
+      }
+
+      // Free tier: check limits
+      const FREE_LIMIT = 1;
+      const cycleStart = userData.currentCycleStartDate || 0;
+      const now = Date.now();
+      const daysDiff = Math.floor((now - cycleStart) / (1000 * 60 * 60 * 24));
+
+      let eventsCreated = userData.eventsCreatedInCycle || 0;
+      const adsUnlocked = userData.adEventsUnlocked || 0;
+
+      // Lazy cycle reset (30 days)
+      if (daysDiff >= 30) {
+        await db.collection("users").doc(creatorId).update({
+          currentCycleStartDate: now,
+          eventsCreatedInCycle: 1, // This event counts as the first
+          joinRequestsInCycle: 0,
+          adEventsUnlocked: 0,
+          adsWatchedProgress: 0,
+        });
+        console.log(`Cycle reset + event created for ${creatorId}`);
+        return;
+      }
+
+      const effectiveLimit = FREE_LIMIT + adsUnlocked;
+
+      if (eventsCreated >= effectiveLimit) {
+        // LIMIT EXCEEDED — Delete event and notify
+        console.warn(`Creator ${creatorId} exceeded limit (${eventsCreated}/${effectiveLimit}). Deleting event ${eventId}`);
+        await snapshot.ref.delete();
+
+        // Notify user
+        await db.collection("notifications").doc().set({
+          userId: creatorId,
+          title: "Límite alcanzado",
+          message: "Has alcanzado tu límite mensual de eventos. Suscríbete a Banana Gold para crear más.",
+          eventId: "",
+          type: "GENERIC",
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
+      // Within limits: increment counter
+      await db.collection("users").doc(creatorId).update({
+        eventsCreatedInCycle: admin.firestore.FieldValue.increment(1),
+      });
+      console.log(`Event ${eventId} created. Count: ${eventsCreated + 1}/${effectiveLimit}`);
+
+    } catch (error) {
+      console.error("Error validating event creation:", error);
     }
   }
 );

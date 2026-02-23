@@ -9,8 +9,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
-class MessageRepository {
-    private val firestore = FirebaseFirestore.getInstance()
+import javax.inject.Inject
+
+class MessageRepository @Inject constructor(
+    private val firestore: FirebaseFirestore,
+    private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository
+) {
     private val conversationsCollection = firestore.collection("conversations")
     
     // Obtener o crear conversación entre dos usuarios
@@ -35,6 +39,27 @@ class MessageRepository {
                 }
             
             if (existing != null) {
+                // 🆕 BUG FIX: Update nicknames if they were generic/placeholder
+                val existingNicknames = existing.get("participantNicknames") as? Map<String, String> ?: emptyMap()
+                val needsUpdate = existingNicknames.any { (id, nick) -> 
+                    nick == "Usuario" || nick == "Alguien" || nick.isBlank() 
+                }
+                
+                if (needsUpdate) {
+                    val updatedNicknames = existingNicknames.toMutableMap()
+                    if (currentUserId in updatedNicknames && (updatedNicknames[currentUserId] == "Usuario" || updatedNicknames[currentUserId].isNullOrBlank()) && currentUserNickname != "Usuario") {
+                        updatedNicknames[currentUserId] = currentUserNickname
+                    }
+                    if (otherUserId in updatedNicknames && (updatedNicknames[otherUserId] == "Usuario" || updatedNicknames[otherUserId].isNullOrBlank()) && otherUserNickname != "Usuario") {
+                        updatedNicknames[otherUserId] = otherUserNickname
+                    }
+                    
+                    if (updatedNicknames != existingNicknames) {
+                        conversationsCollection.document(existing.id).update("participantNicknames", updatedNicknames).await()
+                        android.util.Log.d("MessageRepository", "Updated generic nicknames for conversation ${existing.id}")
+                    }
+                }
+                
                 Result.success(existing.id)
             } else {
                 // Crear nueva conversación
@@ -83,13 +108,19 @@ class MessageRepository {
     suspend fun sendMessage(
         conversationId: String,
         senderId: String,
-        content: String
+        content: String = "",
+        audioUrl: String? = null,
+        audioDurationMs: Int? = null,
+        replyToId: String? = null
     ): Result<Unit> {
         return try {
             val message = Message(
                 conversationId = conversationId,
                 senderId = senderId,
-                content = content
+                content = content,
+                audioUrl = audioUrl,
+                audioDurationMs = audioDurationMs,
+                replyToId = replyToId
             )
             
             val docRef = conversationsCollection.document(conversationId)
@@ -105,8 +136,10 @@ class MessageRepository {
                 val participants = conversationSnapshot.get("participants") as? List<String>
                 val recipientId = participants?.firstOrNull { it != senderId }
                 
+                val displayContent = if (audioUrl != null) "🎤 Mensaje de audio" else content
+
                 val updates = mutableMapOf<String, Any>(
-                    "lastMessage" to content,
+                    "lastMessage" to displayContent,
                     "lastMessageSenderId" to senderId,
                     "lastMessageTimestamp" to System.currentTimeMillis()
                 )
@@ -119,14 +152,14 @@ class MessageRepository {
 
                 // 🔔 Send Notification to Recipient
                 if (recipientId != null) {
-                    val notifRepo = NotificationRepository()
+                    val notifRepo = notificationRepository
                     val senderNickname = (conversationSnapshot.get("participantNicknames") as? Map<String, String>)?.get(senderId) ?: "Alguien"
                     
                     notifRepo.sendNotification(
                         com.eventos.banana.domain.model.AppNotification(
                             userId = recipientId,
                             title = "Nuevo mensaje de $senderNickname",
-                            message = content,
+                            message = displayContent,
                             eventId = conversationId,
                             type = com.eventos.banana.domain.model.NotificationType.NEW_MESSAGE
                         )
@@ -139,6 +172,25 @@ class MessageRepository {
             
             Result.success(Unit)
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 🎤 SUBIR AUDIO
+    suspend fun uploadAudio(conversationId: String, senderId: String, audioBytes: ByteArray): Result<String> {
+        return try {
+            if (audioBytes.isEmpty()) throw Exception("Datos de audio vacíos")
+
+            val ext = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) "ogg" else "m4a"
+            val audioPath = "conversations/$conversationId/audio/${java.util.UUID.randomUUID()}.$ext"
+            val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
+            val storageRef = storage.reference.child(audioPath)
+            
+            storageRef.putBytes(audioBytes).await()
+            val downloadUrl = storageRef.downloadUrl.await().toString()
+            Result.success(downloadUrl)
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepository", "Error uploading audio", e)
             Result.failure(e)
         }
     }
@@ -210,6 +262,49 @@ class MessageRepository {
         }
     }
 
+    // 🎭 TOGGLE REACTION (Round v1.1.4)
+    suspend fun toggleReaction(
+        conversationId: String,
+        messageId: String,
+        userId: String,
+        emoji: String
+    ): Result<Unit> {
+        return try {
+            val messageRef = conversationsCollection.document(conversationId)
+                .collection("messages")
+                .document(messageId)
+
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(messageRef)
+                @Suppress("UNCHECKED_CAST")
+                val currentReactions = snapshot.get("reactions") as? Map<String, List<String>> ?: emptyMap()
+                val updatedReactions = currentReactions.toMutableMap()
+                
+                val userList = (updatedReactions[emoji] as? List<String>)?.toMutableList() ?: mutableListOf()
+                
+                if (userList.contains(userId)) {
+                    // Remove reaction
+                    userList.remove(userId)
+                    if (userList.isEmpty()) {
+                        updatedReactions.remove(emoji)
+                    } else {
+                        updatedReactions[emoji] = userList
+                    }
+                } else {
+                    // Add reaction
+                    userList.add(userId)
+                    updatedReactions[emoji] = userList
+                }
+                
+                transaction.update(messageRef, "reactions", updatedReactions)
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepository", "Error toggling reaction: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     // 🗑️ DELETE MESSAGE (Soft Delete)
     suspend fun deleteMessage(conversationId: String, messageId: String): Result<Unit> {
         return try {
@@ -238,6 +333,39 @@ class MessageRepository {
                     )
                 )
                 .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 🗑️ DELETE CONVERSATION (Hard Delete)
+    suspend fun deleteConversation(conversationId: String): Result<Unit> {
+        return try {
+            // 1. Eliminar todos los mensajes de la subcolección
+            val messagesSnapshot = conversationsCollection.document(conversationId)
+                .collection("messages")
+                .get()
+                .await()
+
+            val batch = firestore.batch()
+            var count = 0
+            for (doc in messagesSnapshot.documents) {
+                batch.delete(doc.reference)
+                count++
+                // Firestore permite máximo 500 operaciones por batch
+                if (count >= 450) {
+                    batch.commit().await()
+                    count = 0
+                }
+            }
+            if (count > 0) {
+                batch.commit().await()
+            }
+
+            // 2. Eliminar el documento de la conversación
+            conversationsCollection.document(conversationId).delete().await()
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -290,4 +418,5 @@ class MessageRepository {
             }
         awaitClose { listener.remove() }
     }
+
 }

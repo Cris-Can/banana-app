@@ -1,5 +1,7 @@
 package com.eventos.banana.ui.profile
 
+import androidx.hilt.navigation.compose.hiltViewModel
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,9 +18,9 @@ import com.eventos.banana.ui.util.*
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.eventos.banana.util.LocationHelper
-import com.eventos.banana.viewmodel.ProfileUiState
-import com.eventos.banana.viewmodel.ProfileViewModel
-import com.eventos.banana.viewmodel.SessionViewModel
+import com.eventos.banana.ui.profile.ProfileUiState
+import com.eventos.banana.ui.profile.ProfileViewModel
+import com.eventos.banana.ui.auth.SessionViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.FlowRow
@@ -65,7 +67,8 @@ fun ProfileScreen(
     onProfileViewsClick: () -> Unit = {}, // 👁️ New Feature
     onLeaderboardClick: () -> Unit = {}, // 🏆 Gamification
     onSettingsClick: () -> Unit, // ⚙️ Updated
-    profileViewModel: ProfileViewModel = viewModel()
+    onRatingsClick: (String) -> Unit = {}, // ⭐ New Feature
+    profileViewModel: ProfileViewModel = hiltViewModel()
 ) {
     val profileUiState by sessionViewModel.profileUiState.collectAsState()
     val uiState by profileViewModel.uiState.collectAsState()
@@ -153,6 +156,11 @@ fun ProfileScreen(
             cropImageOptions = com.canhub.cropper.CropImageOptions(
                 imageSourceIncludeCamera = false,
                 imageSourceIncludeGallery = true,
+                activityBackgroundColor = android.graphics.Color.BLACK,
+                toolbarColor = android.graphics.Color.BLACK,
+                toolbarBackButtonColor = android.graphics.Color.WHITE,
+                activityMenuIconColor = android.graphics.Color.WHITE,
+                activityMenuTextColor = android.graphics.Color.WHITE,
                 guidelines = com.canhub.cropper.CropImageView.Guidelines.ON,
                 cropShape = if (isAvatar) com.canhub.cropper.CropImageView.CropShape.OVAL 
                            else com.canhub.cropper.CropImageView.CropShape.RECTANGLE,
@@ -160,16 +168,14 @@ fun ProfileScreen(
                 aspectRatioX = if (isAvatar) 1 else if (isCover) ratioX else 1,
                 aspectRatioY = if (isAvatar) 1 else if (isCover) ratioY else 1,
                 outputCompressQuality = 80,
-                maxCropResultWidth = if (isAvatar) 800 else 1600,
-                maxCropResultHeight = if (isAvatar) 800 else if (isCover) 1600 else 1600,
+                maxCropResultWidth = if (isAvatar) 2048 else 4096,
+                maxCropResultHeight = if (isAvatar) 2048 else 4096,
+                showCropOverlay = true,
                 activityTitle = when {
                     isAvatar -> "Recortar foto de perfil"
                     isCover -> "Recortar portada"
                     else -> "Recortar foto"
-                },
-                toolbarColor = android.graphics.Color.BLACK,
-                activityBackgroundColor = android.graphics.Color.BLACK,
-                toolbarTintColor = android.graphics.Color.WHITE
+                }
             )
         )
         cropLauncher.launch(options)
@@ -205,8 +211,22 @@ fun ProfileScreen(
     ) { padding ->
 
         if (profile == null) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
                 CircularProgressIndicator()
+                Spacer(Modifier.height(16.dp))
+                Text("Cargando perfil...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            
+            // ⏱️ TIMEOUT: If profile doesn't load in 4s, return home
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(4000)
+                if (profile == null) {
+                    onBack() // Redirigir si queda pegado
+                }
             }
         } else {
             Column(
@@ -639,6 +659,7 @@ fun ProfileScreen(
                 ) {
                     // Reputación
                     com.eventos.banana.ui.components.BananaCard(
+                         modifier = Modifier.clickable { onRatingsClick(profile.uid) },
                          containerColor = when {
                             profile.isPerfectAttendee() -> MaterialTheme.colorScheme.tertiaryContainer
                             profile.averageRating >= 4.5 -> MaterialTheme.colorScheme.primaryContainer

@@ -8,7 +8,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.Event
 
-import com.eventos.banana.viewmodel.JoinSubmissionState
+import com.eventos.banana.ui.event.JoinSubmissionState
 
 @Composable
 fun QuestionnaireScreen(

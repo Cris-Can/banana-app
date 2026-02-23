@@ -7,10 +7,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
-class NotificationRepository {
+import javax.inject.Inject
 
-    private val notificationsCollection =
-        FirebaseFirestore.getInstance().collection("notifications")
+class NotificationRepository @Inject constructor(
+    private val firestore: FirebaseFirestore
+) {
+
+    private val notificationsCollection = firestore.collection("notifications")
 
     fun observeNotifications(userId: String): Flow<List<AppNotification>> =
         callbackFlow {
@@ -42,6 +45,7 @@ class NotificationRepository {
             val data = hashMapOf(
                 "id" to doc.id,
                 "userId" to notification.userId,
+                "fromUserId" to notification.fromUserId,
                 "title" to notification.title,
                 "message" to notification.message,
                 "eventId" to notification.eventId,
@@ -64,7 +68,7 @@ class NotificationRepository {
             .get()
             .await()
 
-        val batch = FirebaseFirestore.getInstance().batch()
+        val batch = firestore.batch()
 
         snapshot.documents.forEach { doc ->
             batch.update(doc.reference, "read", true)

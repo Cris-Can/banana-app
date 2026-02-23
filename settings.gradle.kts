@@ -21,4 +21,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Banana"
 include(":app")
+include(":core:ui")
+include(":core:data")
  

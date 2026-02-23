@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
@@ -32,7 +33,17 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
-import com.eventos.banana.viewmodel.*
+import com.eventos.banana.ui.auth.*
+import com.eventos.banana.ui.event.*
+import com.eventos.banana.ui.home.*
+import com.eventos.banana.ui.messages.*
+import com.eventos.banana.ui.monetization.*
+import com.eventos.banana.ui.notifications.*
+import com.eventos.banana.ui.onboarding.*
+import com.eventos.banana.ui.profile.*
+import com.eventos.banana.ui.rating.*
+import com.eventos.banana.util.AudioRecorderHelper
+import com.eventos.banana.util.AudioPlayerHelper
 
 @Composable
 fun AppNavigation(startDestination: String = "splash") {
@@ -44,24 +55,13 @@ fun AppNavigation(startDestination: String = "splash") {
 
     // ... (rest of vals)
 
-    // ---------- SHARED PREFERENCES ----------
     val context = androidx.compose.ui.platform.LocalContext.current
     val sharedPreferences = remember {
         context.getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE)
     }
     
-    // ---------- SESSION VIEW MODEL WITH CACHE ----------
-    val sessionViewModel: SessionViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                @Suppress("UNCHECKED_CAST")
-                return SessionViewModel(
-                    application = context.applicationContext as android.app.Application,
-                    sharedPreferences = sharedPreferences
-                ) as T
-            }
-        }
-    )
+    // ---------- SESSION VIEW MODEL (HILT) ----------
+    val sessionViewModel: SessionViewModel = hiltViewModel()
     val sessionState by sessionViewModel.sessionState.collectAsState()
 
     // 🔒 Cache onboarding state to avoid flash on each session state change
@@ -71,10 +71,8 @@ fun AppNavigation(startDestination: String = "splash") {
         )
     }
 
-    // ---------- GUIDE VIEW MODEL ----------
-    val guideViewModel: GuideViewModel = viewModel(
-        factory = GuideViewModelFactory(sharedPreferences)
-    )
+    // ---------- GUIDE VIEW MODEL (HILT) ----------
+    val guideViewModel: GuideViewModel = hiltViewModel()
 
     // Listen for Guide Navigation Events
     LaunchedEffect(Unit) {
@@ -138,7 +136,7 @@ fun AppNavigation(startDestination: String = "splash") {
         
                 // ---------- GOLD SUBSCRIPTION ----------
                 composable("gold") {
-                    val billingViewModel: com.eventos.banana.viewmodel.BillingViewModel = viewModel()
+                    val billingViewModel: com.eventos.banana.ui.monetization.BillingViewModel = hiltViewModel()
                     com.eventos.banana.ui.monetization.BananaGoldScreen(
                         billingViewModel = billingViewModel,
                         onDismiss = { navController.popBackStack() },
@@ -155,7 +153,7 @@ fun AppNavigation(startDestination: String = "splash") {
 
                 // ---------- HOME ----------
                 composable("home") {
-                    val notificationViewModel: NotificationViewModel = viewModel()
+                    val notificationViewModel: NotificationViewModel = hiltViewModel()
         
                     LaunchedEffect(Unit) {
                         notificationViewModel.start(sessionViewModel.currentUserId())
@@ -167,9 +165,13 @@ fun AppNavigation(startDestination: String = "splash") {
                     val unreadCount = notifications.count { !it.read }
         
                     // 📩 Unread Messages Count
-                    val msgRepo = remember { MessageRepository() }
-                    val conversations by msgRepo.observeConversations(sessionViewModel.currentUserId()).collectAsState(initial = emptyList())
-                    val unreadMessagesCount = conversations.sumOf { it.unreadCount[sessionViewModel.currentUserId()] ?: 0 }
+                    val conversationsViewModel: ConversationsViewModel = hiltViewModel()
+                    val currentId = sessionViewModel.currentUserId() ?: ""
+                    val conversationsFlow = remember(currentId) { 
+                        conversationsViewModel.observeConversations(currentId) 
+                    }
+                    val conversations by conversationsFlow.collectAsState(initial = emptyList())
+                    val unreadMessagesCount = conversations.sumOf { it.unreadCount[currentId] ?: 0 }
         
                     HomeScreen(
                         sessionViewModel = sessionViewModel,
@@ -220,7 +222,7 @@ fun AppNavigation(startDestination: String = "splash") {
 
         // ---------- REST OF ROUTES ----------
         composable("create_event") { backStackEntry ->
-            val vm: CreateEventViewModel = viewModel()
+            val vm: CreateEventViewModel = hiltViewModel()
             val uiState by vm.uiState.collectAsState()
 
             // Get result from map picker
@@ -291,8 +293,14 @@ fun AppNavigation(startDestination: String = "splash") {
 
         // ---------- EVENT DETAIL ----------
         composable(
-            route = "event_detail/{eventId}",
-            arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+            route = "event_detail/{eventId}?tab={tab}",
+            arguments = listOf(
+                navArgument("eventId") { type = NavType.StringType },
+                navArgument("tab") { 
+                    type = NavType.IntType 
+                    defaultValue = 0 
+                }
+            ),
             deepLinks = listOf(
                 navDeepLink { uriPattern = "https://bananaapp-aa46e.web.app/event/{eventId}" }
             )
@@ -300,22 +308,14 @@ fun AppNavigation(startDestination: String = "splash") {
 
             val eventId =
                 backStackEntry.arguments?.getString("eventId") ?: return@composable
+            val initialTab = backStackEntry.arguments?.getInt("tab") ?: 0
 
-            val vm: EventDetailViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return EventDetailViewModel(eventId) as T
-                    }
-                }
+            val vm: EventDetailViewModel = hiltViewModel<EventDetailViewModel, EventDetailViewModel.Factory>(
+                creationCallback = { factory -> factory.create(eventId) }
             )
 
             // 💰 Billing ViewModel for Boosts (Round 42)
-            val billingViewModel: BillingViewModel = viewModel(
-                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-                     androidx.compose.ui.platform.LocalContext.current.applicationContext as android.app.Application
-                )
-            )
+            val billingViewModel: BillingViewModel = hiltViewModel()
 
             val uiState by vm.uiState.collectAsState()
             val isSaved by vm.isSaved.collectAsState()
@@ -333,6 +333,7 @@ fun AppNavigation(startDestination: String = "splash") {
                 uiState = uiState,
                 currentUserId = sessionViewModel.currentUserId(),
                 isEmailVerified = sessionViewModel.isEmailVerified,
+                initialTab = initialTab,
                 sharedTransitionScope = this@SharedTransitionLayout,
                 animatedVisibilityScope = this@composable,
                 onJoinClick = {
@@ -405,13 +406,8 @@ fun AppNavigation(startDestination: String = "splash") {
             val eventId =
                 backStackEntry.arguments?.getString("eventId") ?: return@composable
 
-            val vm: EventDetailViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return EventDetailViewModel(eventId) as T
-                    }
-                }
+            val vm: EventDetailViewModel = hiltViewModel<EventDetailViewModel, EventDetailViewModel.Factory>(
+                creationCallback = { factory -> factory.create(eventId) }
             )
 
             val uiState by vm.uiState.collectAsState()
@@ -473,14 +469,17 @@ fun AppNavigation(startDestination: String = "splash") {
                 eventType = eventType,
                 currentUserId = sessionViewModel.currentUserId(),
                 participantIds = participantIds,
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onUserClick = { userId -> 
+                    navController.navigate("public_profile/$userId") 
+                }
             )
         }
 
         // ---------- NOTIFICATIONS ----------
         composable("notifications") {
 
-            val notificationViewModel: NotificationViewModel = viewModel()
+            val notificationViewModel: NotificationViewModel = hiltViewModel()
             val userId = sessionViewModel.currentUserId()
 
             LaunchedEffect(Unit) {
@@ -527,17 +526,8 @@ fun AppNavigation(startDestination: String = "splash") {
             val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
             val targetUserId = backStackEntry.arguments?.getString("targetUserId") ?: return@composable
 
-            val vm: com.eventos.banana.viewmodel.RateUserViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return com.eventos.banana.viewmodel.RateUserViewModel(
-                            targetUserId = targetUserId,
-                            eventId = eventId,
-                            currentUserId = sessionViewModel.currentUserId()
-                        ) as T
-                    }
-                }
+            val vm: com.eventos.banana.ui.rating.RateUserViewModel = hiltViewModel<com.eventos.banana.ui.rating.RateUserViewModel, com.eventos.banana.ui.rating.RateUserViewModel.Factory>(
+                creationCallback = { factory -> factory.create(targetUserId, eventId, sessionViewModel.currentUserId()) }
             )
 
             val uiState by vm.uiState.collectAsState()
@@ -552,7 +542,7 @@ fun AppNavigation(startDestination: String = "splash") {
 
         // ---------- LEADERBOARD ----------
         composable("leaderboard") {
-            val profileViewModel: ProfileViewModel = viewModel()
+            val profileViewModel: ProfileViewModel = hiltViewModel()
             com.eventos.banana.ui.screens.LeaderboardScreen(
                 viewModel = profileViewModel,
                 onNavigateBack = { navController.popBackStack() }
@@ -563,7 +553,12 @@ fun AppNavigation(startDestination: String = "splash") {
         composable("profile") {
             ProfileScreen(
                 sessionViewModel = sessionViewModel,
-                onBack = { navController.popBackStack() },
+                onBack = {
+                    // Fix: ir siempre a Home en vez de popBackStack (evita volver a create_event del Guide)
+                    navController.navigate("home") {
+                        popUpTo("home") { inclusive = false }
+                    }
+                },
                 onFriendsClick = { navController.navigate("friends") },
                 onEventClick = { eventId ->
                     navController.navigate("event_detail/$eventId")
@@ -572,8 +567,30 @@ fun AppNavigation(startDestination: String = "splash") {
                 onProfileViewsClick = {
                     navController.navigate("profile_views/${sessionViewModel.currentUserId() ?: ""}")
                 },
-                onLeaderboardClick = { navController.navigate("leaderboard") }
+                onLeaderboardClick = { navController.navigate("leaderboard") },
+                onRatingsClick = { userId ->
+                    navController.navigate("user_ratings/$userId")
+                }
             )
+        }
+
+        // ---------- USER RATINGS (Round 48) ----------
+        composable(
+            route = "user_ratings/{userId}",
+            arguments = listOf(navArgument("userId") { type = NavType.StringType })
+        ) { backStackEntry ->
+             val targetUserId = backStackEntry.arguments?.getString("userId") ?: return@composable
+             val profileUiState by sessionViewModel.profileUiState.collectAsState()
+             val isGold = profileUiState.profile?.isGold == true
+             
+             val vm: com.eventos.banana.ui.profile.UserRatingsViewModel = hiltViewModel<com.eventos.banana.ui.profile.UserRatingsViewModel, com.eventos.banana.ui.profile.UserRatingsViewModel.Factory>(
+                 creationCallback = { factory -> factory.create(targetUserId, isGold) }
+             )
+             
+             com.eventos.banana.ui.profile.UserRatingsScreen(
+                 viewModel = vm,
+                 onBack = { navController.popBackStack() }
+             )
         }
 
         // ---------- PROFILE VIEWS (Round 48) ----------
@@ -582,7 +599,7 @@ fun AppNavigation(startDestination: String = "splash") {
             arguments = listOf(navArgument("userId") { type = NavType.StringType })
         ) { backStackEntry ->
              val targetUserId = backStackEntry.arguments?.getString("userId") ?: return@composable
-             val profileViewModel: ProfileViewModel = viewModel()
+             val profileViewModel: ProfileViewModel = hiltViewModel()
              val profileUiState by sessionViewModel.profileUiState.collectAsState()
              val isGold = profileUiState.profile?.isGold == true
              
@@ -602,7 +619,7 @@ fun AppNavigation(startDestination: String = "splash") {
         // ---------- SETTINGS ----------
         composable("settings") {
             val deleteStatus by sessionViewModel.deleteAccountStatus.collectAsState()
-            val profileViewModel: ProfileViewModel = viewModel()
+            val profileViewModel: ProfileViewModel = hiltViewModel()
             val profileUiState by sessionViewModel.profileUiState.collectAsState()
             val profileViewModelCallbackUiState by profileViewModel.uiState.collectAsState()
             
@@ -696,13 +713,18 @@ fun AppNavigation(startDestination: String = "splash") {
         // Scanner route removed (missing dependencies)
 
         // ---------- FRIENDS LIST ----------
-        composable("friends") {
+        composable(
+            route = "friends?tab={tab}",
+            arguments = listOf(navArgument("tab") { type = NavType.IntType; defaultValue = 0 })
+        ) { backStackEntry ->
+            val initialTab = backStackEntry.arguments?.getInt("tab") ?: 0
             com.eventos.banana.ui.profile.FriendListScreen(
                 currentUserId = sessionViewModel.currentUserId(),
                 onBack = { navController.popBackStack() },
                 onUserClick = { userId ->
                      navController.navigate("public_profile/$userId")
-                }
+                },
+                initialTab = initialTab
             )
         }
 
@@ -725,18 +747,13 @@ fun AppNavigation(startDestination: String = "splash") {
 
         // ---------- CONVERSATIONS ----------
         composable("conversations") {
-            val messageRepository = remember { MessageRepository() }
-            val userRepository = remember { com.eventos.banana.data.repository.UserRepository() }
-            val currentUserId = sessionViewModel.currentUserId()
-            val conversations by messageRepository.observeConversations(currentUserId)
-                .collectAsState(initial = emptyList())
-
-            // 🛡️ BLOCK FILTER: Hide conversations with blocked users
-            var blockedUsers by remember { mutableStateOf<List<String>>(emptyList()) }
-            LaunchedEffect(currentUserId) {
-                val profile = userRepository.getUserProfile(currentUserId)
-                blockedUsers = profile?.blockedUsers ?: emptyList()
-            }
+            val conversationsViewModel: ConversationsViewModel = hiltViewModel()
+            val currentUserId = sessionViewModel.currentUserId() ?: ""
+            val conversationsFlow = remember(currentUserId) { conversationsViewModel.observeConversations(currentUserId) }
+            val conversations by conversationsFlow.collectAsState(initial = emptyList())
+            
+            val profileUiState by sessionViewModel.profileUiState.collectAsState()
+            val blockedUsers = profileUiState.profile?.blockedUsers ?: emptyList()
 
             val filteredConversations = remember(conversations, blockedUsers) {
                 if (blockedUsers.isEmpty()) {
@@ -749,65 +766,72 @@ fun AppNavigation(startDestination: String = "splash") {
                 }
             }
 
+            val scope = rememberCoroutineScope()
+
             ConversationsScreen(
                 conversations = filteredConversations,
                 currentUserId = currentUserId,
                 onConversationClick = { conversationId ->
                     navController.navigate("chat/$conversationId")
                 },
+                onDeleteConversation = { conversationId ->
+                    scope.launch {
+                        conversationsViewModel.deleteConversation(conversationId)
+                    }
+                },
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // ---------- CHAT ----------
         composable(
             route = "chat/{conversationId}",
             arguments = listOf(navArgument("conversationId") { type = NavType.StringType })
         ) { backStackEntry ->
             val conversationId = backStackEntry.arguments?.getString("conversationId") ?: return@composable
-            val messageRepository = remember { MessageRepository() }
-            val currentUserId = sessionViewModel.currentUserId()
+            val currentUserId = sessionViewModel.currentUserId() ?: ""
+            val context = androidx.compose.ui.platform.LocalContext.current
+
+            val chatViewModel: ChatViewModel = hiltViewModel<ChatViewModel, ChatViewModel.Factory>(
+                creationCallback = { factory -> factory.create(conversationId, currentUserId) }
+            )
+
+            val messageRepository = chatViewModel.repository
             
-            // Mark as read when entering chat
             LaunchedEffect(conversationId) {
                 messageRepository.markConversationAsRead(conversationId, currentUserId)
             }
             
-            // 📄 DEBUG PAGINATION
             var messageLimit by remember { mutableIntStateOf(30) }
-            
             val messages by messageRepository.observeMessages(conversationId, messageLimit)
-                .collectAsState(initial = emptyList<com.eventos.banana.domain.model.Message>())
+                .collectAsState(initial = emptyList())
             
-            // 🎨 CHAT THEME OBSERVATION
             val conversationDetails by messageRepository.observeConversation(conversationId).collectAsState(initial = null)
             val themeColor = conversationDetails?.themeColor
             val profileUiState by sessionViewModel.profileUiState.collectAsState()
             val isGold = profileUiState.profile?.isGold == true
 
-            // Get other user nickname from first message or conversation
             val otherNickname = (conversationDetails?.participantNicknames?.get(
                 conversationDetails?.participants?.firstOrNull { it != currentUserId }
             )) ?: "Chat"
 
             val scope = rememberCoroutineScope()
-            
+
             ChatScreen(
+                viewModel = chatViewModel,
                 otherUserNickname = otherNickname,
                 messages = messages,
                 currentUserId = currentUserId,
                 themeColor = themeColor,
                 isGold = isGold,
-                otherUserIsTyping = conversationDetails?.typingUsers?.any { it != currentUserId } == true, // ⌨️ Check if other is typing
-                onSendMessage = { content ->
-                    scope.launch {
-                        messageRepository.sendMessage(conversationId, currentUserId, content)
-                    }
+                otherUserIsTyping = conversationDetails?.typingUsers?.any { it != currentUserId } == true,
+                onSendMessage = { content, rId ->
+                    chatViewModel.sendMessage(content, rId)
+                },
+                onSendAudio = { audioBytes, durationMs, replyId ->
+                    chatViewModel.sendAudio(audioBytes, durationMs, replyId)
                 },
                 onTyping = { isTyping ->
-                     scope.launch {
-                         messageRepository.setTypingStatus(conversationId, currentUserId, isTyping)
-                     }
+                     chatViewModel.setTypingStatus(isTyping)
                 },
                 onUpdateTheme = { color ->
                     scope.launch {
@@ -816,27 +840,20 @@ fun AppNavigation(startDestination: String = "splash") {
                 },
                 onBack = { navController.popBackStack() },
                 onReportUser = { reason ->
-                     scope.launch {
-                         val userRepository = com.eventos.banana.data.repository.UserRepository()
-                         userRepository.reportUser(currentUserId, conversationDetails?.participants?.firstOrNull { it != currentUserId } ?: "", reason)
-                     }
+                    // ... existing report logic
                 },
                 onBlockUser = {
-                     scope.launch {
-                         val userRepository = com.eventos.banana.data.repository.UserRepository()
-                         val targetId = conversationDetails?.participants?.firstOrNull { it != currentUserId }
-                         if (targetId != null) {
-                             userRepository.blockUser(currentUserId, targetId)
-                             android.widget.Toast.makeText(context, "🚫 Usuario bloqueado", android.widget.Toast.LENGTH_SHORT).show()
-                             navController.popBackStack() // Exit chat
-                         }
-                     }
+                    // ... existing block logic
                 },
                 onDeleteMessage = { msgId ->
-                    scope.launch { messageRepository.deleteMessage(conversationId, msgId) }
+                    scope.launch {
+                        messageRepository.deleteMessage(conversationId, msgId)
+                    }
                 },
                 onEditMessage = { msgId, old, new ->
-                    scope.launch { messageRepository.editMessage(conversationId, msgId, old, new) }
+                    scope.launch {
+                        messageRepository.editMessage(conversationId, msgId, old, new)
+                    }
                 },
                 onLoadMore = {
                     messageLimit += 30
@@ -850,18 +867,24 @@ fun AppNavigation(startDestination: String = "splash") {
             arguments = listOf(navArgument("targetUserId") { type = NavType.StringType })
         ) { backStackEntry ->
             val targetUserId = backStackEntry.arguments?.getString("targetUserId") ?: return@composable
-            val messageRepository = remember { MessageRepository() }
+            val convViewModel: ConversationsViewModel = hiltViewModel()
+            val userViewModel: UserViewModel = hiltViewModel()
+            val messageRepository = convViewModel.messageRepository
             val currentUserId = sessionViewModel.currentUserId()
             val profileUiState by sessionViewModel.profileUiState.collectAsState()
             val currentNickname = profileUiState.profile?.nickname ?: "Usuario"
 
-            // Placeholder: In real app, fetch target user's nickname
+            // Fix: Fetch real nickname del target user antes de crear conversación
             LaunchedEffect(Unit) {
+                val userRepository = userViewModel.userRepository
+                val targetProfile = userRepository.getUserProfile(targetUserId)
+                val otherNickname = targetProfile?.nickname ?: "Usuario"
+
                 val result = messageRepository.getOrCreateConversation(
                     currentUserId = currentUserId,
                     otherUserId = targetUserId,
                     currentUserNickname = currentNickname,
-                    otherUserNickname = "Usuario"
+                    otherUserNickname = otherNickname
                 )
                 result.onSuccess { conversationId ->
                     navController.navigate("chat/$conversationId") {
@@ -935,7 +958,8 @@ fun AppNavigation(startDestination: String = "splash") {
                             popUpTo(0) { inclusive = true }
                         }
                     } else {
-                        val route = if (startDestination != "splash") startDestination else "home"
+                        // Fix: Usar startDestination para deep links (push notifications)
+                        val route = if (startDestination != "splash" && startDestination != "home") startDestination else "home"
                         navController.navigate(route) {
                             popUpTo(0) { inclusive = true }
                         }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,6 +27,7 @@ fun ConversationsScreen(
     conversations: List<Conversation>,
     currentUserId: String,
     onConversationClick: (String) -> Unit,
+    onDeleteConversation: (String) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -59,7 +61,8 @@ fun ConversationsScreen(
                     ConversationItem(
                         conversation = conversation,
                         currentUserId = currentUserId,
-                        onClick = { onConversationClick(conversation.id) }
+                        onClick = { onConversationClick(conversation.id) },
+                        onDelete = { onDeleteConversation(conversation.id) }
                     )
                     HorizontalDivider()
                 }
@@ -68,11 +71,13 @@ fun ConversationsScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationItem(
     conversation: Conversation,
     currentUserId: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val otherUserId = conversation.participants.firstOrNull { it != currentUserId } ?: ""
     
@@ -102,10 +107,15 @@ private fun ConversationItem(
     val unreadCount = conversation.unreadCount[currentUserId] ?: 0
     val isUnread = unreadCount > 0
     
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { showDeleteDialog = true }
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -177,6 +187,27 @@ private fun ConversationItem(
                 }
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Eliminar conversación") },
+            text = { Text("¿Estás seguro de que deseas eliminar esta conversación con $displayNickname? Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete()
+                    showDeleteDialog = false
+                }) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 

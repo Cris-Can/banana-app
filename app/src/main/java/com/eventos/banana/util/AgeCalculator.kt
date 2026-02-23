@@ -10,7 +10,7 @@ object AgeCalculator {
      * @return Edad en años completos
      */
     fun calculateAge(birthDateMillis: Long): Int {
-        val birthCalendar = Calendar.getInstance().apply {
+        val birthCalendar = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
             timeInMillis = birthDateMillis
         }
         

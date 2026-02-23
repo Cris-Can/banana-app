@@ -6,17 +6,18 @@ import com.eventos.banana.domain.model.EncounterMethod
 import com.eventos.banana.domain.model.EncounterLocation
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
 /**
  * Repository para gestionar "encuentros" (confirmación de que dos usuarios se conocieron físicamente)
  * Usado para validar que solo se puedan puntuar personas con quien realmente interactuaste.
  */
-class EncounterRepository {
+class EncounterRepository @Inject constructor(
+    private val db: FirebaseFirestore
+) {
 
-    private val db = FirebaseFirestore.getInstance()
     private val encountersCollection = db.collection("encounters")
     private val checkinsCollection = db.collection("event_checkins")
-    private val userRepository = UserRepository() // 🆕
 
     companion object {
         private const val TAG = "EncounterRepository"
@@ -37,11 +38,6 @@ class EncounterRepository {
         location: EncounterLocation? = null
     ): Result<String> {
         return try {
-            // Prevenir auto-encuentro
-            if (userId1 == userId2) {
-                return Result.failure(Exception("No puedes registrar encuentro contigo mismo"))
-            }
-
             // Crear ID único (ordenado alfabéticamente para evitar duplicados)
             val encounterId = Encounter.createId(eventId, userId1, userId2)
             
@@ -65,20 +61,10 @@ class EncounterRepository {
 
             encountersCollection.document(encounterId).set(encounter.toMap()).await()
             
-            // 📊 STATS: Increment attendance for both users IF it's their first interaction/check-in for this event
-            // Note: Optimally we check if they already 'attended' this event via check-in.
-            // For simplicity in this task, we rely on recordCheckIn primarily for the stat, 
-            // OR we could check here. But let's stick to recordCheckIn for the "Official Attendance".
-            // Actually, let's auto-record check-in for both? 
-            // User requested "cuantos asiste de verdad". Interacting is attending.
-            // Let's call recordCheckIn() for both users here safely.
-            recordCheckIn(eventId, userId1)
-            recordCheckIn(eventId, userId2)
-            
-            Log.d(TAG, "Encounter recorded: $userId1 <-> $userId2 via $method")
+            Log.d(TAG, "Encounter recorded in DB: $encounterId")
             Result.success(encounterId)
         } catch (e: Exception) {
-            Log.e(TAG, "Error recording encounter", e)
+            Log.e(TAG, "Error recording encounter in Firestore", e)
             Result.failure(e)
         }
     }
@@ -90,36 +76,26 @@ class EncounterRepository {
     /**
      * Registrar que un usuario estuvo en el evento (Check-in GPS individual)
      */
-    suspend fun recordCheckIn(
-        eventId: String,
-        userId: String
-    ): Result<Unit> {
+    suspend fun recordCheckIn(eventId: String, userId: String): Result<Unit> {
         return try {
             val checkInId = "${eventId}_${userId}"
-            val docRef = checkinsCollection.document(checkInId)
-            
-            // 1. Check if exists
-            val snapshot = docRef.get().await()
-            val isNewCheckIn = !snapshot.exists()
-            
-            val data = hashMapOf(
+            val existing = checkinsCollection.document(checkInId).get().await()
+            if (existing.exists()) {
+                Log.d(TAG, "Check-in already exists for $userId at $eventId")
+                return Result.success(Unit)
+            }
+
+            val data = mapOf(
                 "eventId" to eventId,
                 "userId" to userId,
                 "timestamp" to System.currentTimeMillis()
             )
+            checkinsCollection.document(checkInId).set(data).await()
             
-            docRef.set(data).await()
-            
-            // 2. Increment stats if new
-            if (isNewCheckIn) {
-                userRepository.incrementEventsAttended(userId)
-                Log.d(TAG, "Incremented attendance stat for $userId")
-            }
-            
-            Log.d(TAG, "GPS Check-in recorded for user $userId at event $eventId")
+            Log.d(TAG, "Check-in recorded for $userId at $eventId")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Error recording GPS check-in", e)
+            Log.e(TAG, "Error recording check-in", e)
             Result.failure(e)
         }
     }

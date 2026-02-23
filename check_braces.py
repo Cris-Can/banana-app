@@ -25,4 +25,4 @@ def check_braces(filepath):
     except Exception as e:
         print(f"Error: {e}")
 
-check_braces(r"app\src\main\java\com\eventos\banana\ui\profile\ProfileScreen.kt")
+check_braces(r"app\src\main\java\com\eventos\banana\ui\home\HomeScreen.kt")

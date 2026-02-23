@@ -16,13 +16,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 
 import android.widget.Toast
-import com.eventos.banana.utils.NetworkUtils
+import com.eventos.banana.util.NetworkUtils
 
 import androidx.activity.enableEdgeToEdge
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : FragmentActivity() {
 
     private val requestLocationPermission =
@@ -35,8 +36,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // 🔍 DIAGNÓSTICO: GMSS Security Patch (Background)
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        // 🔍 DIAGNÓSTICO: GMSS Security Patch (Background) - FIX: Usando lifecycleScope para evitar memory leaks (Paso 4 Auditoría)
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 com.google.android.gms.security.ProviderInstaller.installIfNeeded(this@MainActivity)
             } catch (e: Exception) {
@@ -63,16 +64,23 @@ class MainActivity : FragmentActivity() {
             android.util.Log.e("BANANA_DIAG", "Failed to init App Check", e)
         }
         
-        // 📺 ADMOB INITIALIZATION (Removed Duplicate: Already in BananaApp)
+        setupContent(intent)
+    }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        setupContent(intent)
+    }
+
+    private fun setupContent(intent: android.content.Intent?) {
         // 🔍 DIAGNÓSTICO DE RED MEJORADO
-        NetworkUtils.checkRealConnectivity(this) { isConnected ->
-             android.util.Log.e("BANANA_DIAG", "Real Internet Access: $isConnected")
-             if (!isConnected) {
-                 runOnUiThread {
-                     Toast.makeText(this, "⚠️ WiFi conectado pero SIN INTERNET real (Posible fallo DNS)", Toast.LENGTH_LONG).show()
-                 }
-             }
+        lifecycleScope.launch {
+            val isConnected = NetworkUtils.checkRealConnectivity(this@MainActivity)
+            android.util.Log.e("BANANA_DIAG", "Real Internet Access: $isConnected")
+            if (!isConnected) {
+                Toast.makeText(this@MainActivity, "⚠️ WiFi conectado pero SIN INTERNET real", Toast.LENGTH_LONG).show()
+            }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -86,21 +94,58 @@ class MainActivity : FragmentActivity() {
         )
 
 
-        // 🔔 Handle Notification Intent
+        // 🔔 Handle Notification Intent (Deep Linking)
         var initialRoute: String? = null
-        val notifType = intent.getStringExtra("type")
-        val fromUserId = intent.getStringExtra("fromUserId") // 👈 Extract Sender ID
+        val notifType = intent?.getStringExtra("type")
+        val conversationId = intent?.getStringExtra("conversationId") ?: intent?.getStringExtra("eventId")
 
-        if (notifType == "FRIEND_REQUEST" || notifType == "FRIEND_ACCEPTED") {
-            initialRoute = if (!fromUserId.isNullOrBlank()) {
-                "public_profile/$fromUserId" // ✅ Go to sender's profile
-            } else {
-                "friends" // Fallback
+        when (notifType) {
+            "FRIEND_REQUEST" -> {
+                initialRoute = "friends?tab=1" // Tab de solicitudes
+            }
+            "FRIEND_ACCEPTED" -> {
+                initialRoute = "friends?tab=0" // Tab de amigos
+            }
+            "NEW_MESSAGE" -> {
+                val chatId = intent?.getStringExtra("conversationId")
+                if (!chatId.isNullOrBlank()) {
+                    initialRoute = "chat/$chatId"
+                }
+            }
+            "JOIN_REQUEST_SENT" -> {
+                // Ir al evento para decidir si aceptar/rechazar
+                val evtId = intent?.getStringExtra("eventId")
+                if (!evtId.isNullOrBlank()) {
+                    initialRoute = "event_detail/$evtId"
+                } else {
+                    initialRoute = "notifications"
+                }
+            }
+            "PROFILE_VIEW", "JOIN_REJECTED", "REMOVED_FROM_EVENT" -> {
+                initialRoute = "notifications"
+            }
+            "EVENT_UPDATE" -> {
+                // Mensaje en el muro → abrir directamente el tab "Muro"
+                val evtId = intent?.getStringExtra("eventId")
+                if (!evtId.isNullOrBlank()) {
+                    initialRoute = "event_detail/$evtId?tab=1"
+                } else {
+                    initialRoute = "notifications"
+                }
+            }
+            "JOIN_APPROVED", "EVENT_CREATED", "EVENT_CANCELLED", "EVENT_CLOSED" -> {
+                // Eventos generales → abrir tab "Detalles"
+                val evtId = intent?.getStringExtra("eventId")
+                if (!evtId.isNullOrBlank()) {
+                    initialRoute = "event_detail/$evtId"
+                } else {
+                    initialRoute = "notifications"
+                }
             }
         }
 
         setContent {
-            val sessionViewModel: com.eventos.banana.viewmodel.SessionViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+            val sessionViewModel: com.eventos.banana.ui.auth.SessionViewModel = androidx.hilt.navigation.compose.hiltViewModel()
             val profileUiState by sessionViewModel.profileUiState.collectAsState()
             
             // Default to BANANA if not set or loading
@@ -112,7 +157,7 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(startDestination = if (initialRoute == "profile") "profile" else "splash")
+                    AppNavigation(startDestination = initialRoute ?: "splash")
                 }
             }
         }

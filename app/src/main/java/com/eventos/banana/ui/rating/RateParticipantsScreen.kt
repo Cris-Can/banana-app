@@ -163,6 +163,7 @@ fun RateParticipantsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ParticipantRatingCard(
     user: UserProfile,

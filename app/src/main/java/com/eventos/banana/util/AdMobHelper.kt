@@ -13,8 +13,8 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
 object AdMobHelper {
     private const val TAG = "AdMobHelper"
-    // PRODUCTION ID for Rewarded Ads
-    private const val AD_UNIT_ID = "ca-app-pub-5515224074639337/9220208729"
+    // Ad Unit ID is injected via BuildConfig (dev=test / prod=real)
+    private val AD_UNIT_ID = com.eventos.banana.BuildConfig.ADMOB_REWARDED_ID
 
     private var rewardedAd: RewardedAd? = null
     private var isAdLoading = false

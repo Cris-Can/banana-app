@@ -53,4 +53,12 @@ object AppModule {
     @Singleton
     fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage = 
         com.google.firebase.storage.FirebaseStorage.getInstance()
+
+    @ApplicationScope
+    @Provides
+    @Singleton
+    fun provideApplicationScope(): kotlinx.coroutines.CoroutineScope =
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+        )
 }

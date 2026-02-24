@@ -55,3 +55,10 @@
 # Keep Kotlin serialization (if used)
 -keepattributes *Annotation*
 -keep class kotlin.Metadata { *; }
+
+# 🔒 Strip debug logs in production (security + performance)
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

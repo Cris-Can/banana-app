@@ -75,6 +75,7 @@ object RepositoryModule {
         @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
         userRepository: UserRepository,
         authRepository: AuthRepository,
-        eventRepository: EventRepository
-    ): com.eventos.banana.data.repository.BillingRepository = com.eventos.banana.data.repository.BillingRepository(context, userRepository, authRepository, eventRepository)
+        eventRepository: EventRepository,
+        @ApplicationScope appScope: kotlinx.coroutines.CoroutineScope
+    ): com.eventos.banana.data.repository.BillingRepository = com.eventos.banana.data.repository.BillingRepository(context, userRepository, authRepository, eventRepository, appScope)
 }

@@ -18,7 +18,8 @@ class BillingRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val userRepository: UserRepository,
     private val authRepository: com.eventos.banana.data.repository.AuthRepository,
-    private val eventRepository: com.eventos.banana.data.repository.EventRepository
+    private val eventRepository: com.eventos.banana.data.repository.EventRepository,
+    @com.eventos.banana.di.ApplicationScope private val appScope: CoroutineScope
 ) : PurchasesUpdatedListener {
 
     private val _billingSetupComplete = MutableStateFlow(false)
@@ -174,13 +175,13 @@ class BillingRepository @Inject constructor(
                 billingClient.acknowledgePurchase(acknowledgePurchaseParams) { billingResult ->
                     if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                         // Grant entitlement
-                         CoroutineScope(Dispatchers.IO).launch {
+                         appScope.launch {
                             grantEntitlement(purchase)
                         }
                     }
                 }
             } else {
-                 CoroutineScope(Dispatchers.IO).launch {
+                 appScope.launch {
                     grantEntitlement(purchase)
                 }
             }
@@ -220,7 +221,7 @@ class BillingRepository @Inject constructor(
                     .addOnFailureListener { e ->
                         timber.log.Timber.e(e, "Server validation failed for $productId. Applying local fallback.")
                         // Fallback: grant locally if server is unreachable
-                        CoroutineScope(Dispatchers.IO).launch {
+                        appScope.launch {
                             grantEntitlementLocalFallback(purchase, productId, uid)
                         }
                     }
@@ -263,7 +264,7 @@ class BillingRepository @Inject constructor(
         ) { billingResult, purchases -> 
              if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                  val hasGold = purchases.any { it.products.contains(SUB_BANANA_GOLD) && it.purchaseState == Purchase.PurchaseState.PURCHASED }
-                 CoroutineScope(Dispatchers.IO).launch {
+                 appScope.launch {
                      val uid = authRepository.currentUid()
                      if (uid != null) {
                         // 🛡️ PROTECTION: Don't downgrade Founders (force server read)

@@ -60,10 +60,14 @@ android {
             dimension = "env"
             versionNameSuffix = "-dev"
             manifestPlaceholders["appName"] = "Banana Dev"
+            // Google's official test Rewarded Ad ID
+            buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
         }
         create("prod") {
             dimension = "env"
             manifestPlaceholders["appName"] = "Banana"
+            // Real production Rewarded Ad ID
+            buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-5515224074639337/9220208729\"")
         }
     }
 

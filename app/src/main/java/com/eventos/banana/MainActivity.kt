@@ -83,15 +83,31 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        // 🔔 Request Notification Permission (Android 13+) — with rationale check
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestNotificationPermission.launch(
-                Manifest.permission.POST_NOTIFICATIONS
-            )
+            val notifPerm = Manifest.permission.POST_NOTIFICATIONS
+            when {
+                androidx.core.content.ContextCompat.checkSelfPermission(this, notifPerm) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED -> { /* Already granted */ }
+                shouldShowRequestPermissionRationale(notifPerm) -> {
+                    Toast.makeText(this, "Banana necesita notificaciones para avisarte de eventos y mensajes", Toast.LENGTH_LONG).show()
+                    requestNotificationPermission.launch(notifPerm)
+                }
+                else -> requestNotificationPermission.launch(notifPerm)
+            }
         }
 
-        requestLocationPermission.launch(
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
+        // 📍 Request Location Permission — with rationale check
+        val locPerm = Manifest.permission.ACCESS_FINE_LOCATION
+        when {
+            androidx.core.content.ContextCompat.checkSelfPermission(this, locPerm) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED -> { /* Already granted */ }
+            shouldShowRequestPermissionRationale(locPerm) -> {
+                Toast.makeText(this, "Banana usa tu ubicación para mostrarte eventos cercanos", Toast.LENGTH_LONG).show()
+                requestLocationPermission.launch(locPerm)
+            }
+            else -> requestLocationPermission.launch(locPerm)
+        }
 
 
         // 🔔 Handle Notification Intent (Deep Linking)

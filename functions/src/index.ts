@@ -1,5 +1,6 @@
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
-
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { google } from "googleapis";
 
 import * as admin from "firebase-admin";
 
@@ -583,3 +584,106 @@ export const onEventCreatedValidation = onDocumentCreated(
     }
   }
 );
+
+
+/**
+ * =====================================================
+ * 🛡️ C2 — SERVER-SIDE PURCHASE VALIDATION
+ * Callable function invoked by the Android client
+ * after a purchase is acknowledged.
+ * Validates the purchase token with Google Play API
+ * and only then grants the entitlement in Firestore.
+ * =====================================================
+ */
+export const validateAndGrantPurchase = onCall(async (request) => {
+  // 1. Auth check
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const uid = request.auth.uid;
+
+  // 2. Extract params
+  const { purchaseToken, productId, packageName, eventId } = request.data;
+  if (!purchaseToken || !productId || !packageName) {
+    throw new HttpsError("invalid-argument", "Missing purchaseToken, productId, or packageName.");
+  }
+
+  const db = admin.firestore();
+
+  try {
+    // 3. Get Google Play Developer API access via default service account
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+    });
+    const playApi = google.androidpublisher({ version: "v3", auth });
+
+    // 4. Validate based on product type
+    const SUBSCRIPTION_IDS = ["banana_plus_monthly"];
+    const CONSUMABLE_IDS = ["event_boost_24h"];
+
+    if (SUBSCRIPTION_IDS.includes(productId)) {
+      // ---- SUBSCRIPTION ----
+      const subResponse = await playApi.purchases.subscriptions.get({
+        packageName,
+        subscriptionId: productId,
+        token: purchaseToken,
+      });
+
+      const paymentState = subResponse.data.paymentState;
+      // paymentState: 0=pending, 1=received, 2=free trial, 3=deferred
+      if (paymentState === undefined || (paymentState !== 1 && paymentState !== 2)) {
+        console.warn(`Subscription payment not confirmed for ${uid}. State: ${paymentState}`);
+        throw new HttpsError("failed-precondition", "Subscription payment not confirmed.");
+      }
+
+      // 5. Grant Gold status
+      await db.collection("users").doc(uid).update({
+        isGold: true,
+        subscriptionType: "GOLD",
+        goldPurchaseToken: purchaseToken,
+        goldUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`✅ Gold granted to ${uid} via server validation.`);
+      return { success: true, type: "subscription", productId };
+
+    } else if (CONSUMABLE_IDS.includes(productId)) {
+      // ---- CONSUMABLE (Boost) ----
+      const prodResponse = await playApi.purchases.products.get({
+        packageName,
+        productId,
+        token: purchaseToken,
+      });
+
+      const purchaseState = prodResponse.data.purchaseState;
+      // purchaseState: 0=purchased, 1=canceled
+      if (purchaseState !== 0) {
+        console.warn(`Product purchase not valid for ${uid}. State: ${purchaseState}`);
+        throw new HttpsError("failed-precondition", "Purchase not valid.");
+      }
+
+      // 6. Apply Boost if eventId provided
+      if (eventId) {
+        const boostDuration = 24 * 60 * 60 * 1000; // 24h
+        const boostUntil = Date.now() + boostDuration;
+        await db.collection("events").doc(eventId).update({
+          isBoosted: true,
+          boostUntil: new Date(boostUntil),
+        });
+        console.log(`✅ Boost applied to event ${eventId} for ${uid}.`);
+      } else {
+        console.warn(`Boost purchased by ${uid} but no eventId provided.`);
+      }
+
+      return { success: true, type: "consumable", productId };
+
+    } else {
+      throw new HttpsError("invalid-argument", `Unknown productId: ${productId}`);
+    }
+
+  } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
+    console.error("Purchase validation error:", error);
+    throw new HttpsError("internal", "Failed to validate purchase with Google Play.");
+  }
+});

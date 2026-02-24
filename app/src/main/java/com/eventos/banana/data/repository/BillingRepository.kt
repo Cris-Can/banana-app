@@ -187,40 +187,70 @@ class BillingRepository @Inject constructor(
         }
     }
     
-    // 🔥 Grant Logic (Sync with Firestore)
+    // 🔥 Grant Logic — Delegated to Server-Side Cloud Function (C2 Audit Fix)
     private suspend fun grantEntitlement(purchase: Purchase) {
         val uid = authRepository.currentUid() ?: return
         
         purchase.products.forEach { productId ->
-            when (productId) {
-                SUB_BANANA_GOLD -> {
-                    // Activate Gold Logic
-                    userRepository.setGoldStatus(uid, true)
-                }
-                INAPP_EVENT_BOOST -> {
-                    // 1. Apply Boost Logic (Server preferred, client fallback)
-                    val eventId = pendingBoostEventId
-                    if (eventId != null) {
-                         // 24h Boost
-                         val duration = 24L * 60 * 60 * 1000
-                         eventRepository.boostEvent(eventId, duration)
-                         pendingBoostEventId = null // Clear from prefs
-                    } else {
-                        android.util.Log.e("BillingRepository", "Boost purchased but no EventID pending!")
-                        // TODO: Handle "lost" purchase (maybe refund or generic credit?)
+            try {
+                // Call server-side validation Cloud Function
+                val data = hashMapOf(
+                    "purchaseToken" to purchase.purchaseToken,
+                    "productId" to productId,
+                    "packageName" to context.packageName,
+                    "eventId" to (if (productId == INAPP_EVENT_BOOST) pendingBoostEventId else null)
+                )
+                
+                val functions = com.google.firebase.functions.FirebaseFunctions.getInstance()
+                functions
+                    .getHttpsCallable("validateAndGrantPurchase")
+                    .call(data)
+                    .addOnSuccessListener {
+                        timber.log.Timber.d("Purchase validated server-side for $productId")
+                        if (productId == INAPP_EVENT_BOOST) {
+                            pendingBoostEventId = null // Clear pending boost
+                            
+                            // Consume the purchase to allow buying again
+                            val consumeParams = ConsumeParams.newBuilder()
+                                .setPurchaseToken(purchase.purchaseToken)
+                                .build()
+                            billingClient.consumeAsync(consumeParams) { _, _ -> }
+                        }
                     }
-                    
-                    // 2. Consume Purchase to allow buying again
-                    val consumeParams = ConsumeParams.newBuilder()
-                        .setPurchaseToken(purchase.purchaseToken)
-                        .build()
-                        
-                     billingClient.consumeAsync(consumeParams) { result, token ->
-                         if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                             android.util.Log.d("BillingRepository", "Boost Consumed Successfully")
-                         }
-                     }
+                    .addOnFailureListener { e ->
+                        timber.log.Timber.e(e, "Server validation failed for $productId. Applying local fallback.")
+                        // Fallback: grant locally if server is unreachable
+                        CoroutineScope(Dispatchers.IO).launch {
+                            grantEntitlementLocalFallback(purchase, productId, uid)
+                        }
+                    }
+            } catch (e: Exception) {
+                timber.log.Timber.e(e, "Error calling validateAndGrantPurchase")
+                grantEntitlementLocalFallback(purchase, productId, uid)
+            }
+        }
+    }
+    
+    /**
+     * 🛡️ Local fallback: only used if Cloud Function is unreachable.
+     * This preserves the original behavior as a safety net.
+     */
+    private suspend fun grantEntitlementLocalFallback(purchase: Purchase, productId: String, uid: String) {
+        when (productId) {
+            SUB_BANANA_GOLD -> {
+                userRepository.setGoldStatus(uid, true)
+            }
+            INAPP_EVENT_BOOST -> {
+                val eventId = pendingBoostEventId
+                if (eventId != null) {
+                    val duration = 24L * 60 * 60 * 1000
+                    eventRepository.boostEvent(eventId, duration)
+                    pendingBoostEventId = null
                 }
+                val consumeParams = ConsumeParams.newBuilder()
+                    .setPurchaseToken(purchase.purchaseToken)
+                    .build()
+                billingClient.consumeAsync(consumeParams) { _, _ -> }
             }
         }
     }

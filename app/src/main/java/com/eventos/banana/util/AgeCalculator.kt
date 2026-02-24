@@ -10,20 +10,11 @@ object AgeCalculator {
      * @return Edad en años completos
      */
     fun calculateAge(birthDateMillis: Long): Int {
-        val birthCalendar = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
-            timeInMillis = birthDateMillis
-        }
-        
-        val today = Calendar.getInstance()
-        
-        var age = today.get(Calendar.YEAR) - birthCalendar.get(Calendar.YEAR)
-        
-        // Ajustar si aún no ha cumplido años este año
-        if (today.get(Calendar.DAY_OF_YEAR) < birthCalendar.get(Calendar.DAY_OF_YEAR)) {
-            age--
-        }
-        
-        return age
+        val birthDate = java.time.Instant.ofEpochMilli(birthDateMillis)
+            .atZone(java.time.ZoneOffset.UTC)
+            .toLocalDate()
+        val today = java.time.LocalDate.now()
+        return java.time.Period.between(birthDate, today).years
     }
     
     /**

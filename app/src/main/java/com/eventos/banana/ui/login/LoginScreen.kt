@@ -299,9 +299,10 @@ fun LoginScreen(
                     
                 // 🎂 FECHA DE NACIMIENTO
                     val dateText = if (birthDate != null) {
-                        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
-                        calendar.timeInMillis = birthDate!!
-                        "📅 ${calendar.get(java.util.Calendar.DAY_OF_MONTH)}/${calendar.get(java.util.Calendar.MONTH) + 1}/${calendar.get(java.util.Calendar.YEAR)}"
+                        // Fix: Material3 DatePicker returns UTC millis — format in UTC to avoid -1 day bug
+                        val instant = java.time.Instant.ofEpochMilli(birthDate!!)
+                        val utcDate = instant.atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                        "📅 ${utcDate.dayOfMonth}/${utcDate.monthValue}/${utcDate.year}"
                     } else {
                         stringResource(com.eventos.banana.R.string.auth_select_birthdate)
                     }

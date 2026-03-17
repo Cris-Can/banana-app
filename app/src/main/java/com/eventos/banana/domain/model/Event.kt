@@ -32,8 +32,6 @@ data class Event(
     val createdAt: Long = 0L,
     val startAt: Long = 0L,
     val endAt: Long = 0L,
-    @get:com.google.firebase.firestore.PropertyName("archived")
-    @set:com.google.firebase.firestore.PropertyName("archived")
     var isArchived: Boolean = false,        // evento ya terminó
     val expiresAt: Long? = null,            // cuándo se elimina definitivamente
 
@@ -65,7 +63,10 @@ data class Event(
     val boostExpiry: Long = 0L,           // Expiración del boost
     
     // 🌍 GEOHASHING (Round 52)
-    val geohash: String? = null           // Indexed field for radius queries
+    val geohash: String? = null,           // Indexed field for radius queries
+    
+    // 🔔 NOTIFICATIONS (Round 53)
+    val notificationRange: String = "COMMUNE" // "COMMUNE", "REGION", "NATIONAL"
 ) {
     // Helper para verificar si un usuario puede unirse según su score
     fun canUserJoin(userAverageRating: Double, userRatingCount: Int): Boolean {

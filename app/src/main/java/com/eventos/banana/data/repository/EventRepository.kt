@@ -2,6 +2,7 @@ package com.eventos.banana.data.repository
 
 import com.eventos.banana.domain.model.*
 import com.google.firebase.firestore.FirebaseFirestore
+import com.eventos.banana.data.remote.model.EventDto
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -11,7 +12,8 @@ import javax.inject.Inject
 
 class EventRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val notificationRepository: NotificationRepository
+    private val notificationRepository: NotificationRepository,
+    private val storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
 ) {
 
     private val eventsCollection = firestore.collection("events")
@@ -22,58 +24,9 @@ class EventRepository @Inject constructor(
         
         return try {
             var imageUrl: String? = null
-            
             if (imageBytes != null && imageBytes.isNotEmpty()) {
-                val projectID = "bananaapp-aa46e"
-                val buckets = listOf(
-                    "default", // tries default from JSON
-                    "$projectID.appspot.com",
-                    "$projectID.firebasestorage.app"
-                )
-                
-                var lastStorageEx: Exception? = null
-
-                for (bucketName in buckets) {
-                    try {
-                        val storageInstance = if (bucketName == "default") {
-                            com.google.firebase.storage.FirebaseStorage.getInstance()
-                        } else {
-                            com.google.firebase.storage.FirebaseStorage.getInstance("gs://$bucketName")
-                        }
-                        
-                        val storageRef = storageInstance.reference.child(imagePath)
-                        
-                        // Try Upload
-                        storageRef.putBytes(imageBytes).await()
-                        
-                        // Try Get URL
-                        for (i in 1..3) {
-                            try {
-                                kotlinx.coroutines.delay(500L * i)
-                                imageUrl = storageRef.downloadUrl.await().toString()
-                                if (imageUrl != null) break
-                            } catch (e: Exception) { /* retry */ }
-                        }
-                        
-                        if (imageUrl != null) break // Success!
-                        
-                    } catch (e: Exception) {
-                        lastStorageEx = e
-                        // if it's 404, try next bucket
-                        if (e is com.google.firebase.storage.StorageException && e.errorCode == -13010) {
-                            continue
-                        } else {
-                            break // other error, abort loop
-                        }
-                    }
-                }
-
-                if (imageUrl == null) {
-                    val msg = (lastStorageEx as? com.google.firebase.storage.StorageException)?.let {
-                        "Error Storage (-13010): El bucket no existe o no está activado en la Consola. Bucket intentado: ${it.message}"
-                    } ?: lastStorageEx?.message ?: "Error desconocido en subida"
-                    throw Exception("Fallo al subir foto. Asegúrate de que 'Storage' esté activado en Firebase Console: $msg")
-                }
+                val uploadResult = storageDataSource.uploadFile(imagePath, imageBytes)
+                imageUrl = uploadResult.getOrThrow()
             }
 
             val eventWithId = event.copy(
@@ -85,16 +38,8 @@ class EventRepository @Inject constructor(
                 rejectedParticipants = emptyList()
             )
 
-            docRef.set(eventWithId).await()
-            
-            // 🔔 NOTIFY ZONE USERS (Client-side implementation)
-            try {
-                notifyZoneUsers(eventWithId)
-            } catch (e: Exception) {
-                // Log error but don't fail event creation
-                android.util.Log.e("EventRepository", "Failed to notify zone users: ${e.message}")
-            }
-
+            val eventDto = EventDto.fromDomain(eventWithId)
+            docRef.set(eventDto).await()
             Result.success(Unit)
 
         } catch (e: Exception) {
@@ -102,30 +47,6 @@ class EventRepository @Inject constructor(
         }
     }
 
-    private suspend fun notifyZoneUsers(event: Event) {
-        // Query users in the same commune who want notifications
-        val snapshot = firestore.collection("users")
-            .whereEqualTo("commune", event.commune)
-            .whereEqualTo("notifyEventsByCommune", true)
-            .get()
-            .await()
-
-        snapshot.documents.forEach { doc ->
-            val userId = doc.id
-            // Don't notify creator
-            if (userId != event.creatorId) {
-                notificationRepository.sendNotification(
-                    AppNotification(
-                        userId = userId,
-                        title = "Nuevo evento en ${event.commune}",
-                        message = event.title,
-                        eventId = event.id,
-                        type = NotificationType.EVENT_CREATED
-                    )
-                )
-            }
-        }
-    }
 
     // =========================================================
     // ARCHIVAR EVENTOS PASADOS (A17 base)
@@ -157,20 +78,8 @@ class EventRepository @Inject constructor(
     }
 
     // =========================================================
-    // LISTAR EVENTOS (HOME)
+    // DETALLES DE EVENTO (REALTIME)
     // =========================================================
-    suspend fun getEvents(): Result<List<Event>> {
-        return try {
-            val snapshot = eventsCollection
-                .orderBy("createdAt")
-                .get()
-                .await()
-
-            Result.success(snapshot.toObjects(Event::class.java))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
 
     fun listenToEvent(eventId: String): Flow<Event> = callbackFlow {
         val listener = eventsCollection.document(eventId)
@@ -179,9 +88,9 @@ class EventRepository @Inject constructor(
                     android.util.Log.e("EventRepository", "listenToEvent error: ${error.message}", error)
                     return@addSnapshotListener
                 }
-                val event = snapshot?.toObject(Event::class.java)
-                if (event != null) {
-                    trySend(event)
+                val eventDto = snapshot?.toObject(EventDto::class.java)
+                if (eventDto != null) {
+                    trySend(eventDto.toDomain())
                 }
             }
         awaitClose { listener.remove() }
@@ -193,10 +102,10 @@ class EventRepository @Inject constructor(
     suspend fun getEventById(eventId: String): Result<Event> {
         return try {
             val snapshot = eventsCollection.document(eventId).get().await()
-            val event = snapshot.toObject(Event::class.java)
+            val eventDto = snapshot.toObject(EventDto::class.java)
                 ?: return Result.failure(Exception("Evento no encontrado"))
 
-            Result.success(event)
+            Result.success(eventDto.toDomain())
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -217,7 +126,7 @@ class EventRepository @Inject constructor(
 
             firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
-                val event = tx.get(ref).toObject(Event::class.java)
+                val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
                     ?: throw Exception("Evento no encontrado")
 
                 if (event.status != EventStatus.OPEN) {
@@ -288,7 +197,7 @@ class EventRepository @Inject constructor(
 
             firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
-                val event = tx.get(ref).toObject(Event::class.java)
+                val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
                     ?: throw Exception("Evento no encontrado")
 
                 if (event.status != EventStatus.OPEN) {
@@ -353,7 +262,7 @@ class EventRepository @Inject constructor(
 
             firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
-                val event = tx.get(ref).toObject(Event::class.java)
+                val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
                     ?: throw Exception("Evento no encontrado")
 
                 if (event.status != EventStatus.OPEN) {
@@ -431,7 +340,7 @@ class EventRepository @Inject constructor(
 
             firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
-                val event = tx.get(ref).toObject(Event::class.java)
+                val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
                     ?: throw Exception("Evento no encontrado")
 
                 eventTitle = event.title
@@ -509,7 +418,7 @@ class EventRepository @Inject constructor(
         return try {
             firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
-                val event = tx.get(ref).toObject(Event::class.java)
+                val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
                     ?: throw Exception("Evento no encontrado")
 
                 if (event.creatorId == userId) {
@@ -545,122 +454,7 @@ class EventRepository @Inject constructor(
         }
     }
 
-    // =========================================================
-    // OBSERVAR EVENTOS (REALTIME) - GEOHASH SUPPORT
-    // =========================================================
-    // =========================================================
-    // OBSERVAR EVENTOS (REALTIME) - GEOHASH SUPPORT
-    // =========================================================
-    fun observeNearbyEvents(geohashPrefix: String? = null, commune: String? = null, region: String? = null, limit: Long = 20): Flow<List<Event>> = callbackFlow {
-
-        val collectionRef = eventsCollection
-
-        var query: com.google.firebase.firestore.Query = collectionRef
-
-        if (!commune.isNullOrBlank()) {
-            // 🏙️ 1. Filter by Commune (Highest Priority)
-            query = query.whereEqualTo("commune", commune)
-                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(limit)
-        } else if (!region.isNullOrBlank()) {
-            // 🗺️ 2. Filter by Region (New)
-            query = query.whereEqualTo("region", region)
-                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(limit)
-        } else if (!geohashPrefix.isNullOrEmpty()) {
-            // 📍 3. Filter by Geohash (GPS)
-            val endParams = geohashPrefix + "~"
-            query = query
-                .orderBy("geohash")
-                .startAt(geohashPrefix)
-                .endAt(endParams)
-                .limit(limit)
-        } else {
-            // 🌍 4. Global Fallback
-            query = query.orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(limit)
-        }
-
-        val listener = query.addSnapshotListener { snapshot, error ->
-
-            if (error != null) {
-                android.util.Log.e("EventRepository", "observeNearbyEvents error: ${error.message}", error)
-                trySend(emptyList())
-                return@addSnapshotListener
-            }
-
-            val now = System.currentTimeMillis()
-
-            val events = snapshot
-                ?.toObjects(Event::class.java)
-                ?.filter {
-                    // Client-side filtering
-                    it.status == EventStatus.OPEN &&
-                    it.endAt > now
-                }
-                ?.sortedWith(
-                    compareByDescending<Event> { it.isBoosted && it.boostExpiry > now }
-                        .thenByDescending { it.createdAt }
-                )
-                ?: emptyList()
-
-            trySend(events)
-        }
-
-        awaitClose { listener.remove() }
-    }
-    
-    // Deprecated: Kept for compatibility if needed, but pointing to new logic
-    fun observeEvents() = observeNearbyEvents(null, null, null)
-
-    // =========================================================
-    // LISTAR EVENTOS (PAGINADOS)
-    // =========================================================
-    suspend fun fetchEventsBatch(
-        geohashPrefix: String? = null,
-        commune: String? = null,
-        region: String? = null,
-        limit: Long = 20,
-        lastSnapshot: com.google.firebase.firestore.DocumentSnapshot? = null
-    ): Result<Pair<List<Event>, com.google.firebase.firestore.DocumentSnapshot?>> {
-        return try {
-            var query: com.google.firebase.firestore.Query = eventsCollection
-
-            if (!commune.isNullOrBlank()) {
-                query = query.whereEqualTo("commune", commune)
-                    .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            } else if (!region.isNullOrBlank()) {
-                query = query.whereEqualTo("region", region)
-                    .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            } else if (!geohashPrefix.isNullOrEmpty()) {
-                query = query.orderBy("geohash")
-                    .startAt(geohashPrefix)
-                    .endAt(geohashPrefix + "~")
-            } else {
-                query = query.orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            }
-
-            if (lastSnapshot != null) {
-                query = query.startAfter(lastSnapshot)
-            }
-
-            val snapshot = query.limit(limit).get().await()
-            val now = System.currentTimeMillis()
-            
-            val filteredEvents = snapshot.toObjects(Event::class.java).filter { 
-                it.status == EventStatus.OPEN && it.endAt > now 
-            }.sortedWith(
-                compareByDescending<Event> { it.isBoosted && it.boostExpiry > now }
-                    .thenByDescending { it.createdAt }
-            )
-
-            val newLastDoc = if (snapshot.documents.isNotEmpty()) snapshot.documents.last() else null
-            Result.success(Pair(filteredEvents, newLastDoc))
-        } catch (e: Exception) {
-            android.util.Log.e("EventRepository", "fetchEventsBatch error: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
+     // Lógica de feeds movida a MainFeedRepository
 
     // =========================================================
     // AUTO-MARK EVENTS AS RATABLE (Round 11)
@@ -685,8 +479,9 @@ class EventRepository @Inject constructor(
             val batch = com.google.firebase.firestore.FirebaseFirestore.getInstance().batch()
             
             eventsToMark.documents.forEach { doc ->
-                val event = doc.toObject(Event::class.java)
-                if (event != null) {
+                val eventDto = doc.toObject(EventDto::class.java)
+                if (eventDto != null) {
+                    val event = eventDto.toDomain()
                     val ratingDeadline = event.endAt + (5 * 24 * 60 * 60 * 1000) // +5 días
                     
                     batch.update(doc.reference, mapOf(

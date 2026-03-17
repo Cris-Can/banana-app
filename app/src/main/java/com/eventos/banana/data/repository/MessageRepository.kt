@@ -13,7 +13,8 @@ import javax.inject.Inject
 
 class MessageRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository
+    private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository,
+    private val storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
 ) {
     private val conversationsCollection = firestore.collection("conversations")
     
@@ -161,6 +162,7 @@ class MessageRepository @Inject constructor(
                             title = "Nuevo mensaje de $senderNickname",
                             message = displayContent,
                             eventId = conversationId,
+                            conversationId = conversationId,
                             type = com.eventos.banana.domain.model.NotificationType.NEW_MESSAGE
                         )
                     )
@@ -179,16 +181,10 @@ class MessageRepository @Inject constructor(
     // 🎤 SUBIR AUDIO
     suspend fun uploadAudio(conversationId: String, senderId: String, audioBytes: ByteArray): Result<String> {
         return try {
-            if (audioBytes.isEmpty()) throw Exception("Datos de audio vacíos")
-
             val ext = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) "ogg" else "m4a"
             val audioPath = "conversations/$conversationId/audio/${java.util.UUID.randomUUID()}.$ext"
-            val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
-            val storageRef = storage.reference.child(audioPath)
             
-            storageRef.putBytes(audioBytes).await()
-            val downloadUrl = storageRef.downloadUrl.await().toString()
-            Result.success(downloadUrl)
+            storageDataSource.uploadFile(audioPath, audioBytes)
         } catch (e: Exception) {
             android.util.Log.e("MessageRepository", "Error uploading audio", e)
             Result.failure(e)

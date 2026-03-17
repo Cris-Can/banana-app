@@ -115,7 +115,7 @@ fun ProfileScreen(
                     try {
                         val croppedUri = result.uriContent
                         if (croppedUri != null) {
-                            val bytes = context.contentResolver.openInputStream(croppedUri)?.use { it.readBytes() }
+                            val bytes = com.eventos.banana.util.ImageCompressor.compressFromUri(context, croppedUri)
                             if (bytes != null) {
                                 val uid = sessionViewModel.currentUserId() ?: return@launch
                                 profileViewModel.uploadPhoto(
@@ -643,13 +643,65 @@ fun ProfileScreen(
 
 
 
-                // 🏆 LEADERBOARD BUTTON
+                // 👁️ VISITAS DE PERFIL
+                if (profile.profileViews > 0) {
+                    com.eventos.banana.ui.components.BananaCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .clickable { onProfileViewsClick() },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.Person,
+                                        contentDescription = "Visitas",
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = "${profile.profileViews} visitas a tu perfil",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = if (profile.isGold || profile.isFounder) "Toca para ver quiénes son" else "Descubre quién te ha visitado",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = "Ver visitas",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+
+                // 🏆 LEADERBOARD BUTTON & RANKING PREVIEW
                 OutlinedButton(
                     onClick = onLeaderboardClick,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                 ) {
-                    Text("🏆 Ver Ranking Global")
+                    val rankText = if (profile.score > 0) "Tienes ${profile.score} pts · 🏆 Ranking Global" else "🏆 Ver Ranking Global"
+                    Text(rankText)
                 }
 
                 // 4. REPUTATION & RELIABILITY

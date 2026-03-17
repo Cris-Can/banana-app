@@ -70,8 +70,8 @@ class RatingRepository @Inject constructor(
                 .set(rating.toMap())
                 .await()
 
-            // La actualización del score ahora se maneja automáticamente via Cloud Functions (Backend)
-            // updateUserScore(toUserId) -> REMOVIDO para evitar error de permisos en cliente
+            // 🔥 Actualizar el score manualmente (E3 Fix)
+            updateUserScore(toUserId)
 
 
             Log.d(TAG, "Rating submitted: $fromUserId -> $toUserId = $score")

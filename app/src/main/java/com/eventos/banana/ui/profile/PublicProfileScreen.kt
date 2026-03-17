@@ -259,6 +259,36 @@ fun PublicProfileScreen(
                                 }
                             }
                         }
+                        
+                        // 🏆 GAMIFICATION SCORE
+                        if (profile.score > 0) {
+                            com.eventos.banana.ui.components.BananaCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text("🏆", style = MaterialTheme.typography.headlineMedium)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            "${profile.score} Pts",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                        Text(
+                                            "Puntuación de comportamiento",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         // 📊 ASISTENCIA (Round 14)
                         Card(

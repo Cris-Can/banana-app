@@ -17,9 +17,12 @@ import javax.inject.Inject
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventType
 
+import com.eventos.banana.data.repository.MainFeedRepository
+
 @HiltViewModel
 class EventListViewModel @Inject constructor(
     private val repository: EventRepository,
+    private val mainFeedRepository: MainFeedRepository,
     private val userRepository: UserRepository
 ) : ViewModel() {
 
@@ -93,7 +96,20 @@ class EventListViewModel @Inject constructor(
     init {
         // Start observing with default (Global or cached)
         observeEvents()
+        markFinishedEvents()
     }
+
+    private fun markFinishedEvents() {
+        viewModelScope.launch {
+            try {
+                repository.markFinishedEventsAsRatable()
+            } catch (e: Exception) {
+                android.util.Log.e("EventListViewModel", "Failed to mark events", e)
+            }
+        }
+    }
+
+    private var isGlobalSearch = false
 
     fun updateLocation(lat: Double, lng: Double) {
         // 💾 Store persistent location
@@ -120,7 +136,7 @@ class EventListViewModel @Inject constructor(
         currentLimit = PAGE_SIZE
         
         // Refresh events
-        if (_currentCommune.value.isNullOrBlank() && _currentRegion.value.isNullOrBlank()) {
+        if (_currentCommune.value.isNullOrBlank() && _currentRegion.value.isNullOrBlank() && !isGlobalSearch) {
              observeEvents(newHash, null, null)
         }
     }
@@ -129,6 +145,7 @@ class EventListViewModel @Inject constructor(
         if (_currentCommune.value != commune) {
             _currentCommune.value = commune
             currentLimit = PAGE_SIZE // Reset pagination
+            isGlobalSearch = false
             observeEvents(_currentGeohash.value, commune, _currentRegion.value)
         }
     }
@@ -137,20 +154,31 @@ class EventListViewModel @Inject constructor(
         if (_currentRegion.value != region) {
             _currentRegion.value = region
             currentLimit = PAGE_SIZE // Reset pagination
+            isGlobalSearch = false
             observeEvents(_currentGeohash.value, _currentCommune.value, region)
         }
+    }
+
+    fun searchAllRegions() {
+        _currentRegion.value = null
+        _currentCommune.value = null
+        isGlobalSearch = true
+        currentLimit = PAGE_SIZE
+        observeEvents(null, null, null)
     }
 
     /** Loads more events by requesting the next batch */
     fun loadMore() {
         if (_isLoadingMore.value || isLastPage) return
         _isLoadingMore.value = true
-        observeEvents(_currentGeohash.value, _currentCommune.value, _currentRegion.value, isLoadMore = true)
+        val geo = if (isGlobalSearch) null else _currentGeohash.value
+        observeEvents(geo, _currentCommune.value, _currentRegion.value, isLoadMore = true)
     }
 
     /** Refreshes the events list from the beginning */
     fun refresh() {
-        observeEvents(_currentGeohash.value, _currentCommune.value, _currentRegion.value, isLoadMore = false)
+        val geo = if (isGlobalSearch) null else _currentGeohash.value
+        observeEvents(geo, _currentCommune.value, _currentRegion.value, isLoadMore = false)
     }
 
 
@@ -169,12 +197,16 @@ class EventListViewModel @Inject constructor(
 
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            if (!isLoadMore && _uiState.value !is EventListUiState.Success) {
-                // Keep keeping Loading if it's initial
-                _uiState.value = EventListUiState.Loading
+            if (!isLoadMore) {
+                val currentState = _uiState.value
+                if (currentState is EventListUiState.Success) {
+                    _uiState.value = currentState.copy(isRefreshing = true)
+                } else {
+                    _uiState.value = EventListUiState.Loading
+                }
             }
 
-            val result = repository.fetchEventsBatch(
+            val result = mainFeedRepository.fetchEventsBatch(
                 geohashPrefix = geohash,
                 commune = commune,
                 region = region,
@@ -184,7 +216,7 @@ class EventListViewModel @Inject constructor(
 
             result.onSuccess { (newEvents, newLastDoc) ->
                 if (newEvents.isEmpty() && !isLoadMore) {
-                    _uiState.value = EventListUiState.Success(emptyList(), emptyMap(), lastKnownLocation, false)
+                    _uiState.value = EventListUiState.Success(emptyList(), emptyMap(), lastKnownLocation, false, isRefreshing = false)
                     isLastPage = true
                     _isLoadingMore.value = false
                     return@launch
@@ -213,10 +245,10 @@ class EventListViewModel @Inject constructor(
                 var filteredEvents = combinedEvents
 
                 // 📏 DISTANCE FILTERING (Client Side)
-                if (commune.isNullOrBlank() && region.isNullOrBlank()) {
+                if (commune.isNullOrBlank() && region.isNullOrBlank() && !isGlobalSearch) {
                      val userLoc = lastKnownLocation
                      
-                     if (userLoc != null) {
+                     if (userLoc != null && geohash != null) {
                          val maxRadiusMeters = _searchRadiusKm.value * 1000f
                          val results = FloatArray(1)
                          
@@ -259,7 +291,13 @@ class EventListViewModel @Inject constructor(
                 val canLoadMore = newEvents.size.toLong() >= currentLimit
                 if (!canLoadMore) isLastPage = true
 
-                _uiState.value = EventListUiState.Success(filteredEvents, profiles, lastKnownLocation, canLoadMore)
+                _uiState.value = EventListUiState.Success(
+                    events = filteredEvents, 
+                    creatorProfiles = profiles, 
+                    currentUserLocation = lastKnownLocation, 
+                    canLoadMore = canLoadMore,
+                    isRefreshing = false
+                )
                 _isLoadingMore.value = false
                 
             }.onFailure { e ->

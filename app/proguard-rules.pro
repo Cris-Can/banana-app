@@ -19,8 +19,22 @@
 # Firebase App Check
 -keep class com.google.firebase.appcheck.** { *; }
 
-# Firestore model classes
+# Firestore model classes (CRITICAL: prevents R8 from renaming fields used by CustomClassMapper)
 -keep class com.eventos.banana.domain.model.** { *; }
+-keepclassmembers class com.eventos.banana.domain.model.** { *; }
+
+# ⚠️ DTOs in data.remote.model MUST also be kept — Firestore uses toObject() on these
+-keep class com.eventos.banana.data.remote.model.** { *; }
+-keepclassmembers class com.eventos.banana.data.remote.model.** { *; }
+
+# Keep all Kotlin synthetic getter methods for boolean properties (isXxx)
+# These are used by Firestore CustomClassMapper to detect properties
+-keepclassmembers class com.eventos.banana.** {
+    boolean is*();
+    void set*(boolean);
+    ** get*();
+    void set**(**);
+}
 
 # Google Maps
 -keep class com.google.android.gms.maps.** { *; }
@@ -28,7 +42,11 @@
 
 # Google Places
 -keep class com.google.android.libraries.places.** { *; }
+-keepclassmembers class com.google.android.libraries.places.** { *; }
+-keepclasseswithmembers class com.google.android.libraries.places.** { *; }
 -dontwarn com.google.android.libraries.places.**
+-keep class com.google.maps.places.** { *; }
+-dontwarn com.google.maps.places.**
 
 # Coil (Image Loading)
 -dontwarn coil.**

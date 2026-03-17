@@ -35,7 +35,7 @@ class SessionViewModel @Inject constructor(
     private val sharedPreferences: android.content.SharedPreferences
 ) : androidx.lifecycle.AndroidViewModel(application) {
 
-    private var profileListener: ListenerRegistration? = null
+    private var profileJob: kotlinx.coroutines.Job? = null
     private var notificationsJob: kotlinx.coroutines.Job? = null
 
     // ---------- UI STATE (LOGIN / REGISTER) ----------
@@ -140,71 +140,35 @@ class SessionViewModel @Inject constructor(
         val uid = authRepository.currentUid() ?: return
 
         // Limpia listener previo si existe
-        profileListener?.remove()
+        profileJob?.cancel()
 
         _profileUiState.value = ProfileUiState(isLoading = true)
 
-        profileListener = userRepository.listenUserProfile(
-            uid = uid,
-            onChange = { profile ->
-                // 📍 Detect & Notify Location Changes (UX)
-                val oldProfile = _profileUiState.value.profile
-                if (oldProfile != null && profile != null) {
-                    if (oldProfile.commune.isNullOrBlank() && !profile.commune.isNullOrBlank()) {
-                         _locationUpdateMessage.value = "📍 Ubicación actualizada: ${profile.commune}"
-                    }
+        profileJob = viewModelScope.launch {
+            userRepository.observeUserProfile(uid)
+                .catch { e ->
+                    android.util.Log.e("SessionViewModel", "Error observing profile", e)
                 }
-
-                _profileUiState.value = ProfileUiState(
-                    isLoading = false,
-                    profile = profile
-                )
-                
-                // 📍 AUTO-DETECT LOCATION if missing (User Request)
-                profile?.let { userProfile ->
-                    if (userProfile.commune.isNullOrBlank() && userProfile.region.isNullOrBlank()) {
-                        checkAndAutoUpdateLocation(userProfile.uid)
-                    }
-                }
-            },
-            onError = {
-                android.util.Log.w("SessionViewModel", "Profile not found for $uid, attempting auto-repair")
-                // 🔧 AUTO-REPAIR: Create missing profile
-                viewModelScope.launch {
-                    try {
-                        val user = authRepository.getCurrentUser()
-                        if (user != null) {
-                            val repairedProfile = UserProfile(
-                                uid = uid,
-                                email = user.email ?: "",
-                                nickname = user.email?.substringBefore('@') ?: "Usuario"
-                            )
-                            
-                            android.util.Log.d("SessionViewModel", "Auto-creating profile for $uid with nickname: ${repairedProfile.nickname}")
-                            createUserProfileUseCase(repairedProfile)
-                            
-                            // Reload after creation
-                            _profileUiState.value = ProfileUiState(
-                                isLoading = false,
-                                profile = repairedProfile
-                            )
-                            android.util.Log.d("SessionViewModel", "Profile auto-repair successful for $uid")
-                        } else {
-                            _profileUiState.value = ProfileUiState(
-                                isLoading = false,
-                                errorMessage = "No se pudo cargar el perfil"
-                            )
+                .collect { profile ->
+                    // 📍 Detect & Notify Location Changes (UX)
+                    val oldProfile = _profileUiState.value.profile
+                    if (oldProfile != null) {
+                        if (oldProfile.commune.isNullOrBlank() && !profile.commune.isNullOrBlank()) {
+                             _locationUpdateMessage.value = "📍 Ubicación actualizada: ${profile.commune}"
                         }
-                    } catch (e: Exception) {
-                        android.util.Log.e("SessionViewModel", "Profile auto-repair failed for $uid", e)
-                        _profileUiState.value = ProfileUiState(
-                            isLoading = false,
-                            errorMessage = "No se pudo cargar el perfil"
-                        )
+                    }
+
+                    _profileUiState.value = ProfileUiState(
+                        isLoading = false,
+                        profile = profile
+                    )
+                    
+                    // 📍 AUTO-DETECT LOCATION if missing (User Request)
+                    if (profile.commune.isNullOrBlank() && profile.region.isNullOrBlank()) {
+                        checkAndAutoUpdateLocation(profile.uid)
                     }
                 }
-            }
-        )
+        }
     }
 
 
@@ -310,8 +274,8 @@ class SessionViewModel @Inject constructor(
     // LOGOUT
     // =====================================================
     fun logout() {
-        profileListener?.remove()
-        profileListener = null
+        profileJob?.cancel()
+        profileJob = null
         notificationsJob?.cancel()
         notificationsJob = null
         
@@ -367,6 +331,35 @@ class SessionViewModel @Inject constructor(
 
     fun currentUserId(): String {
         return authRepository.currentUid() ?: ""
+    }
+
+    fun updateProfileLocation(latitude: Double, longitude: Double) {
+        val uid = authRepository.currentUid() ?: return
+        
+        viewModelScope.launch {
+            try {
+                val helper = com.eventos.banana.util.LocationHelper(getApplication())
+                val location = android.location.Location("gps").apply {
+                    this.latitude = latitude
+                    this.longitude = longitude
+                }
+                
+                val commune = helper.getCommuneFromLocation(location)
+                if (commune != null) {
+                    val region = com.eventos.banana.data.ChileCommunesList.getRegionForCommune(commune)
+                    val geohash = com.eventos.banana.util.GeohashUtils.encode(latitude, longitude, 9)
+                    
+                    // Only update if it's different to save Firestore writes
+                    val currentProfile = _profileUiState.value.profile
+                    if (currentProfile?.commune != commune || currentProfile.region != region) {
+                        userRepository.updateLocation(uid, region, commune, latitude, longitude, geohash)
+                        android.util.Log.d("SessionViewModel", "📍 Profile location auto-updated: $commune")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("SessionViewModel", "Error auto-updating location", e)
+            }
+        }
     }
 
     private fun checkAndAutoUpdateLocation(uid: String) {

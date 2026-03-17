@@ -7,6 +7,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import com.eventos.banana.navigation.AppNavigation
+import com.eventos.banana.navigation.Screen
 import com.eventos.banana.ui.theme.BananaTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.LocationOn
+import com.eventos.banana.ui.components.PermissionRationaleDialog
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
@@ -31,6 +39,9 @@ class MainActivity : FragmentActivity() {
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private var showNotificationRationale by mutableStateOf(false)
+    private var showLocationRationale by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,28 +94,26 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // 🔔 Request Notification Permission (Android 13+) — with rationale check
+        // 🔔 Request Notification Permission (Android 13+) 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val notifPerm = Manifest.permission.POST_NOTIFICATIONS
             when {
                 androidx.core.content.ContextCompat.checkSelfPermission(this, notifPerm) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED -> { /* Already granted */ }
                 shouldShowRequestPermissionRationale(notifPerm) -> {
-                    Toast.makeText(this, "Banana necesita notificaciones para avisarte de eventos y mensajes", Toast.LENGTH_LONG).show()
-                    requestNotificationPermission.launch(notifPerm)
+                    showNotificationRationale = true
                 }
                 else -> requestNotificationPermission.launch(notifPerm)
             }
         }
 
-        // 📍 Request Location Permission — with rationale check
+        // 📍 Request Location Permission
         val locPerm = Manifest.permission.ACCESS_FINE_LOCATION
         when {
             androidx.core.content.ContextCompat.checkSelfPermission(this, locPerm) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED -> { /* Already granted */ }
             shouldShowRequestPermissionRationale(locPerm) -> {
-                Toast.makeText(this, "Banana usa tu ubicación para mostrarte eventos cercanos", Toast.LENGTH_LONG).show()
-                requestLocationPermission.launch(locPerm)
+                showLocationRationale = true
             }
             else -> requestLocationPermission.launch(locPerm)
         }
@@ -117,45 +126,45 @@ class MainActivity : FragmentActivity() {
 
         when (notifType) {
             "FRIEND_REQUEST" -> {
-                initialRoute = "friends?tab=1" // Tab de solicitudes
+                initialRoute = Screen.Friends(tab = 1).route // Tab de solicitudes
             }
             "FRIEND_ACCEPTED" -> {
-                initialRoute = "friends?tab=0" // Tab de amigos
+                initialRoute = Screen.Friends(tab = 0).route // Tab de amigos
             }
             "NEW_MESSAGE" -> {
                 val chatId = intent?.getStringExtra("conversationId")
                 if (!chatId.isNullOrBlank()) {
-                    initialRoute = "chat/$chatId"
+                    initialRoute = Screen.Chat(chatId).route
                 }
             }
             "JOIN_REQUEST_SENT" -> {
                 // Ir al evento para decidir si aceptar/rechazar
                 val evtId = intent?.getStringExtra("eventId")
                 if (!evtId.isNullOrBlank()) {
-                    initialRoute = "event_detail/$evtId"
+                    initialRoute = Screen.EventDetail(evtId).route
                 } else {
-                    initialRoute = "notifications"
+                    initialRoute = Screen.Notifications.route
                 }
             }
             "PROFILE_VIEW", "JOIN_REJECTED", "REMOVED_FROM_EVENT" -> {
-                initialRoute = "notifications"
+                initialRoute = Screen.Notifications.route
             }
             "EVENT_UPDATE" -> {
                 // Mensaje en el muro → abrir directamente el tab "Muro"
                 val evtId = intent?.getStringExtra("eventId")
                 if (!evtId.isNullOrBlank()) {
-                    initialRoute = "event_detail/$evtId?tab=1"
+                    initialRoute = Screen.EventDetail(evtId, tab = 1).route
                 } else {
-                    initialRoute = "notifications"
+                    initialRoute = Screen.Notifications.route
                 }
             }
             "JOIN_APPROVED", "EVENT_CREATED", "EVENT_CANCELLED", "EVENT_CLOSED" -> {
                 // Eventos generales → abrir tab "Detalles"
                 val evtId = intent?.getStringExtra("eventId")
                 if (!evtId.isNullOrBlank()) {
-                    initialRoute = "event_detail/$evtId"
+                    initialRoute = Screen.EventDetail(evtId).route
                 } else {
-                    initialRoute = "notifications"
+                    initialRoute = Screen.Notifications.route
                 }
             }
         }
@@ -173,7 +182,33 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(startDestination = initialRoute ?: "splash")
+                    AppNavigation(startDestination = initialRoute ?: Screen.Splash.route)
+
+                    if (showNotificationRationale) {
+                        PermissionRationaleDialog(
+                            title = "Notificaciones",
+                            description = "Banana necesita notificarte sobre nuevos mensajes y cambios en tus eventos.",
+                            icon = Icons.Default.Notifications,
+                            onDismiss = {
+                                showNotificationRationale = false
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
+                        )
+                    }
+
+                    if (showLocationRationale) {
+                        PermissionRationaleDialog(
+                            title = "Ubicación",
+                            description = "Banana usa tu ubicación para encontrarte eventos cerca de ti y permitirte hacer check-in.",
+                            icon = Icons.Default.LocationOn,
+                            onDismiss = {
+                                showLocationRationale = false
+                                requestLocationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
+                        )
+                    }
                 }
             }
         }

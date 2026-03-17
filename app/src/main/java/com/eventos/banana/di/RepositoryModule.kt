@@ -9,6 +9,7 @@ import com.eventos.banana.data.repository.SubscriptionRepository
 import com.eventos.banana.data.repository.EncounterRepository
 import com.eventos.banana.data.repository.RatingRepository
 import com.eventos.banana.data.repository.FeedRepository
+import com.eventos.banana.data.repository.MainFeedRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,15 +28,17 @@ object RepositoryModule {
     @Singleton
     fun provideUserRepository(
         firestore: com.google.firebase.firestore.FirebaseFirestore,
-        notificationRepository: NotificationRepository
-    ): UserRepository = UserRepository(firestore, notificationRepository)
+        notificationRepository: NotificationRepository,
+        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
+    ): UserRepository = UserRepository(firestore, notificationRepository, storageDataSource)
 
     @Provides
     @Singleton
     fun provideEventRepository(
         firestore: com.google.firebase.firestore.FirebaseFirestore,
-        notificationRepository: NotificationRepository
-    ): EventRepository = EventRepository(firestore, notificationRepository)
+        notificationRepository: NotificationRepository,
+        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
+    ): EventRepository = EventRepository(firestore, notificationRepository, storageDataSource)
 
     @Provides
     @Singleton
@@ -45,8 +48,9 @@ object RepositoryModule {
     @Singleton
     fun provideMessageRepository(
         firestore: com.google.firebase.firestore.FirebaseFirestore,
-        notificationRepository: NotificationRepository
-    ): MessageRepository = MessageRepository(firestore, notificationRepository)
+        notificationRepository: NotificationRepository,
+        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
+    ): MessageRepository = MessageRepository(firestore, notificationRepository, storageDataSource)
 
     @Provides
     @Singleton
@@ -67,8 +71,14 @@ object RepositoryModule {
     @Singleton
     fun provideFeedRepository(
         firestore: com.google.firebase.firestore.FirebaseFirestore,
-        storage: com.google.firebase.storage.FirebaseStorage
-    ): FeedRepository = FeedRepository(firestore, storage)
+        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
+    ): FeedRepository = FeedRepository(firestore, storageDataSource)
+
+    @Provides
+    @Singleton
+    fun provideMainFeedRepository(
+        firestore: com.google.firebase.firestore.FirebaseFirestore
+    ): MainFeedRepository = MainFeedRepository(firestore)
     @Provides
     @Singleton
     fun provideBillingRepository(

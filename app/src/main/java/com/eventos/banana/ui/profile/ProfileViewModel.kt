@@ -504,7 +504,8 @@ class ProfileViewModel @Inject constructor(
             try {
                 val result = userRepository.getTopUsers(50)
                 if (result.isSuccess) {
-                     _leaderboardUsers.value = result.getOrDefault(emptyList())
+                     val pair = result.getOrNull()
+                     _leaderboardUsers.value = pair?.first ?: emptyList()
                      _uiState.value = ProfileUiState.Success
                 } else {
                      _uiState.value = ProfileUiState.Error(getFriendlyErrorMessage(result.exceptionOrNull()))

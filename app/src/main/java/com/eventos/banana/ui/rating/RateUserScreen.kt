@@ -37,9 +37,15 @@ fun RateUserScreen(
                 .padding(padding),
             contentAlignment = Alignment.Center
         ) {
-            if (uiState.isLoading) {
+            if (uiState.isLoadingData) {
                 CircularProgressIndicator()
-            } else if (uiState.success) {
+            } else if (uiState.loadError != null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(uiState.loadError, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onBack) { Text(stringResource(com.eventos.banana.R.string.common_back)) }
+                }
+            } else if (uiState.submissionState is com.eventos.banana.ui.util.ResultState.Success) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -100,19 +106,26 @@ fun RateUserScreen(
                             .height(120.dp)
                     )
 
-                    uiState.errorMessage?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error)
+                    if (uiState.submissionState is com.eventos.banana.ui.util.ResultState.Error) {
+                        Text(
+                            (uiState.submissionState as com.eventos.banana.ui.util.ResultState.Error).message,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
 
                     Button(
                         onClick = { onSubmit(score, comment) },
-                        enabled = score > 0,
+                        enabled = score > 0 && uiState.submissionState !is com.eventos.banana.ui.util.ResultState.Loading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(com.eventos.banana.R.string.common_send))
+                        if (uiState.submissionState is com.eventos.banana.ui.util.ResultState.Loading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text(stringResource(com.eventos.banana.R.string.common_send))
+                        }
                     }
                     
-                    TextButton(onClick = onBack) {
+                    TextButton(onClick = onBack, enabled = uiState.submissionState !is com.eventos.banana.ui.util.ResultState.Loading) {
                         Text(stringResource(com.eventos.banana.R.string.common_cancel))
                     }
                 }

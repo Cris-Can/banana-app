@@ -43,6 +43,8 @@ class FriendListViewModel @Inject constructor(
     
     // Pagination state
     private var allFriendIds = emptyList<String>()
+    private var allRequestReceivedIds = emptyList<String>()
+    private var allRequestSentIds = emptyList<String>()
     private var currentPage = 0
     private val pageSize = 30
     val hasMoreFriends = MutableStateFlow(false)
@@ -62,27 +64,21 @@ class FriendListViewModel @Inject constructor(
 
                 // Initialize pagination for friends
                 allFriendIds = currentUser.friends
-                currentPage = 0
-                
-                // 2. Fetch first page of friends
-                val start = 0
-                val end = pageSize.coerceAtMost(allFriendIds.size)
-                val chunkIds = allFriendIds.subList(start, end)
-                val friendsList = userRepository.getUsers(chunkIds)
+                allRequestReceivedIds = currentUser.friendRequestsReceived
+                allRequestSentIds = currentUser.friendRequestsSent
+
+                val friendsList = userRepository.getUsers(allFriendIds.take(pageSize))
                 
                 _friends.value = friendsList
                 allFriends = friendsList
                 currentPage = 1
-                hasMoreFriends.value = end < allFriendIds.size
+                hasMoreFriends.value = pageSize < allFriendIds.size
 
-                // 3. Fetch Requests (Received)
-                val requestIds = currentUser.friendRequestsReceived
-                val requestsList = userRepository.getUsers(requestIds)
+                val requestsList = userRepository.getUsers(allRequestReceivedIds)
 
-                // 4. Fetch Suggestions
                 val region = currentUser.region ?: ""
                 val commune = currentUser.commune ?: ""
-                
+
                 val suggestionsListRaw = if (commune.isNotBlank()) {
                     userRepository.getUsersByCommune(commune, currentUserId)
                 } else if (region.isNotBlank()) {
@@ -94,8 +90,8 @@ class FriendListViewModel @Inject constructor(
                 val friendIdsSet = allFriendIds.toSet()
                 val suggestionsList = suggestionsListRaw.filter { user ->
                     user.uid !in friendIdsSet && 
-                    user.uid !in requestIds &&
-                    user.uid !in currentUser.friendRequestsSent &&
+                    user.uid !in allRequestReceivedIds &&
+                    user.uid !in allRequestSentIds &&
                     user.uid != currentUserId
                 }
 
@@ -172,8 +168,9 @@ class FriendListViewModel @Inject constructor(
                 // Filter out self and existing friends from search results to avoid duplicates
                 val finalSearchResults = globalResults.filter { user ->
                     user.uid != currentUserId &&
-                    allFriends.none { it.uid == user.uid } &&
-                    allRequests.none { it.uid == user.uid }
+                    user.uid !in allFriendIds &&
+                    user.uid !in allRequestReceivedIds &&
+                    user.uid !in allRequestSentIds
                 }
 
                 _uiState.value = _uiState.value.copy(

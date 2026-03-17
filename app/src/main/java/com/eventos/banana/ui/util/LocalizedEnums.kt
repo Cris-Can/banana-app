@@ -114,9 +114,12 @@ fun AppNotification.localizedTitle(): String = when (type) {
     NotificationType.FRIEND_ACCEPTED    -> stringResource(R.string.notif_friend_accepted_title)
     NotificationType.NEW_MESSAGE        -> stringResource(R.string.notif_new_message_title, extractParam())
     NotificationType.PROFILE_VIEW       -> stringResource(R.string.notif_profile_view_title)
+    NotificationType.RATING             -> title.ifBlank { "¡Nueva calificación! ⭐" }
+    NotificationType.RATING_REMINDER    -> title.ifBlank { "¡Evento finalizado! ⭐" }
     NotificationType.EVENT_CANCELLED,
     NotificationType.EVENT_CLOSED,
     NotificationType.EVENT_UPDATE,
+    NotificationType.EVENT_WALL_POST,
     NotificationType.REMOVED_FROM_EVENT -> title.ifBlank { stringResource(R.string.notif_generic_title) }
     NotificationType.GENERIC            -> title.ifBlank { stringResource(R.string.notif_generic_title) }
 }

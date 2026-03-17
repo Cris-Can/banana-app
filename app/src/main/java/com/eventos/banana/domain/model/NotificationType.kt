@@ -18,6 +18,7 @@ enum class NotificationType {
     EVENT_CANCELLED,     // 👈 A15.1
     EVENT_CLOSED,        // 👈 A15.1
     EVENT_UPDATE,        // 🔔 New updates (Wall posts, edits)
+    EVENT_WALL_POST,     // 💬 Respuestas en el muro
 
     // Moderación
     // Moderación
@@ -25,6 +26,10 @@ enum class NotificationType {
     
     // Chat
     NEW_MESSAGE,
+    
+    // Calificaciones
+    RATING,           // ⭐ Alguien te calificó
+    RATING_REMINDER,  // ⭐ Recordatorio para calificar
     
     // Perfil
     PROFILE_VIEW // 👁️ Round 48

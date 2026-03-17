@@ -13,12 +13,14 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 
+import com.eventos.banana.ui.util.ResultState
+
 data class RateUserUiState(
-    val isLoading: Boolean = false,
+    val submissionState: ResultState<Unit> = ResultState.Idle,
     val targetNickname: String = "",
-    val success: Boolean = false,
     val alreadyRated: Boolean = false,
-    val errorMessage: String? = null
+    val isLoadingData: Boolean = true,
+    val loadError: String? = null
 )
 
 @HiltViewModel(assistedFactory = RateUserViewModel.Factory::class)
@@ -40,7 +42,7 @@ class RateUserViewModel @AssistedInject constructor(
     }
 
 
-    private val _uiState = MutableStateFlow(RateUserUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(RateUserUiState())
     val uiState: StateFlow<RateUserUiState> = _uiState
 
     init {
@@ -57,14 +59,14 @@ class RateUserViewModel @AssistedInject constructor(
                 val targetProfile = userRepository.getUserProfile(targetUserId)
                 
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isLoadingData = false,
                     targetNickname = targetProfile?.nickname ?: "Usuario",
                     alreadyRated = rated
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = "Error al cargar datos: ${e.message}"
+                    isLoadingData = false,
+                    loadError = "Error al cargar datos: ${e.message}"
                 )
             }
         }
@@ -74,7 +76,7 @@ class RateUserViewModel @AssistedInject constructor(
         if (score < 1) return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(submissionState = ResultState.Loading)
 
             try {
                 // Use OTRO as default for legacy rating flow
@@ -89,17 +91,18 @@ class RateUserViewModel @AssistedInject constructor(
                 )
 
                 if (result.isSuccess) {
-                    _uiState.value = _uiState.value.copy(isLoading = false, success = true)
+                    // 🆕 ACTUALIZACIÓN MANUAL DE PUNTOS (Ranking)
+                    userRepository.recalculateUserStats(targetUserId)
+                    
+                    _uiState.value = _uiState.value.copy(submissionState = ResultState.Success(Unit))
                 } else {
                     _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = "Error al enviar: ${result.exceptionOrNull()?.message}"
+                        submissionState = ResultState.Error(result.exceptionOrNull()?.message ?: "Error desconocido")
                     )
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = "Error: ${e.message}"
+                    submissionState = ResultState.Error(e.message ?: "Error fatal")
                 )
             }
         }

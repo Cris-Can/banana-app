@@ -1,17 +1,22 @@
 package com.eventos.banana.data.repository
 
 import com.eventos.banana.domain.model.UserProfile
+import com.eventos.banana.data.remote.model.UserProfileDto
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
 import javax.inject.Inject
 
 class UserRepository @Inject constructor(
-    private val firestore: FirebaseFirestore,
-    private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository
+    private val firestore: com.google.firebase.firestore.FirebaseFirestore,
+    private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository,
+    private val storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
 ) {
 
     private val users = firestore.collection("users")
@@ -21,7 +26,8 @@ class UserRepository @Inject constructor(
     // ---------- CREATE PROFILE (Simple Save) ----------
     suspend fun saveUserProfile(profile: UserProfile): Result<Unit> {
         return try {
-            users.document(profile.uid).set(profile).await()
+            val dto = UserProfileDto.fromDomain(profile)
+            users.document(profile.uid).set(dto).await()
             Result.success(Unit)
         } catch (e: Exception) {
             android.util.Log.e("UserRepository", "Error saving profile", e)
@@ -35,7 +41,7 @@ class UserRepository @Inject constructor(
             if (forceRefresh) {
                 android.util.Log.d("UserRepository", "Forcing server fetch for $uid")
                 val serverSnapshot = users.document(uid).get(Source.SERVER).await()
-                val profile = serverSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
+                val profile = serverSnapshot.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = uid)
                 
                 // 🛠️ RETROACTIVE FIX (Force Refresh)
                 if (profile != null && !profile.isFounder) {
@@ -50,7 +56,7 @@ class UserRepository @Inject constructor(
                 .await()
 
             if (cachedSnapshot.exists()) {
-                val profile = cachedSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
+                val profile = cachedSnapshot.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = uid)
                 
                 // 🛠️ RETROACTIVE FIX (Cache)
                 if (profile != null && !profile.isFounder) {
@@ -64,7 +70,7 @@ class UserRepository @Inject constructor(
                     .get(Source.SERVER)
                     .await()
 
-                val profile = serverSnapshot.toObject(UserProfile::class.java)?.copy(uid = uid)
+                val profile = serverSnapshot.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = uid)
                 
                 // 🛠️ RETROACTIVE FIX (Server Default)
                 if (profile != null && !profile.isFounder) {
@@ -97,14 +103,13 @@ class UserRepository @Inject constructor(
                 
                 // 3. IMMEDIATE WRITE to User (Priority: High)
                 // We do this OUTSIDE the transaction to ensure the user gets it even if stats fail
-                users.document(profile.uid).set(upgradedProfile, SetOptions.merge()).await()
+                val dto = UserProfileDto.fromDomain(upgradedProfile)
+                users.document(profile.uid).set(dto, SetOptions.merge()).await()
                 android.util.Log.d("UserRepository", "Retro-upgrade success for ${profile.uid}")
 
                 // 4. STOP Incrementing Global Count here!
                 // The count should only increase for NEW users (in createUserProfile).
                 // Retroactive upgrades should not inflate the user count.
-
-                upgradedProfile // Return upgraded
 
                 upgradedProfile // Return upgraded
             } else {
@@ -133,7 +138,7 @@ class UserRepository @Inject constructor(
                     .await()
                 
                 val chunkUsers = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+                    doc.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = doc.id)
                 }
                 allUsers.addAll(chunkUsers)
             }
@@ -193,24 +198,23 @@ class UserRepository @Inject constructor(
     }
 
     // ---------- REALTIME PROFILE LISTENER ----------
-    fun listenUserProfile(
-        uid: String,
-        onChange: (UserProfile) -> Unit,
-        onError: () -> Unit
-    ): ListenerRegistration {
-        return users
+    fun observeUserProfile(uid: String): Flow<UserProfile> = callbackFlow {
+        val registration = users
             .document(uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) {
-                    onError()
+                    close(error)
                     return@addSnapshotListener
                 }
 
-                val profile = snapshot.toObject(UserProfile::class.java)
+                val profile = snapshot?.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = uid)
                 if (profile != null) {
-                    onChange(profile)
+                    trySend(profile)
                 }
             }
+        awaitClose {
+            registration.remove()
+        }
     }
 
     // ---------- UPDATE LOCATION ----------
@@ -407,19 +411,45 @@ class UserRepository @Inject constructor(
         }
     }
 
-    // 🏆 GAMIFICATION: Get Top Users
-    suspend fun getTopUsers(limit: Int = 10): Result<List<UserProfile>> {
+    // 🏆 GAMIFICATION: Get Top Users (Most Active by Score)
+    suspend fun getTopUsers(limit: Int = 20, startAfter: com.google.firebase.firestore.DocumentSnapshot? = null): Result<Pair<List<UserProfile>, com.google.firebase.firestore.DocumentSnapshot?>> {
         return try {
-            val snapshot = users
+            var query = users
                 .orderBy("score", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(limit.toLong())
-                .get()
-                .await()
-
-            val topUsers = snapshot.toObjects(UserProfile::class.java)
-            Result.success(topUsers)
+                
+            if (startAfter != null) {
+                query = query.startAfter(startAfter)
+            }
+                
+            val snapshot = query.get().await()
+            val usersList = snapshot.toObjects(UserProfileDto::class.java).map { it.toDomain() }
+            val lastVisible = if (snapshot.size() > 0) snapshot.documents[snapshot.size() - 1] else null
+            Result.success(Pair(usersList, lastVisible))
         } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Error getting top users", e)
+            android.util.Log.e("UserRepository", "Error getting top users by score", e)
+            Result.failure(e)
+        }
+    }
+
+    // ⭐ GAMIFICATION: Get Top Users (Best Rated by RatingSum)
+    suspend fun getTopUsersByRating(limit: Int = 20, startAfter: com.google.firebase.firestore.DocumentSnapshot? = null): Result<Pair<List<UserProfile>, com.google.firebase.firestore.DocumentSnapshot?>> {
+        return try {
+            var query = users
+                .orderBy("ratingSum", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(limit.toLong())
+                
+            if (startAfter != null) {
+                query = query.startAfter(startAfter)
+            }
+
+            val snapshot = query.get().await()
+            val usersList = snapshot.toObjects(UserProfileDto::class.java).map { it.toDomain() }
+            val lastVisible = if (snapshot.size() > 0) snapshot.documents[snapshot.size() - 1] else null
+            
+            Result.success(Pair(usersList, lastVisible))
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Error getting top users by rating", e)
             Result.failure(e)
         }
     }
@@ -432,30 +462,8 @@ class UserRepository @Inject constructor(
 
             val imagePath = "users/$uid/photos/${java.util.UUID.randomUUID()}.jpg"
             
-            // 📸 Upload to Firebase Storage (default bucket from google-services.json)
-            val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
-            val storageRef = storage.reference.child(imagePath)
-            
-            android.util.Log.d("UserRepository", "Uploading photo to: $imagePath (bucket: ${storage.reference.bucket})")
-            
-            // Upload bytes
-            storageRef.putBytes(imageBytes).await()
-            
-            // Get download URL (with retry)
-            var downloadUrl: String? = null
-            for (i in 1..3) {
-                try {
-                    kotlinx.coroutines.delay(500L * i)
-                    downloadUrl = storageRef.downloadUrl.await().toString()
-                    if (downloadUrl != null) break
-                } catch (e: Exception) {
-                    android.util.Log.w("UserRepository", "Retry $i getting download URL", e)
-                }
-            }
-
-            if (downloadUrl == null) {
-                throw Exception("No se pudo obtener la URL de descarga de la foto")
-            }
+            val uploadResult = storageDataSource.uploadFile(imagePath, imageBytes)
+            val downloadUrl = uploadResult.getOrThrow()
 
             android.util.Log.d("UserRepository", "Photo uploaded OK: $downloadUrl")
 
@@ -591,7 +599,7 @@ class UserRepository @Inject constructor(
                 .await()
             
             snapshot.documents.mapNotNull { doc ->
-                doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+                doc.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = doc.id)
             }
         } catch (e: Exception) {
             android.util.Log.e("UserRepository", "Error searching users", e)
@@ -608,7 +616,7 @@ class UserRepository @Inject constructor(
                 .await()
             
             snapshot.documents.mapNotNull { doc ->
-                doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+                doc.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = doc.id)
             }
                 .filter { it.uid != excludeUid }
         } catch (e: Exception) {
@@ -625,7 +633,7 @@ class UserRepository @Inject constructor(
                 .await()
             
             snapshot.documents.mapNotNull { doc ->
-                doc.toObject(UserProfile::class.java)?.copy(uid = doc.id)
+                doc.toObject(UserProfileDto::class.java)?.toDomain()?.copy(uid = doc.id)
             }
                 .filter { it.uid != excludeUid }
         } catch (e: Exception) {
@@ -700,12 +708,20 @@ class UserRepository @Inject constructor(
             // 🕒 Cooldown reduced to 1 minute for easier testing/interaction
             val shouldNotify = (now - lastVisit) > 60000 // 1 Minute cooldown (was 1 Hour)
             
-            // 2. Update View Record
+            // 2. Update View Record (Subcollection)
             val viewData = mapOf(
                 "visitorUid" to visitorUid,
                 "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
             visitorViewRef.set(viewData, com.google.firebase.firestore.SetOptions.merge()).await()
+            
+            // 2b. Increment main profileViews counter and add to recentViewers array
+            if (shouldNotify) {
+                 users.document(targetUid).update(
+                     "profileViews", com.google.firebase.firestore.FieldValue.increment(1),
+                     "recentViewers", com.google.firebase.firestore.FieldValue.arrayUnion(visitorUid)
+                 ).await()
+            }
             
             // 3. Send Notification if needed
             if (shouldNotify) {
@@ -716,8 +732,7 @@ class UserRepository @Inject constructor(
                         title = "Tienes una nueva visita 👁️",
                         message = "Alguien ha visto tu perfil recientemente.",
                         type = com.eventos.banana.domain.model.NotificationType.PROFILE_VIEW,
-                        read = false,
-                        createdAt = com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        read = false
                     )
                 )
             }

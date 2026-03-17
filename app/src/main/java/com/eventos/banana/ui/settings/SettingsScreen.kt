@@ -59,7 +59,7 @@ fun SettingsScreen(
     onVerifyEmail: () -> Unit,
     isEmailVerified: Boolean,
     onRecalculateStats: (String) -> Unit,
-    onUpdateLocation: (String, String, String) -> Unit,
+    onUpdateLocation: (String, String, String, Double?, Double?) -> Unit,
     onUpdateNotifyCommune: (Boolean, String, String) -> Unit,
     onToggleCategorySubscription: (String, Boolean) -> Unit,
     onUpdateNotifyWall: (Boolean) -> Unit,
@@ -87,6 +87,7 @@ fun SettingsScreen(
     // Logic for Location
     var detectedRegion by remember { mutableStateOf<String?>(null) }
     var detectedCommune by remember { mutableStateOf<String?>(null) }
+    var isDetecting by remember { mutableStateOf(false) }
 
 
     Scaffold(
@@ -206,18 +207,25 @@ fun SettingsScreen(
                     
                     SettingsItem(
                         icon = Icons.Outlined.LocationOn,
-                        title = "$communeText, $regionText",
-                        subtitle = "Toca para actualizar tu ubicación actual",
+                        title = if (isDetecting) "Detectando ubicación..." else "$communeText, $regionText",
+                        subtitle = if (isDetecting) "Por favor espera..." else "Toca para actualizar tu ubicación actual",
                         onClick = {
-                             scope.launch {
-                                val result = com.eventos.banana.util.LocationHelper(context).detectLocationFull()
-                                if (result != null) {
-                                    detectedRegion = result.region
-                                    detectedCommune = result.commune
-                                    if (userProfile != null) {
-                                         onUpdateLocation(userProfile.uid, result.region, result.commune)
+                             if (!isDetecting) {
+                                 scope.launch {
+                                    isDetecting = true
+                                    val result = com.eventos.banana.util.LocationHelper(context).detectLocationFull()
+                                    if (result != null) {
+                                        detectedRegion = result.region
+                                        detectedCommune = result.commune
+                                        if (userProfile != null) {
+                                             onUpdateLocation(userProfile.uid, result.region, result.commune, result.latitude, result.longitude)
+                                        }
+                                    } else {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        // TODO: Mostrar diálogo de error o manual
                                     }
-                                }
+                                    isDetecting = false
+                                 }
                              }
                         }
                     )

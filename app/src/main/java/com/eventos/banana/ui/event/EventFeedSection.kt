@@ -3,8 +3,10 @@ package com.eventos.banana.ui.event
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert // Explicit import
 import androidx.compose.material3.*
@@ -92,6 +95,7 @@ fun EventFeedSection(
                             post = post,
                             currentUserId = currentUserId,
                             onUserClick = { onUserClick(post.userId) },
+                            onReply = { viewModel.setReplyingTo(post) },
                             onBlock = { viewModel.blockUser(currentUserId, post.userId) },
                             onReport = { reason -> viewModel.reportPost(currentUserId, post, reason) }
                         )
@@ -111,6 +115,35 @@ fun EventFeedSection(
 
         if (uiState.isLoading || uiState.isUploading) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+
+        // REPLY BANNER
+        uiState.replyingTo?.let { replyingPost ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Respondiendo a @${replyingPost.userNickname}",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { viewModel.cancelReply() }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Cancelar", modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
         }
 
         // INPUT AREA
@@ -133,7 +166,7 @@ fun EventFeedSection(
                 maxLines = 3
             )
 
-            IconButton(
+            FilledIconButton(
                 onClick = {
                     scope.launch {
                         val bytes = selectedImageUri?.let {
@@ -144,22 +177,46 @@ fun EventFeedSection(
                         selectedImageUri = null
                     }
                 },
-                enabled = (postContent.isNotBlank() || selectedImageUri != null) && !uiState.isUploading
+                modifier = Modifier.padding(start = 4.dp),
+                enabled = (postContent.isNotBlank() || selectedImageUri != null) && !uiState.isUploading,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(com.eventos.banana.R.string.common_send))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send, 
+                    contentDescription = stringResource(com.eventos.banana.R.string.common_send)
+                )
             }
         }
 
-        // PREVIEW IMAGEN SELECCIONADA
-        selectedImageUri?.let {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // PREVIEW IMAGEN SELECCIONADA (E5 Fix)
+        selectedImageUri?.let { uri ->
+            Box(
+                modifier = Modifier
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                    .size(100.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
             ) {
-                Text(stringResource(com.eventos.banana.R.string.feed_image_selected), style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = { selectedImageUri = null }, colors = ButtonDefaults.textButtonColors()) {
-                    Text("x")
+                AsyncImage(
+                    model = uri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Surface(
+                    onClick = { selectedImageUri = null },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.5f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remover",
+                        modifier = Modifier.size(20.dp).padding(4.dp),
+                        tint = Color.White
+                    )
                 }
             }
         }
@@ -171,6 +228,7 @@ fun PostItem(
     post: FeedPost,
     currentUserId: String,
     onUserClick: () -> Unit,
+    onReply: () -> Unit,
     onBlock: () -> Unit,
     onReport: (String) -> Unit
 ) {
@@ -246,6 +304,33 @@ fun PostItem(
                 }
             }
 
+            // QUOTED CONTENT (Reply)
+            if (post.replyToNickname != null) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(Modifier.padding(8.dp)) {
+                        Text(
+                            "@${post.replyToNickname}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            post.replyToContent ?: "Imagen",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
             if (post.content.isNotBlank()) {
                 Text(post.content, style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(8.dp))
@@ -291,12 +376,25 @@ fun PostItem(
                 }
             }
             
-            Text(
-                text = post.timestampAsDate?.let { java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(it) } ?: "",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray,
-                modifier = Modifier.align(Alignment.End)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = { onReply() },
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text("Responder", style = MaterialTheme.typography.labelLarge)
+                }
+                
+                Text(
+                    text = post.timestampAsDate?.let { java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(it) } ?: "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+            }
         }
     }
 }

@@ -59,6 +59,12 @@ service cloud.firestore {
       allow update: if isSignedIn() && request.auth.uid != userId
                     && request.resource.data.diff(resource.data).affectedKeys()
                         .hasOnly(['friendRequestsReceived', 'friends', 'friendRequestsSent']);
+      
+      // 👁️ Vistas de perfil: cualquier usuario puede registrar SU visita (usando su UID como ID del doc)
+      match /profile_views/{visitorId} {
+        allow read: if isSignedIn() && request.auth.uid == userId; // Solo el dueño del perfil lee
+        allow write: if isSignedIn() && request.auth.uid == visitorId; // El visitante escribe SU registro
+      }
     }
 
     // --- NOTIFICACIONES ---

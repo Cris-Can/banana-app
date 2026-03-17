@@ -6,6 +6,7 @@ import com.eventos.banana.data.repository.SubscriptionRepository
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.util.GeohashUtils
 import javax.inject.Inject
+import kotlin.random.Random
 
 /**
  * UseCase para orquestar la creación de un nuevo evento.
@@ -24,18 +25,38 @@ class CreateEventUseCase @Inject constructor(
                 return Result.failure(Exception("LIMIT_REACHED"))
             }
 
-            // 2. Generar Geohash
-            val lat = event.exactLatitude ?: event.latitude
-            val lng = event.exactLongitude ?: event.longitude
+            // 2. Ofuscación de Ubicación (Seguridad Física)
+            val exactLat = event.exactLatitude ?: event.latitude
+            val exactLng = event.exactLongitude ?: event.longitude
             
-            val eventWithGeohash = if (lat != null && lng != null) {
-                val hash = GeohashUtils.encode(lat, lng, 9)
-                event.copy(geohash = hash)
+            // Generate Fuzzed coordinates (approx 300m - 800m offset)
+            val eventWithFuzzedLocation = if (exactLat != null && exactLng != null) {
+                // 1 degree lat/lng ~= 111km at equator. 0.005 ~= 550m
+                val latOffset = (Random.nextDouble(-0.007, 0.007))
+                val lngOffset = (Random.nextDouble(-0.007, 0.007))
+                
+                val fuzzedLat = exactLat + latOffset
+                val fuzzedLng = exactLng + lngOffset
+                
+                event.copy(
+                    exactLatitude = exactLat,
+                    exactLongitude = exactLng,
+                    latitude = fuzzedLat,  // PUBLIC COORD
+                    longitude = fuzzedLng  // PUBLIC COORD
+                )
             } else {
                 event
             }
 
-            // 3. Crear el evento a través del repositorio
+            // 3. Generar Geohash (Usando las coordenadas públicas/ofuscadas)
+            val eventWithGeohash = if (eventWithFuzzedLocation.latitude != null && eventWithFuzzedLocation.longitude != null) {
+                val hash = GeohashUtils.encode(eventWithFuzzedLocation.latitude, eventWithFuzzedLocation.longitude, 9)
+                eventWithFuzzedLocation.copy(geohash = hash)
+            } else {
+                eventWithFuzzedLocation
+            }
+
+            // 4. Crear el evento a través del repositorio
             val result = eventRepository.createEvent(eventWithGeohash, imageBytes)
             
             if (result.isSuccess) {

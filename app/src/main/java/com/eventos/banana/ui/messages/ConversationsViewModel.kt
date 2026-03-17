@@ -7,6 +7,8 @@ import com.eventos.banana.domain.model.Conversation
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -22,6 +24,17 @@ class ConversationsViewModel @Inject constructor(
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = emptyList()
             )
+    }
+
+    private val _unreadMessagesCount = MutableStateFlow(0)
+    val unreadMessagesCount: StateFlow<Int> = _unreadMessagesCount
+
+    fun startUnreadMessagesObservation(userId: String) {
+        viewModelScope.launch {
+            messageRepository.observeConversations(userId).collect { list ->
+                _unreadMessagesCount.value = list.sumOf { it.unreadCount[userId] ?: 0 }
+            }
+        }
     }
 
     suspend fun deleteConversation(conversationId: String) {

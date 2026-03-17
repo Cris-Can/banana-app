@@ -19,8 +19,11 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.res.stringResource
@@ -34,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
@@ -67,9 +71,8 @@ fun HomeScreen(
     val context = LocalContext.current
     val locations = remember { ChileCommunesList.getRegionsWithCommunes() }
     
-    // Preferences for Guide
-    val sharedPreferences = remember { context.getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE) }
-    var showGuide by remember { mutableStateOf(false) }
+    // 🗺️ MAP TOGGLE STATE
+    var isMapView by remember { mutableStateOf(false) }
 
     // 📍 GPS LOGIC
     val fusedLocationClient = remember { com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context) }
@@ -91,21 +94,7 @@ fun HomeScreen(
     )
 
     LaunchedEffect(Unit) {
-        val seen = sharedPreferences.getBoolean("home_guide_seen", false)
-        if (!seen) {
-            showGuide = true
-        }
-        
-        // Round 11: Auto-mark finished events as ratable
-        try {
-            com.eventos.banana.data.repository.EventRepository(
-                com.google.firebase.firestore.FirebaseFirestore.getInstance(),
-                com.eventos.banana.data.repository.NotificationRepository(com.google.firebase.firestore.FirebaseFirestore.getInstance())
-            ).markFinishedEventsAsRatable()
-        } catch (e: Exception) {
-            android.util.Log.e("HomeScreen", "Failed to mark events", e)
-        }
-        
+
         // 📍 Request Permission
         if (!hasLocationPermission) {
             permissionLauncher.launch(arrayOf(
@@ -122,6 +111,7 @@ fun HomeScreen(
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         eventListViewModel.updateLocation(location.latitude, location.longitude)
+                        sessionViewModel.updateProfileLocation(location.latitude, location.longitude)
                         android.util.Log.d("HomeScreen", "📍 Location updated: ${location.latitude}, ${location.longitude}")
                     }
                 }
@@ -137,7 +127,10 @@ fun HomeScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     
     LaunchedEffect(uiState) {
-        if (uiState !is EventListUiState.Loading) {
+        val state = uiState
+        if (state is EventListUiState.Success) {
+            isRefreshing = state.isRefreshing
+        } else if (state is EventListUiState.Error) {
             isRefreshing = false
         }
     }
@@ -186,7 +179,7 @@ fun HomeScreen(
     // OR: We could auto-clear filters if GPS is found? 
     // Let's keep manual filters as "Overrides".
     
-    val effectiveCommune = if (selectedRegion == null) null else (selectedCommune ?: userCommune)
+    val effectiveCommune = selectedCommune
     
     // Map Toggle Logic - Removed shadowing variable
     // onMapClick parameter is now used directly to navigate to World Map
@@ -251,8 +244,11 @@ fun HomeScreen(
                     },
                     actions = {
                         // 🌍 MAP TOGGLE
-                        IconButton(onClick = onMapClick) {
-                            Icon(Icons.Filled.LocationOn, contentDescription = stringResource(com.eventos.banana.R.string.home_cd_map))
+                        IconButton(onClick = { isMapView = !isMapView }) {
+                            Icon(
+                                imageVector = if (isMapView) Icons.Filled.List else Icons.Filled.LocationOn,
+                                contentDescription = if (isMapView) "Ver Lista" else "Ver Mapa"
+                            )
                         }
 
                         // 🔍 SEARCH
@@ -407,11 +403,12 @@ fun HomeScreen(
                 }
                 
                  // ---------- FILTROS REGION/COMUNA ----------
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // ... (Dropdowns logic remains same, just visually compacted spacing)
+            if (!isMapView) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // ... (Dropdowns logic remains same, just visually compacted spacing)
                 
                 var regionExpanded by remember { mutableStateOf(false) }
 
@@ -437,8 +434,7 @@ fun HomeScreen(
                                 onClick = {
                                     selectedRegion = null
                                     selectedCommune = null
-                                    eventListViewModel.updateRegion(null) // ➕
-                                    eventListViewModel.updateCommune(null) // Ensure commune is also cleared
+                                    eventListViewModel.searchAllRegions()
                                     regionExpanded = false
                                 }
                             )
@@ -500,10 +496,11 @@ fun HomeScreen(
                         }
                     }
                 }
-            }
+                } // Column
+            } // End of !isMapView Region/Commune block
 
-            // ---------- LISTA ----------
-            when (uiState) {
+            // ---------- CONTENIDO PRINCIPAL (LISTA O MAPA) ----------
+            when (val state = uiState) {
                 is EventListUiState.Loading -> {
                     Box(Modifier.fillMaxSize(), Alignment.Center) {
                         CircularProgressIndicator()
@@ -512,7 +509,7 @@ fun HomeScreen(
 
                 is EventListUiState.Error -> {
                     Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Text((uiState as EventListUiState.Error).message)
+                        Text(state.message) // <-- Using state.message securely
                     }
                 }
 
@@ -564,7 +561,7 @@ fun HomeScreen(
                         }
                     }
 
-                val events = (uiState as EventListUiState.Success).events
+                    val events = state.events
                         .filter { event ->
                             event.status == EventStatus.OPEN &&
                                     event.endAt > now &&
@@ -574,104 +571,374 @@ fun HomeScreen(
                                     checkDate(event.startAt, selectedDateFilter)
                         }
 
-
-                    if (events.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Text(
-                                    text = "No se encontraron eventos",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                                Text(
-                                    text = "Intenta cambiar los filtros",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.tertiary
+                    if (isMapView) {
+                        // ---------- VISTA DE MAPA ----------
+                        var selectedMapEvent by remember { mutableStateOf<Event?>(null) }
+                        
+                        // 🚀 OPTIMIZACIÓN SEGURA: Pre-calcular solo datos básicos para evitar lag
+                        // Nota: Evitamos crear BitmapDescriptor aquí porque puede fallar si el SDK no está listo
+                        val markerDataList = remember(events) {
+                            events.mapNotNull { event ->
+                                val lat = event.latitude ?: event.exactLatitude ?: 0.0
+                                val lng = event.longitude ?: event.exactLongitude ?: 0.0
+                                if (lat == 0.0 || lng == 0.0) return@mapNotNull null
+                                
+                                val hue = when (event.eventType) {
+                                    com.eventos.banana.domain.model.EventType.DEPORTES -> 120f // GREEN
+                                    com.eventos.banana.domain.model.EventType.SOCIAL -> 270f // VIOLET
+                                    com.eventos.banana.domain.model.EventType.CULTURAL -> 330f // ROSE
+                                    com.eventos.banana.domain.model.EventType.EDUCATIVO -> 240f // BLUE
+                                    com.eventos.banana.domain.model.EventType.JUEGOS -> 180f // CYAN
+                                    com.eventos.banana.domain.model.EventType.GASTRONOMIA -> 30f // ORANGE
+                                    com.eventos.banana.domain.model.EventType.AIRE_LIBRE -> 150f // GREEN_LIME
+                                    else -> 0f // RED
+                                }
+                                
+                                com.eventos.banana.ui.home.MapMarkerInfo(
+                                    event = event,
+                                    position = com.google.android.gms.maps.model.LatLng(lat, lng),
+                                    hue = hue
                                 )
                             }
                         }
-                    } else {
-                        PullToRefreshBox(
-                            isRefreshing = isRefreshing,
-                            onRefresh = {
-                                isRefreshing = true
-                                eventListViewModel.refresh()
-                            },
-                            modifier = Modifier.fillMaxWidth().weight(1f)
-                        ) {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(
-                                    start = 16.dp, 
-                                    end = 16.dp, 
-                                    top = 16.dp, 
-                                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 80.dp // Space for FAB + Nav Bar
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(12.dp) // Rule 5: 12dp separation between cards
-                            ) {
-                            items(events, key = { it.id }) { event ->
-                                // Calculate Creator Info
-                                val creatorProfile = (uiState as EventListUiState.Success).creatorProfiles[event.creatorId]
-                                val creatorName = creatorProfile?.nickname ?: "Usuario"
-                                val creatorRating = creatorProfile?.averageRating ?: 0.0
-                                val creatorRatingCount = creatorProfile?.ratingCount ?: 0
 
-                                com.eventos.banana.ui.components.BananaEventCard(
-                                    event = event,
-                                    creatorName = creatorName,
-                                    creatorRating = creatorRating,
-                                    creatorRatingCount = creatorRatingCount,
-                                    onClick = { onEventClick(event.id) },
-                                    userLocation = (uiState as? EventListUiState.Success)?.currentUserLocation,
-                                    modifier = Modifier.animateItem(),
-                                    sharedTransitionScope = sharedTransitionScope,
-                                    animatedVisibilityScope = animatedVisibilityScope
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            val userLoc = state.currentUserLocation
+                            val cameraPositionState = com.google.maps.android.compose.rememberCameraPositionState {
+                                position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(
+                                    com.google.android.gms.maps.model.LatLng(
+                                        userLoc?.latitude ?: -33.4489,
+                                        userLoc?.longitude ?: -70.6693
+                                    ),
+                                    12f
                                 )
                             }
 
-                            // 📄 Paginación: Botón "Cargar más"
-                            val successState = uiState as EventListUiState.Success
-                            if (successState.canLoadMore) {
-                                item {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                                        contentAlignment = Alignment.Center
+                            com.google.maps.android.compose.GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = cameraPositionState,
+                                properties = com.google.maps.android.compose.MapProperties(
+                                    isMyLocationEnabled = hasLocationPermission
+                                ),
+                                uiSettings = com.google.maps.android.compose.MapUiSettings(
+                                    myLocationButtonEnabled = true,
+                                    zoomControlsEnabled = false,
+                                    compassEnabled = true
+                                ),
+                                onMapClick = { selectedMapEvent = null }
+                            ) {
+                                markerDataList.forEach { data ->
+                                    val markerIcon = remember(data.hue) {
+                                        try {
+                                            com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(data.hue)
+                                        } catch (e: Exception) {
+                                            null // Fallback to default
+                                        }
+                                    }
+
+                                    com.google.maps.android.compose.Marker(
+                                        state = com.google.maps.android.compose.MarkerState(position = data.position),
+                                        title = data.event.title,
+                                        snippet = "${data.event.eventType.emoji} ${data.event.commune}",
+                                        onClick = {
+                                            selectedMapEvent = data.event
+                                            true
+                                        },
+                                        icon = markerIcon
+                                    )
+                                }
+                            }
+
+                            // 🎨 LEYENDA DEL MAPA
+                            var isLegendExpanded by remember { mutableStateOf(false) }
+                            
+                            Card(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(16.dp),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                onClick = { isLegendExpanded = !isLegendExpanded }
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.padding(horizontal = 4.dp)
                                     ) {
-                                        if (isLoadingMore) {
-                                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                        } else {
-                                            OutlinedButton(onClick = { eventListViewModel.loadMore() }) {
-                                                Text("Cargar más eventos")
+                                        Text(
+                                            "Categorías",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Icon(
+                                            imageVector = if (isLegendExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = if (isLegendExpanded) "Colapsar" else "Expandir",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+
+                                    androidx.compose.animation.AnimatedVisibility(visible = isLegendExpanded) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        ) {
+                                            com.eventos.banana.domain.model.EventType.values().filter { it != com.eventos.banana.domain.model.EventType.OTRO }.forEach { type ->
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    val hue = when (type) {
+                                                        com.eventos.banana.domain.model.EventType.DEPORTES -> 120f
+                                                        com.eventos.banana.domain.model.EventType.SOCIAL -> 270f
+                                                        com.eventos.banana.domain.model.EventType.CULTURAL -> 330f
+                                                        com.eventos.banana.domain.model.EventType.EDUCATIVO -> 240f
+                                                        com.eventos.banana.domain.model.EventType.JUEGOS -> 180f
+                                                        com.eventos.banana.domain.model.EventType.GASTRONOMIA -> 30f
+                                                        com.eventos.banana.domain.model.EventType.AIRE_LIBRE -> 150f
+                                                        else -> 0f
+                                                    }
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(8.dp)
+                                                            .background(
+                                                                color = androidx.compose.ui.graphics.Color.hsv(hue, 0.7f, 0.9f),
+                                                                shape = androidx.compose.foundation.shape.CircleShape
+                                                            )
+                                                    )
+                                                    Text(
+                                                        "${type.emoji} ${type.localizedName()}",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        } // LazyColumn closing
-                    } // PullToRefreshBox closing
-                }
-            } // Box closing
-        } // Column closing
-    } // AnimatedVisibilityScope closing o Column closing
-        }
-    } // End Scaffold
-             
-        if (showGuide) {
-            HomeGuideOverlay(onDismiss = {
-                showGuide = false
-                sharedPreferences.edit().putBoolean("home_guide_seen", true).apply()
-            })
-        }
-    }
+
+                            // 🃏 CARD OVERLAY al seleccionar un pin
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = selectedMapEvent != null,
+                                enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }) +
+                                        androidx.compose.animation.fadeIn(),
+                                exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it }) +
+                                       androidx.compose.animation.fadeOut(),
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(16.dp)
+                            ) {
+                                selectedMapEvent?.let { event ->
+                                    val creatorProfile = state.creatorProfiles[event.creatorId]
+                                    val creatorName = creatorProfile?.nickname ?: "Usuario"
+
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface
+                                        ),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Imagen del evento
+                                            if (!event.imageUrl.isNullOrBlank()) {
+                                                AsyncImage(
+                                                    model = event.imageUrl,
+                                                    contentDescription = event.title,
+                                                    modifier = Modifier
+                                                        .size(72.dp)
+                                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(72.dp)
+                                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        event.eventType.emoji,
+                                                        style = MaterialTheme.typography.headlineMedium
+                                                    )
+                                                }
+                                            }
+
+                                            // Info del evento
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = event.title,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = "${event.eventType.emoji} ${event.eventType.localizedName()}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                // 🕐 Fecha y hora
+                                                val dateFormat = remember { java.text.SimpleDateFormat("EEE dd MMM · HH:mm", java.util.Locale("es", "CL")) }
+                                                Text(
+                                                    text = "🕐 ${dateFormat.format(java.util.Date(event.startAt))}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = "por $creatorName · ${event.commune}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
+                                            }
+
+                                            // Botón Ver
+                                            FilledTonalButton(
+                                                onClick = { onEventClick(event.id) },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                            ) {
+                                                Text("Ver", style = MaterialTheme.typography.labelLarge)
+                                            }
+                                        }
+
+                                        // Botón cerrar
+                                        IconButton(
+                                            onClick = { selectedMapEvent = null },
+                                            modifier = Modifier
+                                                .align(Alignment.End)
+                                                .size(24.dp)
+                                                .offset(x = (-8).dp, y = (-8).dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = "Cerrar",
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // ---------- VISTA LISTA CLÁSICA ----------
+                        if (events.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Text(
+                                        text = "No se encontraron eventos",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                    Text(
+                                        text = "Intenta cambiar los filtros",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.tertiary
+                                    )
+                                }
+                            }
+                        } else {
+                            PullToRefreshBox(
+                                isRefreshing = isRefreshing,
+                                onRefresh = {
+                                    eventListViewModel.refresh()
+                                },
+                                modifier = Modifier.fillMaxWidth().weight(1f)
+                            ) {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(
+                                        start = 16.dp, 
+                                        end = 16.dp, 
+                                        top = 16.dp, 
+                                        bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 80.dp // Space for FAB + Nav Bar
+                                    ),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp) // Rule 5: 12dp separation between cards
+                                ) {
+                                items(events, key = { it.id }) { event ->
+                                    // Calculate Creator Info safely
+                                    val creatorProfile = state.creatorProfiles[event.creatorId]
+                                    val creatorName = creatorProfile?.nickname ?: "Usuario"
+                                    val creatorRating = creatorProfile?.averageRating ?: 0.0
+                                    val creatorRatingCount = creatorProfile?.ratingCount ?: 0
+
+                                    com.eventos.banana.ui.components.BananaEventCard(
+                                        event = event,
+                                        creatorName = creatorName,
+                                        creatorRating = creatorRating,
+                                        creatorRatingCount = creatorRatingCount,
+                                        onClick = { onEventClick(event.id) },
+                                        userLocation = state.currentUserLocation,
+                                        modifier = Modifier.animateItem(),
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope
+                                    )
+                                }
+
+                                // 📄 Paginación: Botón "Cargar más"
+                                if (state.canLoadMore) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (isLoadingMore) {
+                                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                            } else {
+                                                OutlinedButton(onClick = { eventListViewModel.loadMore() }) {
+                                                    Text("Cargar más eventos")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } // lazy column
+                        } // pull to refresh box
+                    } // else events.isEmpty
+                    } // if isMapView
+                } // when(uiState).Success
+            } // when(uiState)
+        } // Column modifiers
+    } // Box closing
+} // Scaffold
+} // Fin HomeScreen
+
+data class MapMarkerInfo(
+    val event: Event,
+    val position: com.google.android.gms.maps.model.LatLng,
+    val hue: Float
+)

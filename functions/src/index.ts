@@ -41,22 +41,42 @@ export const onNotificationCreated = onDocumentCreated(
     const notification = snapshot.data();
     const userId = notification.userId;
 
-    const userSnap = await admin
-      .firestore()
-      .collection("users")
-      .doc(userId)
-      .get();
+    const db = admin.firestore();
+    const userSnap = await db.collection("users").doc(userId).get();
 
     if (!userSnap.exists) {
-      console.log("Usuario no existe:", userId);
+      console.log(`[PUSH_DIAG] Usuario no existe: ${userId}`);
       return;
     }
 
-    const fcmToken = userSnap.data()?.fcmToken;
+    const userData = userSnap.data();
+    const fcmToken = userData?.fcmToken;
 
     if (!fcmToken) {
-      console.log("Usuario sin token FCM:", userId);
+      console.log(`[PUSH_DIAG] Usuario ${userId} (${userData?.nickname || "sin nick"}) NO tiene token FCM.`);
       return;
+    }
+
+    const notificationType = notification.type || "GENERIC";
+    let channelId = "banana_channel_01";
+
+    // 📺 CHANNEL MAPPING (Matching NotificationHelper.kt)
+    switch (notificationType) {
+      case "NEW_MESSAGE":
+        channelId = "banana_messages";
+        break;
+      case "JOIN_REQUEST_SENT":
+      case "JOIN_APPROVED":
+      case "JOIN_REJECTED":
+      case "RATING":
+      case "RATING_REMINDER":
+        channelId = "banana_reminders";
+        break;
+      case "EVENT_CREATED":
+      case "EVENT_WALL_POST":
+      case "EVENT_UPDATE":
+        channelId = "banana_channel_01";
+        break;
     }
 
     const message = {
@@ -67,15 +87,34 @@ export const onNotificationCreated = onDocumentCreated(
       },
       data: {
         eventId: notification.eventId ?? "",
-        type: notification.type ?? "GENERIC",
+        conversationId: notification.conversationId ?? notification.eventId ?? "",
+        fromUserId: notification.fromUserId ?? "",
+        type: notificationType,
+        channelId: channelId,
       },
+      android: {
+        priority: "high" as const,
+        notification: {
+          channelId: channelId,
+          sound: "default",
+          // Sin clickAction → Android abre la app automáticamente al tocar la notificación
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            contentAvailable: true,
+            sound: "default"
+          }
+        }
+      }
     };
 
     try {
       await admin.messaging().send(message);
-      console.log("Push enviado a:", userId);
+      console.log(`[PUSH_DIAG] Enviado ok a ${userId}. Tipo: ${notificationType}. Canal: ${channelId}`);
     } catch (e: any) {
-      console.error(`Error enviando notificación a ${userId}:`, e);
+      console.error(`[PUSH_DIAG] Error en ${userId}:`, e);
       await cleanupInvalidToken(userId, e);
     }
   }
@@ -83,59 +122,122 @@ export const onNotificationCreated = onDocumentCreated(
 
 /**
  * =====================================================
- * 🆕 A14.2 + A14.3 — EVENTOS POR COMUNA
- * - Flag global ON/OFF
- * - Preferencia por usuario
+ * 🆕 NOTIFICACIÓN INTELIGENTE (ZONA + INTERESES)
+ * - Prioridad 1: Intereses (subscribedCategories)
+ * - Prioridad 2: Ubicación (notificationRange)
+ * - Evita duplicados por usuario
  * =====================================================
  */
-export const onEventCreatedNotifyCommune = onDocumentCreated(
+export const onEventCreatedNotifyZone = onDocumentCreated(
   "events/{eventId}",
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
 
-    // ---------- EVENT DATA ----------
     const eventData = snapshot.data();
     const eventId = event.params.eventId;
     const title = eventData.title;
+    const category = eventData.category;
     const commune = eventData.commune;
+    const region = eventData.region;
+    const range = eventData.notificationRange || "COMMUNE";
+    const creatorId = eventData.creatorId;
+    const isBoosted = eventData.isBoosted === true;
 
-    if (!commune) {
-      console.log("Evento sin comuna, no se notifica:", eventId);
-      return;
-    }
+    console.log(`[INTELLIGENT_NOTIF] Event ${eventId} created. Cat: ${category}, Range: ${range}`);
 
-    // Normalizar tópico igual que en Android: events_Comuna_Con_Guiones_Bajos
-    const topicName = `events_${commune.replace(/ /g, "_")}`;
-
-    console.log(`Evento nuevo en ${commune}. Enviando push al tópico: ${topicName}`);
-
-    // Construir mensaje FCM
-    const message: admin.messaging.Message = {
-      topic: topicName,
-      notification: {
-        title: "Nuevo evento cerca de ti 📍",
-        body: `Se creó un nuevo evento en tu comuna: ${title}`,
-      },
-      data: {
-        eventId: eventId,
-        type: "EVENT_CREATED",
-        click_action: "FLUTTER_NOTIFICATION_CLICK" // Estándar para muchos plugins, aunque Android nativo lo maneja con el Intent Filter
-      },
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "banana_events_channel", // Debe coincidir con BananaApp.kt
-          clickAction: "FLUTTER_NOTIFICATION_CLICK"
-        }
-      }
-    };
+    const db = admin.firestore();
+    const recipientsMap = new Map<string, { title: string, message: string }>();
 
     try {
-      const response = await admin.messaging().send(message);
-      console.log("Mensaje enviado exitosamente al tópico:", response);
+      // 🎯 STEP 1: FIND BY INTERESTS (HIGHEST PRIORITY)
+      if (category) {
+        // Query 1: Subscribed Categories
+        const subSnap = await db.collection("users")
+          .where("subscribedCategories", "array-contains", category)
+          .get();
+
+        // Query 2: Profile Interests (Gustos)
+        const intSnap = await db.collection("users")
+          .where("interests", "array-contains", category)
+          .get();
+
+        const processSnap = (snap: admin.firestore.QuerySnapshot) => {
+          snap.forEach(doc => {
+            if (doc.id !== creatorId) {
+              recipientsMap.set(doc.id, {
+                title: isBoosted ? `¡Evento Destacado! 🔥 ${category}` : `Nuevo evento de ${category} para ti 🍌`,
+                message: `¡Mira lo que está pasando!: ${title}`
+              });
+            }
+          });
+        };
+
+        processSnap(subSnap);
+        processSnap(intSnap);
+      }
+
+      // 🎯 STEP 2: FIND BY LOCATION (ONLY IF NOT NOTIFIED YET)
+      let locationQuery = db.collection("users").where("notifyEventsByCommune", "==", true);
+
+      if (range === "COMMUNE" && commune) {
+        locationQuery = locationQuery.where("commune", "==", commune);
+      } else if (range === "REGION" && region) {
+        locationQuery = locationQuery.where("region", "==", region);
+      } else if (range === "NATIONAL") {
+        // No extra filter (Chile by default)
+      } else {
+        if (commune) locationQuery = locationQuery.where("commune", "==", commune);
+      }
+
+      const locationUsers = await locationQuery.get();
+
+      locationUsers.forEach(doc => {
+        // ONLY ADD if not already added by interests
+        if (doc.id !== creatorId && !recipientsMap.has(doc.id)) {
+          recipientsMap.set(doc.id, {
+            title: isBoosted ? "¡Evento Destacado cerca de ti! 🔥" : "Nuevo evento cerca de ti 📍",
+            message: `Se creó un evento en tu zona: ${title}`
+          });
+        }
+      });
+
+      // 🎯 STEP 3: PERSIST IN BATCH
+      if (recipientsMap.size === 0) {
+        console.log("[INTELLIGENT_NOTIF] No recipients found.");
+        return;
+      }
+
+      console.log(`[INTELLIGENT_NOTIF] Creating ${recipientsMap.size} unique notifications.`);
+      const batch = db.batch();
+      let batchSize = 0;
+
+      for (const [userId, content] of recipientsMap.entries()) {
+        const notifRef = db.collection("notifications").doc();
+        batch.set(notifRef, {
+          userId: userId,
+          title: content.title,
+          message: content.message,
+          eventId: eventId,
+          type: "EVENT_CREATED",
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        batchSize++;
+
+        if (batchSize >= 450) { // Firestore limit
+          await batch.commit();
+          console.log("[INTELLIGENT_NOTIF] Intermediate batch committed.");
+        }
+      }
+
+      if (batchSize > 0) {
+        await batch.commit();
+        console.log("[INTELLIGENT_NOTIF] Final batch committed.");
+      }
+
     } catch (error) {
-      console.error("Error enviando mensaje al tópico:", error);
+      console.error("[INTELLIGENT_NOTIF] Major error:", error);
     }
   }
 );
@@ -203,46 +305,30 @@ export const onRatingCreated = onDocumentCreated(
       console.log(`Stats for ${toUserId}: Sum=${sum}, Count=${count}`);
 
       // 2. Update User Profile
+      const avgScore = count > 0 ? Math.round((sum / count) * 100) : 0; // Score for leaderboard sorting
       await db.collection("users").doc(toUserId).update({
         ratingSum: sum,
         ratingCount: count,
+        score: avgScore, // 🏆 Used by LeaderboardScreen for ranking
       });
 
       console.log(`Profile updated for ${toUserId}`);
 
-      // 3. 🔔 PUSH NOTIFICATION (Favorable Rating >= 4.0) (Round 6)
+      // 3. 🔔 PERSISTENT NOTIFICATION (Through hub)
       const numericScore = Number(score);
       console.log(`Evaluating notification for ${toUserId}: NumericScore=${numericScore}`);
 
-      if (numericScore >= 4.0) {
-        const userDoc = await db.collection("users").doc(toUserId).get();
-        const userData = userDoc.data();
-
-        if (userData && userData.fcmToken) {
-          const payload = {
-            notification: {
-              title: "¡Nueva calificación positiva! ⭐",
-              body: "Un organizador o participante te ha valorado positivamente.",
-            },
-            data: {
-              type: "RATING",
-              targetId: toUserId
-            },
-            token: userData.fcmToken,
-          };
-
-          try {
-            await admin.messaging().send(payload);
-            console.log(`Push notification successfully sent to ${toUserId} for good rating.`);
-          } catch (e: any) {
-            console.error(`Failed to send push to ${toUserId}. Error:`, e);
-            await cleanupInvalidToken(toUserId, e);
-          }
-        } else {
-          console.warn(`User ${toUserId} has no fcmToken or data. Notification skipped.`);
-        }
-      } else {
-        console.log(`Rating for ${toUserId} is not high enough for a notification (${numericScore} < 4.0).`);
+      if (numericScore >= 1.0) { // Changed to all ratings for visibility, test if 4.0 is better
+        const notifRef = db.collection("notifications").doc();
+        await notifRef.set({
+          userId: toUserId,
+          title: "¡Nueva calificación! ⭐",
+          message: `Has recibido una calificación de ${numericScore} estrellas.`,
+          type: "RATING",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          read: false
+        });
+        console.log(`Notification document created for user ${toUserId}`);
       }
     } catch (error) {
       console.error("Error updating user rating stats:", error);
@@ -272,36 +358,25 @@ export const onEventRatableReminder = onDocumentUpdated(
       console.log(`Event ${event.params.eventId} is now ratable. Sending reminders...`);
       const db = admin.firestore();
 
-      const participantIds: string[] = after.participants || [];
+      const participantIds: string[] = after.approvedParticipants || [];
       const creatorId: string = after.creatorId;
       const allConcerned = Array.from(new Set([...participantIds, creatorId]));
 
+      const batch = db.batch();
       for (const userId of allConcerned) {
-        const userDoc = await db.collection("users").doc(userId).get();
-        const userData = userDoc.data();
-
-        if (userData && userData.fcmToken) {
-          const payload = {
-            notification: {
-              title: "¡Evento finalizado! ⭐",
-              body: "Ya puedes calificar a los demás asistentes de " + (after.title || "el evento"),
-            },
-            data: {
-              type: "RATING_REMINDER",
-              eventId: event.params.eventId,
-            },
-            token: userData.fcmToken,
-          };
-
-          try {
-            await admin.messaging().send(payload);
-            console.log(`Reminder sent to ${userId}`);
-          } catch (e: any) {
-            console.error(`Failed reminder for ${userId}`, e);
-            await cleanupInvalidToken(userId, e);
-          }
-        }
+        const notifRef = db.collection("notifications").doc();
+        batch.set(notifRef, {
+          userId: userId,
+          title: "¡Evento finalizado! ⭐",
+          message: `Ya puedes calificar a los asistentes de "${after.title || "el evento"}"`,
+          eventId: event.params.eventId,
+          type: "RATING_REMINDER",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          read: false
+        });
       }
+      await batch.commit();
+      console.log(`Created ${allConcerned.length} rating reminder notifications.`);
     }
   }
 );
@@ -351,6 +426,23 @@ export const onFeedPostCreated = onDocumentCreated(
 
       // Remove Author
       recipients.delete(authorId);
+
+      // 🛑 REMOVE REPLIED USER (Robust Exclusion using replyToUserId)
+      const replyToUserId = post.replyToUserId;
+      if (replyToUserId && typeof replyToUserId === "string") {
+        const trimmedRepliedId = replyToUserId.trim();
+        console.log(`[EXCLUSION_DIAG] Checking exclusion for userId: [${trimmedRepliedId}]`);
+        if (recipients.has(trimmedRepliedId)) {
+          recipients.delete(trimmedRepliedId);
+          console.log(`[EXCLUSION_DIAG] Successfully excluded user ${trimmedRepliedId} from generic notification.`);
+        } else {
+          console.log(`[EXCLUSION_DIAG] User ${trimmedRepliedId} was not in recipients (Author id: ${authorId})`);
+        }
+      } else {
+        console.log("[EXCLUSION_DIAG] No valid replyToUserId found in post.");
+      }
+
+      console.log(`Final recipients list size: ${recipients.size}. Recipients: ${Array.from(recipients).join(", ")}`);
 
       if (recipients.size === 0) {
         console.log("No recipients for this post.");
@@ -414,8 +506,10 @@ export const onFeedPostCreated = onDocumentCreated(
               title: `Nuevo mensaje en ${eventTitle}`,
               message: `${authorNickname}: ${shortContent}`,
               eventId: eventId,
-              type: "EVENT_UPDATE", // as per plan
-              createdAt: Date.now(),
+              conversationId: eventId, // Use eventId as conversationId for wall posts
+              fromUserId: authorId,
+              type: "EVENT_WALL_POST",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
               read: false
             });
             count++;

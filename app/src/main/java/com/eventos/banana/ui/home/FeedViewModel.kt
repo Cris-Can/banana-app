@@ -23,7 +23,8 @@ data class FeedUiState(
     val error: String? = null,
     val isUploading: Boolean = false,
     val creatorNickname: String = "Organizador",
-    val creatorId: String = ""
+    val creatorId: String = "",
+    val replyingTo: FeedPost? = null
 )
 
 
@@ -34,7 +35,8 @@ class FeedViewModel @AssistedInject constructor(
     private val repository: FeedRepository,
     private val userRepository: UserRepository,
     private val eventRepository: EventRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val notificationRepository: com.eventos.banana.data.repository.NotificationRepository
 ) : ViewModel() {
 
     @AssistedFactory
@@ -107,6 +109,14 @@ class FeedViewModel @AssistedInject constructor(
         }
     }
 
+    fun setReplyingTo(post: FeedPost?) {
+        _uiState.value = _uiState.value.copy(replyingTo = post)
+    }
+
+    fun cancelReply() {
+        _uiState.value = _uiState.value.copy(replyingTo = null)
+    }
+
     fun createPost(userId: String, content: String, imageBytes: ByteArray?) {
         if (content.isBlank() && imageBytes == null) return
 
@@ -117,12 +127,18 @@ class FeedViewModel @AssistedInject constructor(
             val userProfile = userRepository.getUserProfile(userId)
             val nickname = userProfile?.nickname ?: "Usuario"
 
+            val replyingTo = _uiState.value.replyingTo
+
             val post = FeedPost(
                 eventId = eventId,
                 userId = userId,
                 userNickname = nickname,
                 content = content,
-                isUserVerified = userProfile?.isVerified ?: false
+                isUserVerified = userProfile?.isVerified ?: false,
+                replyToId = replyingTo?.id,
+                replyToNickname = replyingTo?.userNickname,
+                replyToContent = replyingTo?.content?.let { if (it.length > 50) it.take(47) + "..." else it },
+                replyToUserId = replyingTo?.userId
             )
 
             val result = repository.createPost(post, imageBytes)
@@ -133,11 +149,27 @@ class FeedViewModel @AssistedInject constructor(
                     error = result.exceptionOrNull()?.message
                 )
             } else {
-                _uiState.value = _uiState.value.copy(isUploading = false, error = null)
+                _uiState.value = _uiState.value.copy(isUploading = false, error = null, replyingTo = null)
                 
-                // 🔔 NOTIFICAR A PARTICIPANTES
-                // Ahora manejado por Cloud Functions (Backend) para mayor eficiencia y ahorro de batería.
-                android.util.Log.d("FeedViewModel", "Post created. Notifications delegated to Cloud Function.")
+                // 🔔 NOTIFICAR AL USUARIO RESPONDIDO (Push)
+                if (replyingTo != null && replyingTo.userId != userId) {
+                    android.util.Log.d("FeedViewModel", "🔔 Sending response notification to user: ${replyingTo.userId}")
+                    notificationRepository.sendNotification(
+                        com.eventos.banana.domain.model.AppNotification(
+                            userId = replyingTo.userId,
+                            fromUserId = userId,
+                            title = "¡Te respondieron en el muro! 💬",
+                            message = "$nickname respondió a tu mensaje",
+                            eventId = eventId,
+                            conversationId = eventId,
+                            type = com.eventos.banana.domain.model.NotificationType.EVENT_WALL_POST
+                        )
+                    )
+                } else if (replyingTo?.userId == userId) {
+                    android.util.Log.d("FeedViewModel", "🚫 Notification skipped: Self-reply")
+                }
+                
+                android.util.Log.d("FeedViewModel", "Post created successfully.")
             }
         }
     }

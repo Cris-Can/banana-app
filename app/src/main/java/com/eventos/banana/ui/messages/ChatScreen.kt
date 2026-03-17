@@ -55,6 +55,7 @@ fun ChatScreen(
     onDeleteMessage: (String) -> Unit = {},
     onEditMessage: (String, String, String) -> Unit = { _, _, _ -> },
     onLoadMore: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
 ) {
     var messageText by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -166,7 +167,9 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    Column {
+                    Column(
+                        modifier = Modifier.clickable { onProfileClick() }
+                    ) {
                         Text(otherUserNickname)
                         // ⌨️ Typing Indicator (PREMIUM ONLY)
                         if (otherUserIsTyping && isGold) {

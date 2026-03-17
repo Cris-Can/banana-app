@@ -62,6 +62,12 @@ fun CreateEventScreen(
     val scrollState = rememberScrollState()
     var timeError by remember { mutableStateOf<String?>(null) }
 
+    // ================= ESTADO DE LÍMITES / ADS =================
+    val adUnlockState by viewModel.adUnlockState.collectAsState()
+    val limitDebugInfo by viewModel.limitDebugInfo.collectAsState()
+    val userLimitStats by viewModel.userLimitStats.collectAsState()
+    var showAdDialog by remember { mutableStateOf(false) }
+
     // Image Picker
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -95,6 +101,11 @@ fun CreateEventScreen(
     // ================= ÉXITO =================
     LaunchedEffect(uiState.success) {
         if (uiState.success) onSuccess()
+    }
+
+    // Load initial stats for premium features/limits
+    LaunchedEffect(creatorId) {
+        viewModel.loadUserStats(creatorId)
     }
 
     Column(
@@ -515,6 +526,59 @@ fun CreateEventScreen(
             }
         }
 
+        // ---------- RANGO DE NOTIFICACIONES ----------
+        Text("Alcance de Notificaciones", style = MaterialTheme.typography.titleMedium)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val isGold = userLimitStats?.subscriptionType == "GOLD" || 
+                           userLimitStats?.subscriptionType == "FOUNDER" || 
+                           userLimitStats?.isFounder == true
+                
+                val rangeOptions = listOf(
+                    Triple("COMMUNE", "Solo Comuna", "Notifica a usuarios de tu misma comuna"),
+                    Triple("REGION", "Región", "Notifica a toda la región (Solo Gold 🍌)"),
+                    Triple("NATIONAL", "Nacional", "Notifica a todo el país (Solo Gold 🍌)")
+                )
+
+                rangeOptions.forEach { (range, title, desc) ->
+                    val isRestricted = range != "COMMUNE" && !isGold
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isRestricted) {
+                                viewModel.updateNotificationRange(range)
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = formState.notificationRange == range,
+                            onClick = { viewModel.updateNotificationRange(range) },
+                            enabled = !isRestricted
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isRestricted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = desc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isRestricted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // ---------- CUPOS ----------
         OutlinedTextField(
             value = formState.maxParticipants,
@@ -747,7 +811,7 @@ fun CreateEventScreen(
                 } else {
                     scope.launch {
                         val imageBytes = formState.selectedImageUri?.let { uri ->
-                            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            com.eventos.banana.util.ImageCompressor.compressFromUri(context, uri)
                         }
                         viewModel.createEvent(
                             Event(
@@ -769,7 +833,8 @@ fun CreateEventScreen(
                                 startAt = formState.startAt!!,
                                 endAt = formState.endAt!!,
                                 eventTimestamp = formState.startAt!!,
-                                joinQuestions = formState.questions
+                                joinQuestions = formState.questions,
+                                notificationRange = formState.notificationRange
                             ),
                             imageBytes
                         )
@@ -804,10 +869,7 @@ fun CreateEventScreen(
     }
 
     // ================= 📺 AD UNLOCK DIALOG =================
-    val adUnlockState by viewModel.adUnlockState.collectAsState()
-    val limitDebugInfo by viewModel.limitDebugInfo.collectAsState()
-    val userLimitStats by viewModel.userLimitStats.collectAsState()
-    var showAdDialog by remember { mutableStateOf(false) }
+    // Definitions moved to top
 
     // Intercept Limit Error
     LaunchedEffect(uiState.errorMessage) {

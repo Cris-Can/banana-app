@@ -15,14 +15,15 @@ class SubscriptionRepository @Inject constructor(
     // Limits
     companion object {
         const val FREE_LIMIT_CREATE_EVENT = 1
-        const val FREE_LIMIT_JOIN_REQUEST = 3
+        const val FREE_LIMIT_JOIN_REQUEST = 2
     }
 
     data class UserLimitStats(
         val subscriptionType: String,
         val eventsCreated: Int,
         val adsUnlocked: Int,
-        val limit: Int
+        val limit: Int,
+        val isFounder: Boolean = false
     )
 
     /**
@@ -71,11 +72,8 @@ class SubscriptionRepository @Inject constructor(
             if (updatedUser.subscriptionType == "GOLD" || updatedUser.subscriptionType == "FOUNDER" || updatedUser.isFounder) {
                 Result.success(true)
             } else {
-                if (updatedUser.joinRequestsInCycle < FREE_LIMIT_JOIN_REQUEST) {
-                    Result.success(true)
-                } else {
-                    Result.success(false)
-                }
+                val effectiveLimit = FREE_LIMIT_JOIN_REQUEST + updatedUser.adEventsUnlocked
+                Result.success(updatedUser.joinRequestsInCycle < effectiveLimit)
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -141,7 +139,8 @@ class SubscriptionRepository @Inject constructor(
                 subscriptionType = refreshed.subscriptionType,
                 eventsCreated = refreshed.eventsCreatedInCycle,
                 adsUnlocked = refreshed.adEventsUnlocked,
-                limit = FREE_LIMIT_CREATE_EVENT // The base limit, UI calculates effective
+                limit = FREE_LIMIT_CREATE_EVENT, // The base limit, UI calculates effective
+                isFounder = refreshed.isFounder || refreshed.subscriptionType == "FOUNDER"
             )
         } catch (e: Exception) {
             null

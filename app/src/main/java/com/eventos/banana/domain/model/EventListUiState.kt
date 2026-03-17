@@ -8,7 +8,8 @@ sealed interface EventListUiState {
         val events: List<Event>,
         val creatorProfiles: Map<String, UserProfile> = emptyMap(),
         val currentUserLocation: com.eventos.banana.domain.model.ExactLocation? = null,
-        val canLoadMore: Boolean = false
+        val canLoadMore: Boolean = false,
+        val isRefreshing: Boolean = false
     ) : EventListUiState
 
     data class Error(

@@ -50,6 +50,19 @@
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|keyboard|keyboardHidden"
             android:launchMode="singleTop"
             android:theme="@style/Theme.Banana">
+
+            <!-- 🚀 Launcher principal de la app -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- 🔔 Notificaciones push: abre la app al tocar la notificación -->
+            <intent-filter>
+                <action android:name="OPEN_BANANA_APP" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
             <!-- Deep Link: banana.app/event/{id} -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />

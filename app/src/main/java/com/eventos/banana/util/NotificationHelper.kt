@@ -50,7 +50,7 @@ object NotificationHelper {
         val messages = NotificationChannel(
             CHANNEL_MESSAGES,
             context.getString(R.string.notif_channel_messages),
-            NotificationManager.IMPORTANCE_DEFAULT
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = context.getString(R.string.notif_channel_messages_desc)
         }

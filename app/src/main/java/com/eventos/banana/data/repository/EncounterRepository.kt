@@ -222,8 +222,11 @@ class EncounterRepository @Inject constructor(
         creatorId: String
     ): Result<String> {
         return try {
-            // TODO: Verificar que quien confirma es el creador del evento
-            
+            val eventDoc = db.collection("events").document(eventId).get().await()
+            val actualCreatorId = eventDoc.getString("creatorId")
+            if (actualCreatorId != creatorId) {
+                return Result.failure(Exception("Solo el creador del evento puede confirmar encuentros manualmente."))
+            }
             val result = recordEncounter(
                 eventId = eventId,
                 userId1 = userId1,

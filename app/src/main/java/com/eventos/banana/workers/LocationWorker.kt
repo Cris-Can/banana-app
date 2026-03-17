@@ -8,10 +8,15 @@ import com.eventos.banana.data.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+import androidx.hilt.work.HiltWorker
 
-class LocationWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
+@HiltWorker
+class LocationWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val userRepository: UserRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -35,10 +40,6 @@ class LocationWorker(
             
             if (location != null) {
                 // 4. Update Firestore
-                val userRepository = UserRepository(
-                com.google.firebase.firestore.FirebaseFirestore.getInstance(),
-                com.eventos.banana.data.repository.NotificationRepository(com.google.firebase.firestore.FirebaseFirestore.getInstance())
-            )
                 val geohash = com.eventos.banana.util.GeohashUtils.encode(location.latitude, location.longitude, 9)
                 
                 userRepository.updateLocation(

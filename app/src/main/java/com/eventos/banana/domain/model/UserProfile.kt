@@ -21,7 +21,7 @@ data class UserProfile(
     val notifyEventWall: Boolean = true, // 🔔 Avisa nuevos mensajes en Muro
     val fcmToken: String? = null,
     val appTheme: String = "BANANA", // 🎨 Options: BANANA, DARK, LIGHT
-    @get:PropertyName("isVerified") @set:PropertyName("isVerified") var isVerified: Boolean = false, // 👈 A23 Account verification
+    var isVerified: Boolean = false, // 👈 A23 Account verification
 
     val score: Int = 0,
     
@@ -30,9 +30,9 @@ data class UserProfile(
     val ratingCount: Int = 0,
     
     // 💎 PREMIUM FLAG (Round 11)
-    @PropertyName("isGold") val isGoldStored: Boolean = false,
-    @PropertyName("premium") val isPremiumStored: Boolean = false,
-    @PropertyName("isFounder") val isFounder: Boolean = false, // 🚀 Early Adopter Badge
+    val isGoldStored: Boolean = false,
+    val isPremiumStored: Boolean = false,
+    val isFounder: Boolean = false, // 🚀 Early Adopter Badge
     
     // 🎨 SOCIAL (A20)
     val aboutMe: String = "",
@@ -40,6 +40,10 @@ data class UserProfile(
     val profilePictureUrl: String? = null, // Foto de perfil principal
     val coverPhotoUrl: String? = null, // 🖼️ Foto de portada (Facebook style)
     val photos: List<String> = emptyList(), // URLs de fotos (galería)
+    
+    // 👁️ VISTAS DE PERFIL
+    val profileViews: Int = 0,
+    val recentViewers: List<String> = emptyList(), // UIDs de usuarios que vieron el perfil recientemente
 
     // 🤝 AMIGOS (A20)
     val friends: List<String> = emptyList(),              // UIDs de amigos confirmados

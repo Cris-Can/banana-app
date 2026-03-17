@@ -21,6 +21,9 @@ class NotificationViewModel @Inject constructor(
         MutableStateFlow<List<AppNotification>>(emptyList())
 
     val notifications: StateFlow<List<AppNotification>> = _notifications
+    
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount: StateFlow<Int> = _unreadCount
 
     fun start(userId: String) {
         viewModelScope.launch {
@@ -29,10 +32,9 @@ class NotificationViewModel @Inject constructor(
                     android.util.Log.e("NotificationViewModel", "Error: ${e.message}")
                 }
                 .collect { list ->
-                    // Filter out chat messages from the main notification bell
-                    _notifications.value = list.filter { 
-                        it.type != com.eventos.banana.domain.model.NotificationType.NEW_MESSAGE 
-                    }
+                    // Mostramos todas las notificaciones relevantes
+                    _notifications.value = list
+                    _unreadCount.value = list.count { !it.read }
                 }
         }
     }

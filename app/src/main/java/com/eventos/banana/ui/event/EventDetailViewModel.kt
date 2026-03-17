@@ -43,6 +43,18 @@ class EventDetailViewModel @AssistedInject constructor(
     private val _actionState = MutableStateFlow<ActionState>(ActionState.Idle)
     val actionState: StateFlow<ActionState> = _actionState
 
+    // 📺 AD STATE
+    sealed class UnlockState {
+        object Idle : UnlockState()
+        object LoadingAd : UnlockState()
+        data class Progress(val watched: Int, val required: Int = 2) : UnlockState()
+        object Unlocked : UnlockState()
+        data class Error(val message: String) : UnlockState()
+    }
+
+    private val _adUnlockState = MutableStateFlow<UnlockState>(UnlockState.Idle)
+    val adUnlockState: StateFlow<UnlockState> = _adUnlockState
+
     init {
         loadEvent()
     }
@@ -216,6 +228,42 @@ class EventDetailViewModel @AssistedInject constructor(
 
     fun resetJoinSubmissionState() {
         _joinSubmissionState.value = JoinSubmissionState.Idle
+        _adUnlockState.value = UnlockState.Idle
+    }
+
+    // ---------- ADS LOGIC ----------
+    fun watchAd(activity: android.app.Activity, userId: String) {
+        _adUnlockState.value = UnlockState.LoadingAd
+        
+        com.eventos.banana.util.AdMobHelper.loadRewardedAd(activity)
+        
+        com.eventos.banana.util.AdMobHelper.showRewardedAd(
+            activity = activity,
+            onUserEarnedReward = {
+                viewModelScope.launch {
+                    val result = subscriptionRepository.recordAdWatch(userId)
+                    if (result.isSuccess) {
+                        val (unlocked, progress) = result.getOrThrow()
+                        if (progress == 0) { // Reset means we looped -> Unlocked!
+                            _adUnlockState.value = UnlockState.Unlocked
+                        } else {
+                            _adUnlockState.value = UnlockState.Progress(progress, 2)
+                        }
+                    } else {
+                        _adUnlockState.value = UnlockState.Error("Error guardando progreso: ${result.exceptionOrNull()?.message}")
+                    }
+                }
+            },
+            onAdDismissed = {
+                 if (_adUnlockState.value == UnlockState.LoadingAd) {
+                     _adUnlockState.value = UnlockState.Idle // User closed without watching
+                 }
+            }
+        )
+    }
+
+    fun resetAdUnlockState() {
+        _adUnlockState.value = UnlockState.Idle
     }
 
     // ---------- A15.1 MODERACIÓN ----------

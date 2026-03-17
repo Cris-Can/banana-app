@@ -9,8 +9,10 @@ data class AppNotification(
     val title: String = "",
     val message: String = "",
     val eventId: String? = null,    // opcional
+    val conversationId: String? = null, // 👈 para chats y muro
     val fromUserId: String? = null, // 👈 sender id (for friend requests etc)
-    val createdAt: Any? = null,
+    @ServerTimestamp
+    val createdAt: Date? = null,
     val read: Boolean = false,
     val type: NotificationType = NotificationType.GENERIC
 )

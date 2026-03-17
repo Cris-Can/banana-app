@@ -11,7 +11,11 @@ data class FeedPost(
     val content: String = "",
     val imageUrl: String? = null,
     val timestamp: Any? = null,
-    @PropertyName("isUserVerified") val isUserVerified: Boolean = false
+    @PropertyName("isUserVerified") val isUserVerified: Boolean = false,
+    val replyToId: String? = null,
+    val replyToNickname: String? = null,
+    val replyToContent: String? = null,
+    val replyToUserId: String? = null
 ) {
     // Helper for UI - convert timestamp to Date safely
     val timestampAsDate: Date?

@@ -36,7 +36,8 @@ class CreateEventViewModel @Inject constructor(
         val currentLatitude: Double? = null,
         val currentLongitude: Double? = null,
         val questions: List<JoinQuestion> = emptyList(),
-        val isPublic: Boolean = false // 🌍 NEW
+        val isPublic: Boolean = false, // 🌍 NEW
+        val notificationRange: String = "COMMUNE" // 🔔 NEW: "COMMUNE", "REGION", "NATIONAL"
     )
 
     private val _formState = MutableStateFlow(EventFormState())
@@ -53,6 +54,7 @@ class CreateEventViewModel @Inject constructor(
     fun updateStartAt(value: Long?) { _formState.value = _formState.value.copy(startAt = value) }
     fun updateEndAt(value: Long?) { _formState.value = _formState.value.copy(endAt = value) }
     fun updateIsPublic(value: Boolean) { _formState.value = _formState.value.copy(isPublic = value) } // 🌍 NEW
+    fun updateNotificationRange(value: String) { _formState.value = _formState.value.copy(notificationRange = value) } // 🔔 NEW
 
     fun updateExactLocation(value: com.eventos.banana.domain.model.ExactLocation?) { 
         _formState.value = _formState.value.copy(exactLocation = value) 
@@ -134,17 +136,14 @@ class CreateEventViewModel @Inject constructor(
     private val _debugStatus = MutableStateFlow("Cargando limites...")
     val debugStatus: StateFlow<String> = _debugStatus
 
-    fun loadDebugInfo(userId: String) {
+    fun loadUserStats(userId: String) {
         viewModelScope.launch {
-            _debugStatus.value = "Cargando..."
-            val stats = subscriptionRepository.getDebugStats(userId)
-            val adStats = try {
-                 val user = subscriptionRepository.getUser(userId) // Helper public method needed? No, internal.
-                 // We need to fetch ad stats. Let's rely on ProfileViewModel for global stats or fetch here.
-                 // For now, simplify: just limits.
-                 "" 
-            } catch(e: Exception) { "" }
-            _debugStatus.value = stats
+            val stats = subscriptionRepository.getUserLimitStats(userId)
+            _userLimitStats.value = stats
+            
+            // Also update legacy debug status if needed
+            val debugText = subscriptionRepository.getDebugStats(userId)
+            _debugStatus.value = debugText
         }
     }
     
@@ -199,7 +198,7 @@ class CreateEventViewModel @Inject constructor(
             val type = if (isPremium) "GOLD" else "FREE"
             subscriptionRepository.updateSubscriptionType(userId, type)
             // Refresh info
-            loadDebugInfo(userId)
+            loadUserStats(userId)
         }
     }
     fun resetState() {

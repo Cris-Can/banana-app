@@ -21,6 +21,7 @@ local.properties
 scripts/node_modules/
 
 # 🔑 Signing & Secrets (CRITICAL)
+app/google-services.json
 *.jks
 *.keystore
 keystore.properties

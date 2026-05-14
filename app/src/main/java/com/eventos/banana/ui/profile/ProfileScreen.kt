@@ -16,8 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource // ➕
 import com.eventos.banana.ui.util.*
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.eventos.banana.util.LocationHelper
 import com.eventos.banana.ui.profile.ProfileUiState
 import com.eventos.banana.ui.profile.ProfileViewModel
 import com.eventos.banana.ui.auth.SessionViewModel
@@ -29,35 +27,25 @@ import coil.compose.AsyncImage
 import androidx.compose.material3.AssistChip
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     sessionViewModel: SessionViewModel,
@@ -157,10 +145,11 @@ fun ProfileScreen(
                 imageSourceIncludeCamera = false,
                 imageSourceIncludeGallery = true,
                 activityBackgroundColor = android.graphics.Color.BLACK,
-                toolbarColor = android.graphics.Color.BLACK,
-                toolbarBackButtonColor = android.graphics.Color.WHITE,
-                activityMenuIconColor = android.graphics.Color.WHITE,
-                activityMenuTextColor = android.graphics.Color.WHITE,
+                toolbarColor = android.graphics.Color.WHITE,
+                toolbarBackButtonColor = android.graphics.Color.BLACK,
+                activityMenuIconColor = android.graphics.Color.BLACK,
+                activityMenuTextColor = android.graphics.Color.BLACK,
+                initialCropWindowPaddingRatio = 0.15f,
                 guidelines = com.canhub.cropper.CropImageView.Guidelines.ON,
                 cropShape = if (isAvatar) com.canhub.cropper.CropImageView.CropShape.OVAL 
                            else com.canhub.cropper.CropImageView.CropShape.RECTANGLE,
@@ -212,13 +201,27 @@ fun ProfileScreen(
 
         if (profile == null) {
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(16.dp))
-                Text("Cargando perfil...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                com.eventos.banana.ui.components.SkeletonCircle(140.dp)
+                Spacer(Modifier.height(24.dp))
+                com.eventos.banana.ui.components.SkeletonTextLine(width = 180.dp, height = 24.dp)
+                Spacer(Modifier.height(12.dp))
+                com.eventos.banana.ui.components.SkeletonTextLine(width = 120.dp)
+                Spacer(Modifier.height(12.dp))
+                com.eventos.banana.ui.components.SkeletonTextLine(width = 150.dp)
+                
+                var showFallback by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(2000)
+                    showFallback = true
+                }
+                if (showFallback) {
+                    Spacer(Modifier.height(24.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
             }
             
             // ⏱️ TIMEOUT: If profile doesn't load in 4s, return home
@@ -809,10 +812,14 @@ fun ProfileScreen(
                             }
                         }
 
-                        @OptIn(ExperimentalLayoutApi::class)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
                             interests.forEach { interest ->
                                 AssistChip(
+                                    modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp),
                                     onClick = {},
                                     label = { Text(interest) },
                                     trailingIcon = {
@@ -856,10 +863,10 @@ fun ProfileScreen(
                                     }
                                     
                                     AnimatedVisibility(visible = expanded) {
-                                        @OptIn(ExperimentalLayoutApi::class)
                                         FlowRow(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.padding(bottom = 8.dp)
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                                         ) {
                                             val localizedSubs = type.localizedSubcategories()
                                             val originalSubs = type.subcategories
@@ -867,6 +874,7 @@ fun ProfileScreen(
                                                 val originalKey = originalSubs[index]
                                                 val isSelected = interests.contains(originalKey)
                                                 FilterChip(
+                                                    modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp),
                                                     selected = isSelected,
                                                     onClick = {
                                                         interests = if (isSelected) {
@@ -907,9 +915,8 @@ fun ProfileScreen(
                         Text(stringResource(com.eventos.banana.R.string.profile_photos), style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
 
-                        @OptIn(ExperimentalLayoutApi::class)
                         FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {

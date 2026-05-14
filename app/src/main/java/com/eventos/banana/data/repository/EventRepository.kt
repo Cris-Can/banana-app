@@ -64,9 +64,6 @@ class EventRepository @Inject constructor(
                 doc.reference.update(
                     mapOf(
                         "status" to EventStatus.CLOSED
-                        // más adelante:
-                        // "isArchived" to true,
-                        // "archivedAt" to now
                     )
                 ).await()
             }
@@ -112,6 +109,52 @@ class EventRepository @Inject constructor(
     }
 
     // =========================================================
+    // CONSULTAS PARA PERFIL DE USUARIO
+    // =========================================================
+    suspend fun getEventsByCreatorId(creatorId: String, source: com.google.firebase.firestore.Source = com.google.firebase.firestore.Source.DEFAULT): List<Event> {
+        return try {
+            val snapshot = eventsCollection
+                .whereEqualTo("creatorId", creatorId)
+                .get(source).await()
+            snapshot.toObjects(EventDto::class.java).map { it.toDomain() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getEventsByParticipantId(participantId: String, source: com.google.firebase.firestore.Source = com.google.firebase.firestore.Source.DEFAULT): List<Event> {
+        return try {
+            val snapshot = eventsCollection
+                .whereArrayContains("approvedParticipants", participantId)
+                .get(source).await()
+            snapshot.toObjects(EventDto::class.java).map { it.toDomain() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getEventsByIds(eventIds: List<String>, source: com.google.firebase.firestore.Source = com.google.firebase.firestore.Source.DEFAULT): List<Event> {
+        if (eventIds.isEmpty()) return emptyList()
+        return try {
+            if (eventIds.size <= 30) {
+                val chunks = eventIds.chunked(10)
+                val results = mutableListOf<Event>()
+                chunks.forEach { chunk ->
+                    val snapshot = eventsCollection
+                        .whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
+                        .get(source).await()
+                    results.addAll(snapshot.toObjects(EventDto::class.java).map { it.toDomain() })
+                }
+                results
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    // =========================================================
     // SOLICITAR ACCESO
     // =========================================================
     suspend fun requestJoinEventWithAnswers(
@@ -124,10 +167,10 @@ class EventRepository @Inject constructor(
             var creatorId = ""
             var eventTitle = ""
 
-            firestore.runTransaction { tx ->
+            val transactionSuccess = firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
-                    ?: throw Exception("Evento no encontrado")
+                    ?: return@runTransaction false
 
                 if (event.status != EventStatus.OPEN) {
                     throw Exception("El evento no acepta solicitudes")
@@ -148,11 +191,6 @@ class EventRepository @Inject constructor(
                 creatorId = event.creatorId
                 eventTitle = event.title
                 
-                // Fetch user info to include in request (A23 enhancement)
-                // Since this is inside runTransaction, we should ideally have the nickname before.
-                // But for now we'll pass it from the ViewModel or use the provided logic.
-                // For simplicity, I'll assume the nickname is provided or we use a placeholder.
-                
                 val request = JoinRequest(
                     userId = userId,
                     userNickname = answers["_nickname"] ?: "Usuario", 
@@ -165,7 +203,12 @@ class EventRepository @Inject constructor(
                     "pendingRequests",
                     com.google.firebase.firestore.FieldValue.arrayUnion(request)
                 )
+                true
             }.await()
+
+            if (!transactionSuccess) {
+                return Result.failure(Exception("Evento no encontrado"))
+            }
 
             notificationRepository.sendNotification(
                 AppNotification(
@@ -195,10 +238,10 @@ class EventRepository @Inject constructor(
             var eventTitle = ""
             var participantsToNotify = emptyList<String>()
 
-            firestore.runTransaction { tx ->
+            val transactionSuccess = firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
-                    ?: throw Exception("Evento no encontrado")
+                    ?: return@runTransaction false
 
                 if (event.status != EventStatus.OPEN) {
                     throw Exception("El evento no acepta participantes")
@@ -210,7 +253,7 @@ class EventRepository @Inject constructor(
 
                 if (event.approvedParticipants.contains(userId)) {
                     // Already joined, do nothing
-                    return@runTransaction
+                    return@runTransaction true
                 }
                 
                 if (event.approvedParticipants.size >= event.maxParticipants) {
@@ -226,7 +269,12 @@ class EventRepository @Inject constructor(
                 eventTitle = event.title
                 // Store list of participants to notify (excluding the new one)
                 participantsToNotify = event.approvedParticipants + event.creatorId
+                true
             }.await()
+
+            if (!transactionSuccess) {
+                return Result.failure(Exception("Evento no encontrado"))
+            }
             
             // Notify existing participants
             participantsToNotify.forEach { participantId ->
@@ -260,10 +308,10 @@ class EventRepository @Inject constructor(
             var eventTitle = ""
             var participantsToNotify = emptyList<String>()
 
-            firestore.runTransaction { tx ->
+            val transactionSuccess = firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
-                    ?: throw Exception("Evento no encontrado")
+                    ?: return@runTransaction false
 
                 if (event.status != EventStatus.OPEN) {
                     throw Exception("Evento cerrado")
@@ -292,7 +340,12 @@ class EventRepository @Inject constructor(
                 
                 // Collect existing participants + creator, sin duplicados
                 participantsToNotify = (event.approvedParticipants + event.creatorId).distinct()
+                true
             }.await()
+
+            if (!transactionSuccess) {
+                return Result.failure(Exception("Evento no encontrado"))
+            }
 
             // 1. Notify the JOINER (solo al usuario aceptado)
             notificationRepository.sendNotification(
@@ -338,10 +391,10 @@ class EventRepository @Inject constructor(
             var eventTitle = ""
             var userNickname = ""
 
-            firestore.runTransaction { tx ->
+            val transactionSuccess = firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
-                    ?: throw Exception("Evento no encontrado")
+                    ?: return@runTransaction false
 
                 eventTitle = event.title
                 
@@ -361,7 +414,12 @@ class EventRepository @Inject constructor(
                                 (event.rejectedParticipants + userId)
                     )
                 )
+                true
             }.await()
+
+            if (!transactionSuccess) {
+                return Result.failure(Exception("Evento no encontrado"))
+            }
 
             notificationRepository.sendNotification(
                 AppNotification(
@@ -384,8 +442,17 @@ class EventRepository @Inject constructor(
     // =========================================================
     suspend fun cancelEvent(eventId: String, reason: String): Result<Unit> {
         return try {
-            firestore.runTransaction { tx ->
+            var eventTitle = ""
+            var participantsToNotify = emptyList<String>()
+
+            val transactionSuccess = firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
+                val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
+                    ?: return@runTransaction false
+
+                eventTitle = event.title
+                participantsToNotify = event.approvedParticipants
+
                 tx.update(
                     ref,
                     mapOf(
@@ -394,7 +461,25 @@ class EventRepository @Inject constructor(
                         "cancelledAt" to System.currentTimeMillis()
                     )
                 )
+                true
             }.await()
+
+            if (!transactionSuccess) {
+                return Result.failure(Exception("Evento no encontrado"))
+            }
+
+            // Notify all participants
+            participantsToNotify.forEach { participantId ->
+                notificationRepository.sendNotification(
+                    AppNotification(
+                        userId = participantId,
+                        title = "Evento Cancelado 🚫",
+                        message = "El evento \"$eventTitle\" ha sido cancelado: $reason",
+                        eventId = eventId,
+                        type = NotificationType.EVENT_CANCELLED
+                    )
+                )
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -404,9 +489,37 @@ class EventRepository @Inject constructor(
 
     suspend fun closeEvent(eventId: String): Result<Unit> {
         return try {
-            eventsCollection.document(eventId)
-                .update("status", EventStatus.CLOSED)
-                .await()
+            var eventTitle = ""
+            var participantsToNotify = emptyList<String>()
+
+            val transactionSuccess = firestore.runTransaction { tx ->
+                val ref = eventsCollection.document(eventId)
+                val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
+                    ?: return@runTransaction false
+
+                eventTitle = event.title
+                participantsToNotify = event.approvedParticipants
+
+                tx.update(ref, "status", EventStatus.CLOSED)
+                true
+            }.await()
+
+            if (!transactionSuccess) {
+                return Result.failure(Exception("Evento no encontrado"))
+            }
+
+            // Notify all participants
+            participantsToNotify.forEach { participantId ->
+                notificationRepository.sendNotification(
+                    AppNotification(
+                        userId = participantId,
+                        title = "Evento Finalizado 🏁",
+                        message = "El evento \"$eventTitle\" ha concluido. ¡No olvides calificar!",
+                        eventId = eventId,
+                        type = NotificationType.EVENT_CLOSED
+                    )
+                )
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -416,14 +529,18 @@ class EventRepository @Inject constructor(
 
     suspend fun removeParticipant(eventId: String, userId: String): Result<Unit> {
         return try {
-            firestore.runTransaction { tx ->
+            var eventTitle = ""
+
+            val transactionSuccess = firestore.runTransaction { tx ->
                 val ref = eventsCollection.document(eventId)
                 val event = tx.get(ref).toObject(EventDto::class.java)?.toDomain()
-                    ?: throw Exception("Evento no encontrado")
+                    ?: return@runTransaction false
 
                 if (event.creatorId == userId) {
                     throw Exception("No se puede eliminar al creador")
                 }
+
+                eventTitle = event.title
 
                 // 🛡️ Sanitize Approved
                 @Suppress("UNCHECKED_CAST")
@@ -434,7 +551,23 @@ class EventRepository @Inject constructor(
                     "approvedParticipants",
                     safeApproved.filterNot { it == userId }
                 )
+                true
             }.await()
+
+            if (!transactionSuccess) {
+                return Result.failure(Exception("Evento no encontrado"))
+            }
+
+            // 🔔 Notify the removed user
+            notificationRepository.sendNotification(
+                AppNotification(
+                    userId = userId,
+                    title = "Has sido eliminado del evento 🚫",
+                    message = "El creador te ha eliminado de \"$eventTitle\"",
+                    eventId = eventId,
+                    type = NotificationType.REMOVED_FROM_EVENT
+                )
+            )
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -519,39 +652,6 @@ class EventRepository @Inject constructor(
                 )
             ).await()
             Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    // =========================================================
-    // MIGRATION TOOL (A29) - Fix old events
-    // =========================================================
-    suspend fun migrateEventsToGeohash(): Result<Int> {
-        return try {
-            // 1. Get ALL events (or those missing geohash if possible, but Firestore doesn't support "missing field" query easily without custom index on null)
-            // Safer to just get all Open events or all events. Let's get ALL for now (assuming DB size isn't huge yet).
-            val snapshot = eventsCollection.get().await()
-            val batch = firestore.batch()
-            var count = 0
-            
-            snapshot.documents.forEach { doc ->
-                val lat = doc.getDouble("latitude")
-                val lng = doc.getDouble("longitude")
-                val currentHash = doc.getString("geohash")
-                
-                if (lat != null && lng != null && currentHash == null) {
-                    val newHash = com.eventos.banana.util.GeohashUtils.encode(lat, lng, 9)
-                    batch.update(doc.reference, "geohash", newHash)
-                    count++
-                }
-            }
-            
-            if (count > 0) {
-                batch.commit().await()
-            }
-            
-            Result.success(count)
         } catch (e: Exception) {
             Result.failure(e)
         }

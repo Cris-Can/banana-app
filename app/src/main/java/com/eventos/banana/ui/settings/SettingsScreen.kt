@@ -28,18 +28,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.clickable
 import androidx.compose.animation.*
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.ExperimentalMaterial3Api
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,16 +57,15 @@ fun SettingsScreen(
     onSendPasswordReset: (String) -> Unit,
     onVerifyEmail: () -> Unit,
     isEmailVerified: Boolean,
-    onRecalculateStats: (String) -> Unit,
-    onUpdateLocation: (String, String, String, Double?, Double?) -> Unit,
+    onUpdateLocation: (String, String, String, String, Double?, Double?) -> Unit,
     onUpdateNotifyCommune: (Boolean, String, String) -> Unit,
     onToggleCategorySubscription: (String, Boolean) -> Unit,
     onUpdateNotifyWall: (Boolean) -> Unit,
     onNavigateToIcons: () -> Unit,
     onNavigateToBlockedUsers: () -> Unit, // 🛡️ Blocked Users
-    onMigrateEvents: () -> Unit, // New
-    migrationStatus: String?,    // New
-    profileUiState: com.eventos.banana.ui.profile.ProfileUiState
+    profileUiState: com.eventos.banana.ui.profile.ProfileUiState,
+    locationMessage: String?,
+    onClearLocationMessage: () -> Unit
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -87,7 +85,18 @@ fun SettingsScreen(
     // Logic for Location
     var detectedRegion by remember { mutableStateOf<String?>(null) }
     var detectedCommune by remember { mutableStateOf<String?>(null) }
+    var detectedCountry by remember { mutableStateOf<String?>(null) }
     var isDetecting by remember { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 📍 Location Success Feedback
+    LaunchedEffect(locationMessage) {
+        if (!locationMessage.isNullOrEmpty()) {
+            snackbarHostState.showSnackbar(locationMessage)
+            onClearLocationMessage()
+        }
+    }
 
 
     Scaffold(
@@ -102,6 +111,7 @@ fun SettingsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         
@@ -110,11 +120,7 @@ fun SettingsScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
-                    if (userProfile != null) {
-                        onRecalculateStats(userProfile.uid)
-                        onMigrateEvents()
-                    }
-                    kotlinx.coroutines.delay(2000)
+                    kotlinx.coroutines.delay(1000)
                     isRefreshing = false
                 }
             },
@@ -202,33 +208,115 @@ fun SettingsScreen(
 
                 // 📍 UBICACIÓN
                 SettingsSection(title = "Ubicación") {
+                    var showPlaceSearchDialog by remember { mutableStateOf(false) }
+                    var isFetchingCoordinates by remember { mutableStateOf(false) }
+                    val placesClient = remember { com.eventos.banana.util.LocationHelper(context).getPlacesClient() }
+
                     val regionText = detectedRegion ?: userProfile?.region.takeIf { !it.isNullOrBlank() } ?: "Sin región"
                     val communeText = detectedCommune ?: userProfile?.commune.takeIf { !it.isNullOrBlank() } ?: "Sin comuna"
+                    val countryText = detectedCountry ?: userProfile?.country.takeIf { !it.isNullOrBlank() } ?: ""
                     
-                    SettingsItem(
-                        icon = Icons.Outlined.LocationOn,
-                        title = if (isDetecting) "Detectando ubicación..." else "$communeText, $regionText",
-                        subtitle = if (isDetecting) "Por favor espera..." else "Toca para actualizar tu ubicación actual",
-                        onClick = {
-                             if (!isDetecting) {
-                                 scope.launch {
-                                    isDetecting = true
-                                    val result = com.eventos.banana.util.LocationHelper(context).detectLocationFull()
-                                    if (result != null) {
-                                        detectedRegion = result.region
-                                        detectedCommune = result.commune
-                                        if (userProfile != null) {
-                                             onUpdateLocation(userProfile.uid, result.region, result.commune, result.latitude, result.longitude)
+                    val locationTitle = if (countryText.isNotBlank()) "$communeText, $regionText, $countryText" else "$communeText, $regionText"
+
+                    Column(modifier = Modifier.animateContentSize()) {
+                        SettingsItem(
+                            icon = Icons.Outlined.LocationOn,
+                            title = when {
+                                isDetecting -> "Detectando ubicación..."
+                                isFetchingCoordinates -> "Buscando coordenadas..."
+                                else -> locationTitle
+                            },
+                            subtitle = if (isDetecting || isFetchingCoordinates) "Por favor espera..." else "Toca para cambiar tu ciudad",
+                            onClick = {
+                                if (!isDetecting && !isFetchingCoordinates) {
+                                    showPlaceSearchDialog = true
+                                }
+                            },
+                            trailingContent = {
+                                if (isDetecting || isFetchingCoordinates) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                }
+                            }
+                        )
+                        
+                        // Botón secundario para detección automática rápida
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = !isDetecting && !isFetchingCoordinates,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        isDetecting = true
+                                        val result = com.eventos.banana.util.LocationHelper(context).detectLocationFull()
+                                        if (result != null) {
+                                            detectedRegion = result.region
+                                            detectedCommune = result.commune
+                                            detectedCountry = result.country
+                                            if (userProfile != null) {
+                                                 onUpdateLocation(
+                                                    userProfile.uid, 
+                                                    result.region, 
+                                                    result.commune, 
+                                                    result.country,
+                                                    result.latitude, 
+                                                    result.longitude
+                                                )
+                                            }
+                                        } else {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            android.widget.Toast.makeText(context, "No se pudo detectar la ubicación.", android.widget.Toast.LENGTH_LONG).show()
                                         }
-                                    } else {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        // TODO: Mostrar diálogo de error o manual
+                                        isDetecting = false
                                     }
-                                    isDetecting = false
-                                 }
-                             }
+                                },
+                                modifier = Modifier.padding(start = 56.dp)
+                            ) {
+                                Text("📍 Usar ubicación actual", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
-                    )
+                    }
+
+                    if (showPlaceSearchDialog) {
+                        com.eventos.banana.ui.components.GooglePlacesSearchDialog(
+                            onDismiss = { showPlaceSearchDialog = false },
+                            onPlaceSelected = { placeId, fullText ->
+                                showPlaceSearchDialog = false
+                                isFetchingCoordinates = true
+                                
+                                // 1. Update text locally
+                                val parts = fullText.split(",")
+                                detectedCommune = parts.firstOrNull()?.trim() ?: fullText
+                                detectedRegion = if (parts.size > 1) parts[1].trim() else ""
+                                detectedCountry = if (parts.size > 2) parts.last().trim() else detectedRegion
+                                
+                                // 2. Fetch Coordinates
+                                val fields = listOf(com.google.android.libraries.places.api.model.Place.Field.LAT_LNG)
+                                val request = com.google.android.libraries.places.api.net.FetchPlaceRequest.builder(placeId, fields).build()
+                                
+                                placesClient.fetchPlace(request).addOnSuccessListener { response ->
+                                    val place = response.place
+                                    if (userProfile != null) {
+                                        onUpdateLocation(
+                                            userProfile.uid,
+                                            detectedRegion ?: "",
+                                            detectedCommune ?: "",
+                                            detectedCountry ?: "",
+                                            place.latLng?.latitude,
+                                            place.latLng?.longitude
+                                        )
+                                    }
+                                    isFetchingCoordinates = false
+                                }.addOnFailureListener {
+                                    isFetchingCoordinates = false
+                                    android.widget.Toast.makeText(context, "Error al obtener coordenadas", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                    }
                     
                      SettingsSwitchItem(
                         icon = Icons.Outlined.Place,
@@ -256,6 +344,31 @@ fun SettingsScreen(
                             onUpdateNotifyWall(it)
                         }
                     )
+                    
+                    // 🔔 Push Connectivity Indicator
+                    val hasFcmToken = !userProfile?.fcmToken.isNullOrBlank()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    color = if (hasFcmToken) androidx.compose.ui.graphics.Color(0xFF4CAF50) 
+                                            else androidx.compose.ui.graphics.Color(0xFFF44336),
+                                    shape = androidx.compose.foundation.shape.CircleShape
+                                )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (hasFcmToken) "Push activo" else "Push desconectado",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 // 🏷️ INTERESES
@@ -304,9 +417,99 @@ fun SettingsScreen(
                         onClick = onNavigateToBlockedUsers
                     )
                 }
+
+                // 🎟️ CANJEAR CÓDIGO DE INVITACIÓN (Visible para usuarios NO Founder)
+                if (userProfile?.subscriptionType != "FOUNDER") {
+                    SettingsSection(title = "Código de Invitación") {
+                        var redeemCode by remember { mutableStateOf("") }
+                        var isRedeeming by remember { mutableStateOf(false) }
+                        var redeemResult by remember { mutableStateOf<String?>(null) }
+                        var redeemIsError by remember { mutableStateOf(false) }
+
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                "¿Tienes un código exclusivo?",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            OutlinedTextField(
+                                value = redeemCode,
+                                onValueChange = { 
+                                    redeemCode = it.uppercase().trim()
+                                    redeemResult = null // Limpiar resultado anterior
+                                },
+                                label = { Text("Código de Invitación") },
+                                placeholder = { Text("Ej: FOUNDER-XXXX") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isRedeeming,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+
+                            AnimatedVisibility(
+                                visible = redeemResult != null,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Text(
+                                    text = redeemResult ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (redeemIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (redeemCode.isBlank()) return@Button
+                                    isRedeeming = true
+                                    redeemResult = null
+                                    scope.launch {
+                                        try {
+                                            val functions = com.google.firebase.functions.FirebaseFunctions.getInstance()
+                                            val data = hashMapOf("code" to redeemCode)
+                                            val result = functions.getHttpsCallable("redeemFounderCode").call(data).await()
+                                            @Suppress("UNCHECKED_CAST")
+                                            val response = result.data as? Map<String, Any>
+                                            redeemResult = response?.get("message")?.toString() ?: "¡Código canjeado exitosamente!"
+                                            redeemIsError = false
+                                            redeemCode = ""
+                                        } catch (e: com.google.firebase.functions.FirebaseFunctionsException) {
+                                            redeemResult = e.message ?: "Error al canjear el código."
+                                            redeemIsError = true
+                                        } catch (e: Exception) {
+                                            redeemResult = "Error de conexión. Inténtalo de nuevo."
+                                            redeemIsError = true
+                                        } finally {
+                                            isRedeeming = false
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = redeemCode.isNotBlank() && !isRedeeming,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                if (isRedeeming) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Verificando...")
+                                } else {
+                                    Text("🎟️ Canjear Código")
+                                }
+                            }
+                        }
+                    }
+                }
                 
                 // 👮 ADMIN (Visible only for admins)
-                if (userProfile?.isAdmin == true) {
+                if (userProfile?.admin == true) {
                     SettingsSection(title = "Panel de Administración") {
                         SettingsItem(
                             icon = Icons.Filled.Warning,
@@ -332,16 +535,6 @@ fun SettingsScreen(
                         onClick = onLogout,
                         textColor = MaterialTheme.colorScheme.error
                     )
-                    
-                    // Migration Text (Hidden usually)
-                    if (migrationStatus != null) {
-                         Text(
-                            text = migrationStatus,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 40.dp)
-                        )
-                    }
                     
                     // Delete Account
                     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -438,7 +631,8 @@ fun SettingsItem(
     title: String,
     subtitle: String? = null,
     onClick: () -> Unit,
-    textColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface
+    textColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -455,7 +649,12 @@ fun SettingsItem(
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+        
+        if (trailingContent != null) {
+            trailingContent()
+        } else {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+        }
     }
 }
 

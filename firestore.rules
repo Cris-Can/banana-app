@@ -11,7 +11,7 @@ service cloud.firestore {
     }
     // Campos que NADIE puede editar desde el cliente (solo Cloud Functions con admin SDK)
     function protectedFields() {
-      return ['isFounder', 'isGold', 'subscriptionType', 'eventsRequestedCount', 'ratingSum', 'ratingCount'];
+      return ['admin', 'isFounder', 'isGold', 'subscriptionType', 'eventsRequestedCount', 'ratingSum', 'ratingCount', 'isVerified', 'isBoosted', 'boostExpiry', 'boostUntil', 'boostedAt', 'boostedBy'];
     }
     
     // --- EVENTOS ---
@@ -21,16 +21,13 @@ service cloud.firestore {
                     && request.resource.data.creatorId == request.auth.uid 
                     && request.resource.data.approvedParticipants == [request.auth.uid];
       
-      // Creador: puede editar todo del evento
-      // No-creador: solo puede agregar/quitar su propia solicitud en pendingRequests              
       allow update: if isCreator(resource.data) 
                     || (isSignedIn() 
                         && request.resource.data.diff(resource.data).affectedKeys()
-                            .hasOnly(['pendingRequests', 'approvedParticipants']));
+                            .hasOnly(['pendingRequests']));
                     
       allow delete: if isCreator(resource.data);
       
-      // Feed interno del evento. Solo participantes aprobados o el creador.
       match /feed/{postId} {
         allow read, write: if isSignedIn() && (
           request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.approvedParticipants ||
@@ -50,28 +47,21 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId;
       
-      // Dueño: puede actualizar su perfil, EXCEPTO campos protegidos del sistema
       allow update: if isSignedIn() && request.auth.uid == userId
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(protectedFields());
       
-      // Otros usuarios: solo pueden modificar campos de amistad
-      allow update: if isSignedIn() && request.auth.uid != userId
-                    && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['friendRequestsReceived', 'friends', 'friendRequestsSent']);
+      allow update: if false;
       
-      // 👁️ Vistas de perfil: cualquier usuario puede registrar SU visita (usando su UID como ID del doc)
       match /profile_views/{visitorId} {
-        allow read: if isSignedIn() && request.auth.uid == userId; // Solo el dueño del perfil lee
-        allow write: if isSignedIn() && request.auth.uid == visitorId; // El visitante escribe SU registro
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if isSignedIn() && request.auth.uid == visitorId;
       }
     }
 
     // --- NOTIFICACIONES ---
     match /notifications/{id} {
-      // Leer y eliminar solo el destinatario
       allow read, update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
-      // Crear: el emisor debe ser el auth user, y solo puede enviar tipos permitidos
       allow create: if isSignedIn() && request.resource.data.fromUserId == request.auth.uid; 
     }
 
@@ -86,32 +76,80 @@ service cloud.firestore {
       allow read: if isSignedIn() && (request.auth.uid in resource.data.participants);
       allow create: if isSignedIn() && (request.auth.uid in request.resource.data.participants);
       allow update: if isSignedIn() && (request.auth.uid in resource.data.participants);
+      allow delete: if isSignedIn() && (request.auth.uid in resource.data.participants);
       
       match /messages/{messageId} {
         allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        allow update: if isSignedIn() 
+                && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+                && request.auth.uid == request.resource.data.senderId;
+        allow delete: if isSignedIn() 
+                && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+                && request.auth.uid == resource.data.senderId;
       }
     } 
 
     // --- CHECK-INS (GPS) ---
     match /event_checkins/{checkInId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId ||
+        request.auth.uid in get(/databases/$(database)/documents/events/$(resource.data.eventId)).data.approvedParticipants ||
+        request.auth.uid == get(/databases/$(database)/documents/events/$(resource.data.eventId)).data.creatorId
+      );
+      allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
     
     // --- REPORTES ---
     match /reports/{reportId} {
       allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
-      allow read, update: if false; // Privado para admins
+      allow read, update: if false;
     }
 
     // --- CONFIG GLOBAL (Stats User Count) ---
     match /config/stats {
       allow read: if isSignedIn(); 
-      allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userCount'])
-                    && (request.resource.data.userCount == resource.data.userCount + 1 
-                        || request.resource.data.userCount == resource.data.userCount);
-      allow create: if isSignedIn() && request.resource.data.keys().hasOnly(['userCount']) && request.resource.data.userCount is number;
+      allow update, create: if false;
+    }
+
+    // --- CÓDIGOS DE INVITACIÓN ---
+    match /invitation_codes/{codeId} {
+      allow create, read: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true;
+    }
+
+    // --- FRIEND REQUESTS ---
+    match /friend_requests/{requestId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.senderId ||
+        request.auth.uid == resource.data.receiverId
+      );
+      allow create, update, delete: if false;
+    }
+
+    // --- FRIENDSHIPS (modelo de doble documento) ---
+    match /friendships/{friendshipId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      allow create, update, delete: if false;
+    }
+
+    // --- ENCOUNTERS (NFC/GPS check-ins entre usuarios) ---
+    match /encounters/{encounterId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId1 ||
+        request.auth.uid == resource.data.userId2
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.userId1 == request.auth.uid ||
+        request.resource.data.userId2 == request.auth.uid
+      );
+      allow update, delete: if false;
+    }
+
+    // --- RATING SKIPS ---
+    match /rating_skips/{skipId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
     }
     
   }

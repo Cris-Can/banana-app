@@ -7,6 +7,7 @@ import com.eventos.banana.data.repository.AuthRepository
 import com.eventos.banana.domain.model.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -44,6 +45,9 @@ class PublicProfileViewModel @AssistedInject constructor(
     private val _uiState = MutableStateFlow(PublicProfileUiState())
     val uiState: StateFlow<PublicProfileUiState> = _uiState
 
+    private val _isBlocked = MutableStateFlow(false)
+    val isBlocked: StateFlow<Boolean> = _isBlocked.asStateFlow()
+
     init {
         loadProfile(targetUid)
     }
@@ -60,6 +64,13 @@ class PublicProfileViewModel @AssistedInject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 android.util.Log.d("PublicProfileVM", "Loading profile for $targetUid")
+                
+                // 🛡️ BLOCK CHECK
+                if (currentUid != null) {
+                    val blockedList = userRepository.getBlockedUsers(currentUid)
+                    _isBlocked.value = blockedList.contains(targetUid)
+                }
+
                 val profile = userRepository.getUserProfile(targetUid)
                 
                 if (profile != null) {
@@ -120,27 +131,18 @@ class PublicProfileViewModel @AssistedInject constructor(
     }
 
     fun sendFriendRequest(targetUid: String) {
-        val currentUid = authRepository.currentUid() ?: return
         viewModelScope.launch {
-            try {
-                userRepository.sendFriendRequest(currentUid, targetUid)
-                // Reload or check optimistic update
-                loadProfile(targetUid) 
-            } catch (e: Exception) {
-                // Handle error
-            }
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            userRepository.sendFriendRequest(targetUid)
+            loadProfile(targetUid) // Recargar para actualizar UI
         }
     }
 
     fun acceptFriendRequest(requesterUid: String) {
-        val currentUid = authRepository.currentUid() ?: return
         viewModelScope.launch {
-             try {
-                 userRepository.acceptFriendRequest(currentUid, requesterUid)
-                 loadProfile(requesterUid)
-             } catch(e: Exception) {
-                 // Error
-             }
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            userRepository.acceptFriendRequest(requesterUid)
+            loadProfile(requesterUid)
         }
     }
     fun blockUser(targetUid: String) {
@@ -148,8 +150,9 @@ class PublicProfileViewModel @AssistedInject constructor(
         viewModelScope.launch {
             try {
                 userRepository.blockUser(currentUid, targetUid)
+                _isBlocked.value = true
             } catch (e: Exception) {
-                // Log
+                android.util.Log.e("PublicProfileVM", "Error blocking user", e)
             }
         }
     }
@@ -159,8 +162,9 @@ class PublicProfileViewModel @AssistedInject constructor(
         viewModelScope.launch {
             try {
                 userRepository.unblockUser(currentUid, targetUid)
+                _isBlocked.value = false
             } catch (e: Exception) {
-                // Log
+                android.util.Log.e("PublicProfileVM", "Error unblocking user", e)
             }
         }
     }
@@ -171,7 +175,7 @@ class PublicProfileViewModel @AssistedInject constructor(
             try {
                 userRepository.reportUser(currentUid, reportedUid, reason)
             } catch (e: Exception) {
-               // Log
+               android.util.Log.e("PublicProfileViewModel", "Error reporting user", e)
             }
         }
     }

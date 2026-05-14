@@ -13,12 +13,14 @@ data class UserProfile(
     
     val region: String? = null,
     val commune: String? = null,
+    val country: String? = null,
     val latitude: Double? = null, // 🌍 Global Expansion
     val longitude: Double? = null, // 🌍 Global Expansion
     val geohash: String? = null, // 🌍 Geohashing (Round 52)
     val searchRadiusKm: Int = 20, // 🌍 Radius Search (Default 20km)
-    val notifyEventsByCommune: Boolean = false,
+    val notifyEventsByCommune: Boolean = true,
     val notifyEventWall: Boolean = true, // 🔔 Avisa nuevos mensajes en Muro
+    val notifyByInterest: Boolean = true, // 🎯 Avisa por gustos e intereses
     val fcmToken: String? = null,
     val appTheme: String = "BANANA", // 🎨 Options: BANANA, DARK, LIGHT
     var isVerified: Boolean = false, // 👈 A23 Account verification
@@ -28,6 +30,7 @@ data class UserProfile(
     // ⭐ SISTEMA DE PUNTUACIÓN (Round 11)
     val ratingSum: Double = 0.0,
     val ratingCount: Int = 0,
+    val averageScore: Double = 0.0,
     
     // 💎 PREMIUM FLAG (Round 11)
     val isGoldStored: Boolean = false,
@@ -47,14 +50,17 @@ data class UserProfile(
 
     // 🤝 AMIGOS (A20)
     val friends: List<String> = emptyList(),              // UIDs de amigos confirmados
+    val friendCount: Int = 0,
     val friendRequestsReceived: List<String> = emptyList(), // UIDs de solicitudes entrantes
+    val pendingRequestsReceivedCount: Int = 0,
     val friendRequestsSent: List<String> = emptyList(),     // UIDs de solicitudes enviadas
+    val pendingRequestsSentCount: Int = 0,
     
     // 🛡️ TRUST & SAFETY (Round 49)
     val blockedUsers: List<String> = emptyList(),     // UIDs de usuarios bloqueados
     
     // 👮 ADMIN & MODERATION (Round 69)
-    val isAdmin: Boolean = false, // 🔑 Acceso al Panel de Control
+    val admin: Boolean = false, // 🔑 Acceso al Panel de Control
     val isBanned: Boolean = false, // 🚫 Usuario baneado (no puede loguear/interactuar)
     
     // 💾 SAVED EVENTS (A30)
@@ -80,12 +86,19 @@ data class UserProfile(
     val eventsAttendedCount: Int = 0,  // Eventos a los que asistió realmente (Check-in/NFC)
     val eventsCreatedLifetime: Int = 0, // 🆕 Total eventos organizados (separado de ciclo)
 
+    val invitationCode: String? = null, // 🎟️ Cupón para ser Founder (uso único)
+
+    // 🔄 MIGRACIÓN LEGACY (guard de idempotencia — Round 70)
+    // Evita re-ejecutar el check de upgrade de primeros 40 founders en cada login.
+    // Una vez en true, el bloque `checkAndUpgradeLegacyUser` retorna inmediatamente.
+    val isLegacyMigrated: Boolean = false,
+
     val createdAt: Long = System.currentTimeMillis()
 ) {
     // Computed property: average rating
     val averageRating: Double
         get() = if (ratingCount > 0) {
-            (ratingSum / ratingCount * 10).toInt() / 10.0 // Round to 1 decimal
+            kotlin.math.round(ratingSum / ratingCount * 10) / 10.0 // Round to 1 decimal
         } else {
             0.0
         }

@@ -38,6 +38,11 @@ fun EventDetailRoute(
     onResetCheckInState: () -> Unit,
     actionState: com.eventos.banana.ui.event.ActionState = com.eventos.banana.ui.event.ActionState.Idle,
     onResetActionState: () -> Unit = {},
+    joinSubmissionState: com.eventos.banana.ui.event.JoinSubmissionState = com.eventos.banana.ui.event.JoinSubmissionState.Idle,
+    onResetJoinSubmissionState: () -> Unit = {},
+    adUnlockState: com.eventos.banana.ui.event.EventDetailViewModel.UnlockState = com.eventos.banana.ui.event.EventDetailViewModel.UnlockState.Idle,
+    onWatchAd: () -> Unit = {},
+    onResetAdUnlockState: () -> Unit = {},
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
@@ -122,6 +127,11 @@ fun EventDetailRoute(
                 onResetCheckInState = onResetCheckInState,
                 actionState = actionState,
                 onResetActionState = onResetActionState,
+                joinSubmissionState = joinSubmissionState,
+                onResetJoinSubmissionState = onResetJoinSubmissionState,
+                adUnlockState = adUnlockState,
+                onWatchAd = onWatchAd,
+                onResetAdUnlockState = onResetAdUnlockState,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
             )

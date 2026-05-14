@@ -10,6 +10,12 @@ import com.eventos.banana.data.repository.EncounterRepository
 import com.eventos.banana.data.repository.RatingRepository
 import com.eventos.banana.data.repository.FeedRepository
 import com.eventos.banana.data.repository.MainFeedRepository
+import com.eventos.banana.data.repository.UserAdminRepository
+import com.eventos.banana.data.repository.UserCoreRepository
+import com.eventos.banana.data.repository.UserGamificationRepository
+import com.eventos.banana.data.repository.UserMediaRepository
+import com.eventos.banana.data.repository.UserMessagingRepository
+import com.eventos.banana.data.repository.UserSocialRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,15 +28,64 @@ object RepositoryModule {
 
     @Provides
     @Singleton
-    fun provideAuthRepository(firebaseAuth: com.google.firebase.auth.FirebaseAuth): AuthRepository = AuthRepository(firebaseAuth)
+    fun provideAuthRepository(
+        firebaseAuth: com.google.firebase.auth.FirebaseAuth,
+        rateLimitManager: com.eventos.banana.core.security.RateLimitManager
+    ): AuthRepository = AuthRepository(firebaseAuth, rateLimitManager)
+
+    @Provides
+    @Singleton
+    fun provideUserSocialRepository(
+        firestore: com.google.firebase.firestore.FirebaseFirestore,
+        functions: com.google.firebase.functions.FirebaseFunctions,
+        notificationRepository: NotificationRepository,
+        rateLimitManager: com.eventos.banana.core.security.RateLimitManager
+    ): UserSocialRepository = UserSocialRepository(firestore, functions, notificationRepository, rateLimitManager)
+
+    @Provides
+    @Singleton
+    fun provideUserGamificationRepository(
+        firestore: com.google.firebase.firestore.FirebaseFirestore
+    ): UserGamificationRepository = UserGamificationRepository(firestore)
+
+    @Provides
+    @Singleton
+    fun provideUserMediaRepository(
+        firestore: com.google.firebase.firestore.FirebaseFirestore,
+        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
+    ): UserMediaRepository = UserMediaRepository(firestore, storageDataSource)
+
+    @Provides
+    @Singleton
+    fun provideUserMessagingRepository(
+        firestore: com.google.firebase.firestore.FirebaseFirestore
+    ): UserMessagingRepository = UserMessagingRepository(firestore)
+
+    @Provides
+    @Singleton
+    fun provideUserAdminRepository(
+        firestore: com.google.firebase.firestore.FirebaseFirestore
+    ): UserAdminRepository = UserAdminRepository(firestore)
+
+    @Provides
+    @Singleton
+    fun provideUserCoreRepository(
+        firestore: com.google.firebase.firestore.FirebaseFirestore
+    ): UserCoreRepository = UserCoreRepository(firestore)
 
     @Provides
     @Singleton
     fun provideUserRepository(
         firestore: com.google.firebase.firestore.FirebaseFirestore,
         notificationRepository: NotificationRepository,
-        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
-    ): UserRepository = UserRepository(firestore, notificationRepository, storageDataSource)
+        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource,
+        userSocialRepository: UserSocialRepository,
+        userGamificationRepository: UserGamificationRepository,
+        userMediaRepository: UserMediaRepository,
+        userMessagingRepository: UserMessagingRepository,
+        userAdminRepository: UserAdminRepository,
+        userCoreRepository: UserCoreRepository
+    ): UserRepository = UserRepository(firestore, notificationRepository, storageDataSource, userSocialRepository, userGamificationRepository, userMediaRepository, userMessagingRepository, userAdminRepository, userCoreRepository)
 
     @Provides
     @Singleton
@@ -88,4 +143,12 @@ object RepositoryModule {
         eventRepository: EventRepository,
         @ApplicationScope appScope: kotlinx.coroutines.CoroutineScope
     ): com.eventos.banana.data.repository.BillingRepository = com.eventos.banana.data.repository.BillingRepository(context, userRepository, authRepository, eventRepository, appScope)
+
+    @Provides
+    @Singleton
+    fun provideBiometricRepository(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
+    ): com.eventos.banana.data.repository.BiometricRepository {
+        return com.eventos.banana.data.repository.BiometricRepository(context)
+    }
 }

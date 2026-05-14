@@ -17,43 +17,15 @@ class CreateUserProfileUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(profile: UserProfile): Result<Unit> {
         return try {
-            firestore.runTransaction { transaction ->
-                val statsRef = firestore.collection("config").document("stats")
-                val statsSnapshot = transaction.get(statsRef)
-                
-                // Obtener conteo actual
-                val currentCount = if (statsSnapshot.exists()) {
-                    statsSnapshot.getLong("userCount") ?: 0L
-                } else {
-                    0L
-                }
-                
-                val newCount = currentCount + 1
-                
-                // Actualizar estadísticas globales
-                transaction.set(
-                    statsRef, 
-                    mapOf("userCount" to newCount), 
-                    SetOptions.merge()
-                )
-                
-                // Lógica de Negocio: Primeros 40 usuarios son FOUNDERS
-                val finalProfile = if (newCount <= 40) {
-                    profile.copy(
-                        isGoldStored = true,
-                        isPremiumStored = true,
-                        subscriptionType = "FOUNDER",
-                        isFounder = true
-                    )
-                } else {
-                    profile
-                }
-                
-                // Guardar perfil a través del repositorio (dentro de la transacción)
-                // Nota: Inyectamos el repo para mantener consistencia, pero usamos la transacción de Firestore
-                val userRef = firestore.collection("users").document(profile.uid)
-                transaction.set(userRef, finalProfile)
-            }.await()
+            // Ahora solo guardamos el perfil. 
+            // Las Cloud Functions manejarán:
+            // 1. El incremento de config/stats/userCount
+            // 2. La asignación de estatus FOUNDER si el invitationCode es válido.
+            
+            firestore.collection("users")
+                .document(profile.uid)
+                .set(profile)
+                .await()
             
             Result.success(Unit)
         } catch (e: Exception) {

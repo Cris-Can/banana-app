@@ -21,7 +21,9 @@ data class Message(
     val timestamp: Long = System.currentTimeMillis(),
     val read: Boolean = false, // Deprecated in favor of readers list, kept for backward compat?
     val readers: List<String> = emptyList(), // 👁️ UIDs who read this message
-    val isDeleted: Boolean = false, // 🗑️ Soft delete
+    @get:com.google.firebase.firestore.PropertyName("isDeleted")
+    @set:com.google.firebase.firestore.PropertyName("isDeleted")
+    var isDeleted: Boolean = false, // 🗑️ Soft delete
     val isEdited: Boolean = false, // ✏️ Has been edited
     val editHistory: List<String> = emptyList(), // 📜 Previous content versions
     val replyToId: String? = null, // ↩️ Reply to message ID

@@ -28,12 +28,24 @@ import com.eventos.banana.domain.model.UserProfile
 @Composable
 fun RankingScreen(
     viewModel: RankingViewModel,
+    currentUserId: String?,
     onBack: () -> Unit,
     onUserClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("🏆 Más Activos", "⭐ Mejor Calificados")
+
+    // Carga inicial con el userId para filtrar bloqueados
+    LaunchedEffect(currentUserId) {
+        viewModel.loadRankings(currentUserId)
+    }
+
+    val sharedPrefs = androidx.compose.ui.platform.LocalContext.current
+        .getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE)
+    val hasSeenRankingGuide = remember { mutableStateOf(
+        sharedPrefs.getBoolean("ranking_guide_seen", false)
+    ) }
 
     Scaffold(
         topBar = {
@@ -66,8 +78,34 @@ fun RankingScreen(
             }
 
             if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    repeat(5) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            com.eventos.banana.ui.components.SkeletonCircle(50.dp)
+                            Spacer(Modifier.width(16.dp))
+                            com.eventos.banana.ui.components.SkeletonTextLine(120.dp)
+                            Spacer(Modifier.weight(1f))
+                            com.eventos.banana.ui.components.SkeletonTextLine(40.dp)
+                        }
+                    }
+                    
+                    // Fallback loader if it takes too long
+                    var showFallback by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(2000)
+                        showFallback = true
+                    }
+                    if (showFallback) {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    }
                 }
             } else if (uiState.errorMessage != null) {
                 Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -93,13 +131,6 @@ fun RankingScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         itemsIndexed(usersToShow) { index, user ->
-                            // INFINITE SCROLL TRIGGER
-                            if (index >= usersToShow.size - 3) {
-                                LaunchedEffect(index, selectedTabIndex) {
-                                    viewModel.loadMore(isScoreMode = selectedTabIndex == 0)
-                                }
-                            }
-
                             RankingUserItem(
                                 user = user,
                                 position = index + 1,
@@ -107,36 +138,20 @@ fun RankingScreen(
                                 onClick = { onUserClick(user.uid) }
                             )
                         }
-                        
-                        item {
-                            val isLoadingMore = if (selectedTabIndex == 0) uiState.isLoadingMoreScore else uiState.isLoadingMoreRating
-                            if (isLoadingMore) {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                                }
-                            } else {
-                                val hasMore = if (selectedTabIndex == 0) uiState.hasMoreScore else uiState.hasMoreRating
-                                if (!hasMore && usersToShow.isNotEmpty()) {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "No hay más usuarios por ahora.",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
         }
+    }
+
+    // Show guide overlay on first visit (DESPUÉS del Scaffold)
+    if (!hasSeenRankingGuide.value && !uiState.isLoading && uiState.errorMessage == null) {
+        RankingGuideOverlay(
+            onDismiss = {
+                hasSeenRankingGuide.value = true
+                sharedPrefs.edit().putBoolean("ranking_guide_seen", true).apply()
+            }
+        )
     }
 }
 

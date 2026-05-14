@@ -3,16 +3,27 @@ package com.eventos.banana.data.repository
 import android.app.Activity
 import android.content.Context
 import com.android.billingclient.api.*
-import com.eventos.banana.domain.model.UserProfile
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+
+/**
+ * Subscription state management
+ */
+enum class SubscriptionState {
+    ACTIVE,         // Currently valid subscription
+    EXPIRED,        // Subscription has expired
+    CANCELED,       // User canceled, valid until expiryTimeMillis
+    PENDING,        // Payment pending
+    ON_HOLD,        // Account hold (billing issue)
+    PAUSED,         // Paused subscription
+    UNKNOWN         // Unable to determine state
+}
 
 class BillingRepository @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -28,8 +39,13 @@ class BillingRepository @Inject constructor(
     private val _productDetails = MutableStateFlow<Map<String, ProductDetails>>(emptyMap())
     val productDetails: StateFlow<Map<String, ProductDetails>> = _productDetails
     
-    // TEMPORARY: Store event ID for boost purchase (Risk: Process death clears this)
-    // FIXED: Now using SharedPreferences to survive process death
+    private val _subscriptionState = MutableStateFlow<SubscriptionState>(SubscriptionState.UNKNOWN)
+    val subscriptionState: StateFlow<SubscriptionState> = _subscriptionState
+    
+    private val _subscriptionExpiryMillis = MutableStateFlow<Long?>(null)
+    val subscriptionExpiryMillis: StateFlow<Long?> = _subscriptionExpiryMillis
+    
+    // Store event ID for boost purchase using SharedPreferences to survive process death
     private val prefs = context.getSharedPreferences("billing_prefs", Context.MODE_PRIVATE)
 
     private var pendingBoostEventId: String?
@@ -47,10 +63,14 @@ class BillingRepository @Inject constructor(
     companion object {
         const val SUB_BANANA_GOLD = "banana_plus_monthly"
         const val INAPP_EVENT_BOOST = "event_boost_24h"
+        
+        // Periodic verification interval (1 hour)
+        private const val PERIODIC_VERIFICATION_INTERVAL_MS = 60 * 60 * 1000L
     }
 
     init {
         startConnection()
+        schedulePeriodicVerification()
     }
 
     fun startConnection() {
@@ -71,15 +91,110 @@ class BillingRepository @Inject constructor(
                         }
                     }
                 } else {
-                    android.util.Log.e("BillingRepository", "Setup failed: ${billingResult.debugMessage}")
+                    Timber.e("BillingRepository", "Setup failed: ${billingResult.debugMessage}")
+                    // Retry after delay
+                    appScope.launch {
+                        kotlinx.coroutines.delay(5000)
+                        if (!_billingSetupComplete.value) {
+                            startConnection()
+                        }
+                    }
                 }
             }
 
             override fun onBillingServiceDisconnected() {
                 _billingSetupComplete.value = false
-                // Retry logic could go here
+                Timber.d("BillingRepository", "Billing service disconnected, will retry")
             }
         })
+    }
+    
+    /**
+     * Schedule periodic subscription verification
+     * Runs every hour to check subscription status
+     */
+    private fun schedulePeriodicVerification() {
+        appScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(PERIODIC_VERIFICATION_INTERVAL_MS)
+                if (_billingSetupComplete.value) {
+                    verifySubscriptionStatus()
+                }
+            }
+        }
+    }
+    
+    /**
+     * Verify subscription status by querying Google Play
+     */
+    private fun verifySubscriptionStatus() {
+        billingClient.queryPurchasesAsync(
+            QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build()
+        ) { billingResult, purchases ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
+                val goldPurchase = purchases.find { it.products.contains(SUB_BANANA_GOLD) }
+                
+                if (goldPurchase != null) {
+                    val state = determineSubscriptionState(goldPurchase)
+                    _subscriptionState.value = state
+                    _subscriptionExpiryMillis.value = goldPurchase.purchaseTime
+                    
+                    Timber.d("BillingRepository", "Subscription verification: state=$state")
+                    
+                    // Update user profile based on state
+                    appScope.launch {
+                        val uid = authRepository.currentUid() ?: return@launch
+                        when (state) {
+                            SubscriptionState.ACTIVE, SubscriptionState.CANCELED -> {
+                                // Subscription is valid (either active or canceled but not expired)
+                                userRepository.setGoldStatus(uid, true)
+                            }
+                            SubscriptionState.EXPIRED, SubscriptionState.ON_HOLD, SubscriptionState.PAUSED -> {
+                                // Subscription is no longer valid
+                                userRepository.setGoldStatus(uid, false)
+                            }
+                            else -> { /* Keep current status */ }
+                        }
+                    }
+                } else {
+                    // No subscription found
+                    _subscriptionState.value = SubscriptionState.UNKNOWN
+                    _subscriptionExpiryMillis.value = null
+                }
+            }
+        }
+    }
+    
+    /**
+     * Determine subscription state from purchase data
+     */
+    private fun determineSubscriptionState(purchase: Purchase): SubscriptionState {
+        return when (purchase.purchaseState) {
+            Purchase.PurchaseState.PURCHASED -> {
+                // Check if auto-renewing is enabled
+                val purchaseData = purchase.originalJson
+                if (purchaseData != null) {
+                    try {
+                        val json = org.json.JSONObject(purchaseData)
+                        val autoRenewing = json.optBoolean("autoRenewing", true)
+                        val expiryTimeMillis = json.optLong("expiryTimeMillis", 0)
+                        
+                        if (System.currentTimeMillis() > expiryTimeMillis) {
+                            return SubscriptionState.EXPIRED
+                        }
+                        
+                        return if (autoRenewing) SubscriptionState.ACTIVE else SubscriptionState.CANCELED
+                    } catch (e: org.json.JSONException) {
+                        Timber.e(e, "Failed to parse purchase data")
+                    }
+                }
+                SubscriptionState.ACTIVE
+            }
+            Purchase.PurchaseState.PENDING -> SubscriptionState.PENDING
+            else -> SubscriptionState.UNKNOWN
+        }
     }
 
     private fun queryProductDetails() {
@@ -219,39 +334,10 @@ class BillingRepository @Inject constructor(
                         }
                     }
                     .addOnFailureListener { e ->
-                        timber.log.Timber.e(e, "Server validation failed for $productId. Applying local fallback.")
-                        // Fallback: grant locally if server is unreachable
-                        appScope.launch {
-                            grantEntitlementLocalFallback(purchase, productId, uid)
-                        }
+                        timber.log.Timber.e(e, "Server validation failed for $productId.")
                     }
             } catch (e: Exception) {
                 timber.log.Timber.e(e, "Error calling validateAndGrantPurchase")
-                grantEntitlementLocalFallback(purchase, productId, uid)
-            }
-        }
-    }
-    
-    /**
-     * 🛡️ Local fallback: only used if Cloud Function is unreachable.
-     * This preserves the original behavior as a safety net.
-     */
-    private suspend fun grantEntitlementLocalFallback(purchase: Purchase, productId: String, uid: String) {
-        when (productId) {
-            SUB_BANANA_GOLD -> {
-                userRepository.setGoldStatus(uid, true)
-            }
-            INAPP_EVENT_BOOST -> {
-                val eventId = pendingBoostEventId
-                if (eventId != null) {
-                    val duration = 24L * 60 * 60 * 1000
-                    eventRepository.boostEvent(eventId, duration)
-                    pendingBoostEventId = null
-                }
-                val consumeParams = ConsumeParams.newBuilder()
-                    .setPurchaseToken(purchase.purchaseToken)
-                    .build()
-                billingClient.consumeAsync(consumeParams) { _, _ -> }
             }
         }
     }
@@ -262,24 +348,88 @@ class BillingRepository @Inject constructor(
                 .setProductType(BillingClient.ProductType.SUBS)
                 .build()
         ) { billingResult, purchases -> 
-             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                 val hasGold = purchases.any { it.products.contains(SUB_BANANA_GOLD) && it.purchaseState == Purchase.PurchaseState.PURCHASED }
-                 appScope.launch {
-                     val uid = authRepository.currentUid()
-                     if (uid != null) {
-                        // 🛡️ PROTECTION: Don't downgrade Founders (force server read)
-                         val profile = userRepository.getUserProfile(uid, forceRefresh = true)
-                         val isFounder = profile?.isFounder == true
-                         
-                         if (isFounder) {
-                             android.util.Log.d("BillingRepository", "User is Founder. Skipping Google Play sync. Ensuring FOUNDER type.")
-                             userRepository.setGoldStatus(uid, true) // Will auto-repair to FOUNDER
-                         } else {
-                             userRepository.setGoldStatus(uid, hasGold)
+             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
+                 val goldPurchase = purchases.find { it.products.contains(SUB_BANANA_GOLD) }
+                 
+                 if (goldPurchase != null) {
+                     val state = determineSubscriptionState(goldPurchase)
+                     _subscriptionState.value = state
+                     
+                     appScope.launch {
+                         val uid = authRepository.currentUid()
+                         if (uid != null) {
+                             // 🛡️ PROTECTION: Don't downgrade Founders (force server read)
+                             val profile = userRepository.getUserProfile(uid, forceRefresh = true)
+                             val isFounder = profile?.isFounder == true
+                             
+                             if (isFounder) {
+                                 Timber.d("BillingRepository", "User is Founder. Skipping Google Play sync. Ensuring FOUNDER type.")
+                                 userRepository.setGoldStatus(uid, true) // Will auto-repair to FOUNDER
+                             } else {
+                                 // Handle subscription state
+                                 when (state) {
+                                     SubscriptionState.ACTIVE, SubscriptionState.CANCELED -> {
+                                         // Subscription is valid
+                                         userRepository.setGoldStatus(uid, true)
+                                     }
+                                     SubscriptionState.EXPIRED, SubscriptionState.ON_HOLD, SubscriptionState.PAUSED -> {
+                                         // Subscription is no longer valid
+                                         userRepository.setGoldStatus(uid, false)
+                                     }
+                                     else -> {
+                                         // Keep current status
+                                     }
+                                 }
+                             }
                          }
                      }
+                 } else {
+                     // No active subscription
+                     _subscriptionState.value = SubscriptionState.UNKNOWN
                  }
              }
         }
+    }
+    
+    /**
+     * Get current subscription status for UI display
+     */
+    fun getSubscriptionInfo(): SubscriptionInfo {
+        return SubscriptionInfo(
+            state = _subscriptionState.value,
+            expiryMillis = _subscriptionExpiryMillis.value,
+            productId = if (_subscriptionState.value == SubscriptionState.ACTIVE) SUB_BANANA_GOLD else null
+        )
+    }
+    
+    /**
+     * Check if user currently has active premium
+     */
+    suspend fun hasActivePremium(): Boolean {
+        val uid = authRepository.currentUid() ?: return false
+        val profile = userRepository.getUserProfile(uid)
+        
+        // Check local profile first
+        if (profile?.isGold == true || profile?.isFounder == true || profile?.subscriptionType == "GOLD" || profile?.subscriptionType == "FOUNDER") {
+            return true
+        }
+        
+        // Check subscription state
+        return _subscriptionState.value == SubscriptionState.ACTIVE || _subscriptionState.value == SubscriptionState.CANCELED
+    }
+    
+    /**
+     * Data class for subscription info
+     */
+    data class SubscriptionInfo(
+        val state: SubscriptionState,
+        val expiryMillis: Long?,
+        val productId: String?
+    ) {
+        val isPremium: Boolean
+            get() = state == SubscriptionState.ACTIVE || state == SubscriptionState.CANCELED
+            
+        val timeUntilExpiry: Long?
+            get() = expiryMillis?.let { it - System.currentTimeMillis() }
     }
 }

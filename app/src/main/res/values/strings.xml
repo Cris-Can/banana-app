@@ -52,6 +52,7 @@
     <string name="auth_location_not_detected">Ubicación no detectada</string>
     <string name="auth_your_commune">Tu Comuna (Automático)</string>
     <string name="auth_create_account_button">Crear cuenta</string>
+    <string name="auth_invitation_code_label">Código de Invitación (opcional)</string>
 
     <!-- PROFILE -->
     <string name="profile_title">Perfil</string>
@@ -407,12 +408,15 @@
 
     <!-- CREATE EVENT -->
     <string name="create_event_title">Crear evento</string>
+    <string name="create_event_image_title">Imagen del Evento</string>
+    <string name="create_event_image_hint">Toca para agregar imagen</string>
+    <string name="create_event_location_title">Ubicación</string>
     <string name="create_event_field_title">Título *</string>
     <string name="create_event_field_description">Descripción *</string>
     <string name="create_event_field_type">Tipo de Evento *</string>
     <string name="create_event_field_min_reputation">Reputación Mínima (Opcional)</string>
-    <string name="create_event_field_region">Región *</string>
-    <string name="create_event_field_commune">Comuna * (%1$d)</string>
+    <string name="create_event_field_region">Estado / Región</string>
+    <string name="create_event_field_commune">Ciudad / Localidad</string>
     <string name="create_event_field_address">Dirección Exacta (Solo para aceptados) *</string>
     <string name="create_event_field_address_placeholder">Ej: Calle Falsa 123, Depto 401</string>
     <string name="create_event_field_address_note">Esta información NO es pública.</string>

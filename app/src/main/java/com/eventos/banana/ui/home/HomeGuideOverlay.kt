@@ -1,215 +1,130 @@
 package com.eventos.banana.ui.home
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private data class GuideStep(
+    val emoji: String,
+    val title: String,
+    val description: String
+)
+
+private val steps = listOf(
+    GuideStep("👤", "Tu Perfil",
+        "⬆️ Arriba a la izquierda — tu foto y nombre.\nToca para editar perfil, ver tu reputación y ajustes."),
+    GuideStep("🗺️", "Mapa / Lista",
+        "⬆️ Arriba a la derecha — el primer ícono cambia entre\nel mapa interactivo y la lista de eventos."),
+    GuideStep("🏷️", "Categorías",
+        "⬆️ Debajo de la barra superior — filtra eventos por tipo:\nFiesta, Deporte, Cultura, Comida y más."),
+    GuideStep("📍", "Radio de Búsqueda",
+        "📍 En el centro de la pantalla — ajusta el radio\npara ver eventos cerca de tu ubicación."),
+    GuideStep("🎯", "Centrar Mapa",
+        "⬇️ Abajo a la izquierda (sobre el botón +) —\nte devuelve a tu ubicación actual en el mapa."),
+    GuideStep("➕", "Crear Evento",
+        "⬇️ Abajo a la derecha — el botón + te permite\ncrear tu propio evento y compartirlo."),
+    GuideStep("👥", "Amigos",
+        "⬆️ Arriba a la derecha (tercer ícono) —\ntoca para ver tus amigos y conectar con personas."),
+    GuideStep("🔍", "Búsqueda",
+        "⬆️ Arriba a la derecha (segundo ícono) — la lupa\nbusca eventos por título y usuarios por nickname.")
+)
+
 @Composable
-fun HomeGuideOverlay(
-    onDismiss: () -> Unit
-) {
+fun HomeGuideOverlay(onDismiss: () -> Unit) {
     var currentStep by remember { mutableStateOf(0) }
+    var overlayAlpha by remember { mutableStateOf(0f) }
+    val animatedAlpha by animateFloatAsState(targetValue = overlayAlpha, label = "fade")
 
-    // Textos de cada paso
-    val titles = listOf(
-        "¡Bienvenido a Banana! 🍌",
-        "Tu Perfil 👤",
-        "Acciones Rápidas ⚡",
-        "Filtros de Búsqueda 🔎",
-        "¡Crea tu Evento! ➕"
-    )
-    val descriptions = listOf(
-        "Aquí encontrarás los mejores eventos cerca de ti. Explora, únete y diviértete.",
-        "Toca tu avatar arriba a la izquierda para ver tu reputación, eventos y configuración.",
-        "Arriba a la derecha: 🔍 Buscar usuarios, 👥 Amigos, 🔔 Alertas y ✉️ Chat.",
-        "Filtra por deporte, fiesta, cultura... Usa los chips para encontrar tu panorama.",
-        "Toca el botón + abajo a la derecha para organizar un partido, junta o fiesta."
-    )
-
-    val total = titles.size
-    val isLast = currentStep == total - 1
+    LaunchedEffect(Unit) { overlayAlpha = 0.85f }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .navigationBarsPadding()  // ✅ La card nunca queda bajo los botones del sistema
+            .alpha(animatedAlpha)
+            .background(Color.Black)
+            .clickable { /* Bloquea toques al contenido subyacente */ }
     ) {
+        val step = steps[currentStep]
 
-        // ─── Indicadores flotantes (flechas animadas sin fondo oscuro) ─────────
-        AnimatedContent(
-            targetState = currentStep,
-            transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
-            label = "guide_step_arrow"
-        ) { step ->
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (step) {
-                    1 -> {
-                        // 👤 Tu Perfil → arriba izquierda
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(start = 12.dp, top = 52.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            PulsingArrow(up = true)
-                            GuideChip("Tu Perfil")
-                        }
-                    }
-                    2 -> {
-                        // ⚡ Acciones → arriba derecha
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(end = 12.dp, top = 52.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            PulsingArrow(up = true)
-                            GuideChip("Acciones")
-                        }
-                    }
-                    3 -> {
-                        // 🔎 Filtros → centro superior (debajo de la topbar)
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 112.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            PulsingArrow(up = true)
-                            GuideChip("Filtros")
-                        }
-                    }
-                    4 -> {
-                        // ➕ Crear evento → abajo derecha (FAB)
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 20.dp, bottom = 150.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            GuideChip("Crear")
-                            PulsingArrow(up = false)
-                        }
-                    }
-                    else -> { /* Paso 0 — bienvenida, sin flecha */ }
-                }
-            }
-        }
-
-        // ─── Card de instrucciones (parte inferior) ───────────────────────────
-        ElevatedCard(
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
-                // Título + paginación
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = titles[currentStep],
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${currentStep + 1}/$total",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                    )
-                }
-
-                // Descripción
-                Text(
-                    text = descriptions[currentStep],
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                // Barra de progreso
-                LinearProgressIndicator(
-                    progress = { (currentStep + 1).toFloat() / total.toFloat() },
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(4.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                )
-
-                // Botones
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("No volver a mostrar")
-                    }
+                    Text(step.emoji, fontSize = 40.sp)
+                    Text(
+                        step.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        step.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.DarkGray,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
                     Button(
-                        onClick = { if (isLast) onDismiss() else currentStep++ }
+                        onClick = {
+                            if (currentStep < steps.size - 1) {
+                                currentStep++
+                            } else {
+                                onDismiss()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A1A)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text(if (isLast) "¡Listo! 🎉" else "Siguiente")
+                        Text(
+                            if (currentStep < steps.size - 1) "Siguiente  →" else "¡Entendido!",
+                            color = Color.White,
+                            fontSize = 16.sp
+                        )
                     }
+
+                    TextButton(onClick = onDismiss) {
+                        Text("Saltar tutorial", color = Color.Gray)
+                    }
+
+                    Text(
+                        "Paso ${currentStep + 1} / ${steps.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
                 }
             }
         }
-    } // Cierre del Box exterior con navigationBarsPadding
-}
-
-// ─── Flecha pulsante animada ────────────────────────────────────────────────
-
-@Composable
-private fun PulsingArrow(up: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val offsetY by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (up) -6f else 6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "offsetY"
-    )
-    Text(
-        text = if (up) "⬆️" else "⬇️",
-        fontSize = 28.sp,
-        modifier = Modifier.offset(y = offsetY.dp)
-    )
-}
-
-// ─── Chip de etiqueta ────────────────────────────────────────────────────────
-
-@Composable
-private fun GuideChip(label: String) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.primary,
-        shadowElevation = 4.dp
-    ) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onPrimary,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
     }
 }

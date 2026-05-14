@@ -186,12 +186,15 @@ class SubscriptionRepository @Inject constructor(
             val userRef = usersCollection.document(userId)
             val result = firestore.runTransaction { tx ->
                 val snapshot = tx.get(userRef)
+                if (!snapshot.exists()) {
+                    throw Exception("User not found: $userId")
+                }
                 val currentProgress = snapshot.getLong("adsWatchedProgress")?.toInt() ?: 0
                 val currentUnlocked = snapshot.getLong("adEventsUnlocked")?.toInt() ?: 0
                 
-                // 🛑 MAX CAP: 1 Unlock per month
-                if (currentUnlocked >= 1) {
-                    return@runTransaction Pair(currentUnlocked, currentProgress) // No changing
+                // 🛑 MAX CAP: Removed or increased to 5 for flexibility
+                if (currentUnlocked >= 5) {
+                    return@runTransaction Pair(currentUnlocked, currentProgress) // Max 5 extra events/joins
                 }
 
                 var newProgress = currentProgress + 1

@@ -15,8 +15,7 @@ data class EventDto(
     val description: String = "",
     val category: String = "",
     val eventType: String = "OTRO",
-    val archivedAt: Long? = null,
-    val country: String = "Chile",
+    val country: String = "",
     val region: String = "",
     val commune: String = "",
     val notifyEventsByCommune: Boolean = false,
@@ -32,13 +31,11 @@ data class EventDto(
     val startAt: Long = 0L,
     val endAt: Long = 0L,
     
-    @get:PropertyName("archived")
-    @set:PropertyName("archived")
-    var isArchived: Boolean = false,
-    
     val expiresAt: Long? = null,
     val maxParticipants: Int = 0,
-    val isPublic: Boolean = false,
+    @get:PropertyName("isPublic")
+    @set:PropertyName("isPublic")
+    var isPublic: Boolean = false,
     val approvalRequired: Boolean = true,
     val joinQuestions: List<JoinQuestion> = emptyList(),
     val status: String = "OPEN",
@@ -64,7 +61,6 @@ data class EventDto(
             description = description,
             category = category,
             eventType = try { EventType.valueOf(eventType) } catch (e: Exception) { EventType.OTRO },
-            archivedAt = archivedAt,
             country = country,
             region = region,
             commune = commune,
@@ -80,7 +76,6 @@ data class EventDto(
             createdAt = createdAt,
             startAt = startAt,
             endAt = endAt,
-            isArchived = isArchived,
             expiresAt = expiresAt,
             maxParticipants = maxParticipants,
             isPublic = isPublic,
@@ -112,7 +107,6 @@ data class EventDto(
                 description = domain.description,
                 category = domain.category,
                 eventType = domain.eventType.name,
-                archivedAt = domain.archivedAt,
                 country = domain.country,
                 region = domain.region,
                 commune = domain.commune,
@@ -128,7 +122,6 @@ data class EventDto(
                 createdAt = domain.createdAt,
                 startAt = domain.startAt,
                 endAt = domain.endAt,
-                isArchived = domain.isArchived,
                 expiresAt = domain.expiresAt,
                 maxParticipants = domain.maxParticipants,
                 isPublic = domain.isPublic,

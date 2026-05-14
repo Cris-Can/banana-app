@@ -58,10 +58,10 @@ object GeohashUtils {
 
     fun getPrecisionForRadius(radiusKm: Int): Int {
         return when {
-            radiusKm >= 50 -> 2 // ~600km - Safer for 100km radius to avoid edge effects
-            radiusKm >= 20 -> 3 // ~150km
-            radiusKm >= 5 -> 4  // ~20km
-            else -> 5           // ~2.4km
+            radiusKm >= 100 -> 2 // ~600km
+            radiusKm >= 30 -> 3  // ~150km
+            radiusKm >= 10 -> 4  // ~20km
+            else -> 4            // ~20km (Better more than enough and filter in client)
         }
     }
 }

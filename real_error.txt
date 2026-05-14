@@ -1,5 +1,0 @@
-> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :core:data:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :core:ui:checkKotlinGradlePluginConfigurationErrors SKIPPED
-e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/di/RepositoryModule.kt:79:157 No value passed for parameter 'appScope'.
-   > Compilation error. See log for more details

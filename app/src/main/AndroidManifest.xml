@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- 📺 ADVERTISING ID (Obligatorio Android 13+ para anuncios personalizados) -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+
     <!-- 📦 PACKAGE VISIBILITY (Android 11+) -->
     <queries>
         <package android:name="com.instagram.android" />
@@ -51,11 +54,7 @@
             android:launchMode="singleTop"
             android:theme="@style/Theme.Banana">
 
-            <!-- 🚀 Launcher principal de la app -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <!-- 🚀 Launcher principal movido a activity-alias para evitar duplicados -->
 
             <!-- 🔔 Notificaciones push: abre la app al tocar la notificación -->
             <intent-filter>
@@ -160,10 +159,22 @@
             tools:replace="android:resource" />
 
 
+        <!-- 🔧 FIX: WorkManager On-Demand Initialization Conflict -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <!-- ✂️ Image Crop Activity -->
         <activity
             android:name="com.canhub.cropper.CropImageActivity"
-            android:theme="@style/Theme.Banana.Crop" />
+            android:theme="@style/Base.Theme.AppCompat" />
 
     </application>
 </manifest>

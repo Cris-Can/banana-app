@@ -4,8 +4,8 @@ import com.eventos.banana.data.repository.AuthRepository
 import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.UserProfile
 import com.eventos.banana.util.AgeCalculator
+import com.eventos.banana.util.AppConstants
 import com.eventos.banana.util.GeohashUtils
-import com.eventos.banana.data.ChileCommunesList
 
 import com.eventos.banana.domain.usecase.profile.CreateUserProfileUseCase
 
@@ -20,8 +20,10 @@ class RegisterUseCase(
         birthDate: Long,
         commune: String,
         region: String? = null,
+        country: String? = null,
         latitude: Double? = null,
-        longitude: Double? = null
+        longitude: Double? = null,
+        invitationCode: String? = null
     ): Result<Unit> {
         val age = AgeCalculator.calculateAge(birthDate)
         if (age < 18) {
@@ -33,9 +35,9 @@ class RegisterUseCase(
         return if (result.isSuccess) {
             val uid = authRepository.currentUid() ?: return Result.failure(Exception("Usuario no autenticado"))
 
-            val finalRegion = region ?: ChileCommunesList.getRegionForCommune(commune)
+            val finalRegion = region ?: ""
             val geohash = if (latitude != null && longitude != null) {
-                GeohashUtils.encode(latitude, longitude, 9)
+                GeohashUtils.encode(latitude, longitude, GeohashUtils.getPrecisionForRadius(AppConstants.DEFAULT_SEARCH_RADIUS_KM))
             } else null
 
             val profile = UserProfile(
@@ -46,9 +48,11 @@ class RegisterUseCase(
                 age = age,
                 commune = commune,
                 region = finalRegion,
+                country = country,
                 latitude = latitude,
                 longitude = longitude,
-                geohash = geohash
+                geohash = geohash,
+                invitationCode = invitationCode
             )
 
             try {

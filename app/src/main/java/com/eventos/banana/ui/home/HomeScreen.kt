@@ -4,6 +4,7 @@ package com.eventos.banana.ui.home
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex // ➕
@@ -21,6 +22,13 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import kotlinx.coroutines.launch
+import com.google.maps.android.compose.clustering.*
+import com.google.maps.android.compose.Circle
+import com.google.maps.android.clustering.ClusterItem
 
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
@@ -29,6 +37,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.res.stringResource
 import com.eventos.banana.ui.util.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -43,10 +52,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.eventos.banana.data.ChileCommunesList
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventListUiState
-import com.eventos.banana.domain.model.EventStatus
 import com.eventos.banana.ui.event.EventListViewModel
 import com.eventos.banana.ui.auth.SessionViewModel
 
@@ -69,10 +76,32 @@ fun HomeScreen(
     onMapClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val locations = remember { ChileCommunesList.getRegionsWithCommunes() }
+    val scope = rememberCoroutineScope()
+
+    val sharedPrefs = androidx.compose.ui.platform.LocalContext.current
+        .getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE)
+    val hasSeenHomeGuide = remember { mutableStateOf(
+        sharedPrefs.getBoolean("home_guide_seen", false)
+    ) }
     
-    // 🗺️ MAP TOGGLE STATE
-    var isMapView by remember { mutableStateOf(false) }
+    // 🗺️ MAP STATE (Elevated to be accessible from FAB)
+    // Rule 1: No more hardcoded Santiago. Initialize with world view or profile location if already loaded.
+    val cameraPositionState = com.google.maps.android.compose.rememberCameraPositionState {
+        val profile = sessionViewModel.profileUiState.value.profile
+        val initialLat = profile?.latitude ?: 0.0
+        val initialLng = profile?.longitude ?: 0.0
+        
+        position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(
+            com.google.android.gms.maps.model.LatLng(initialLat, initialLng),
+            if (initialLat != 0.0) 12f else 2f // 🌍 World view if no location
+        )
+    }
+    
+    // Flag to ensure we only auto-center once on app start
+    var hasCenteredCamera by remember { mutableStateOf(false) }
+    
+    // 🗺️ MAP TOGGLE STATE — Mapa es la vista por defecto
+    var isMapView by remember { mutableStateOf(true) }
 
     // 📍 GPS LOGIC
     val fusedLocationClient = remember { com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context) }
@@ -94,7 +123,6 @@ fun HomeScreen(
     )
 
     LaunchedEffect(Unit) {
-
         // 📍 Request Permission
         if (!hasLocationPermission) {
             permissionLauncher.launch(arrayOf(
@@ -121,8 +149,11 @@ fun HomeScreen(
         }
     }
     
-    val uiState by eventListViewModel.uiState.collectAsState()
-    val isLoadingMore by eventListViewModel.isLoadingMore.collectAsState()
+    val uiState by eventListViewModel.uiState.collectAsStateWithLifecycle()
+    val isLoadingMore by eventListViewModel.isLoadingMore.collectAsStateWithLifecycle()
+    
+    // 👤 Centralized User ID for privacy checks
+    val currentUserId = remember { sessionViewModel.currentUserId() }
 
     var isRefreshing by remember { mutableStateOf(false) }
     
@@ -134,30 +165,13 @@ fun HomeScreen(
             isRefreshing = false
         }
     }
-    val profileUiState by sessionViewModel.profileUiState.collectAsState()
-
-    val userCommune = profileUiState.profile?.commune
+    val profileUiState by sessionViewModel.profileUiState.collectAsStateWithLifecycle()
     val nickname = profileUiState.profile?.nickname
 
-    var selectedRegion by remember { mutableStateOf<String?>(null) }
-    var selectedCommune by remember { mutableStateOf<String?>(null) }
-    
     val snackbarHostState = remember { SnackbarHostState() }
     
-    // 🔔 A29 DEFAULT LOCATION FILTER
-    // Only set default if we haven't manually selected yet
-    LaunchedEffect(profileUiState.profile) {
-        if (selectedCommune == null && selectedRegion == null) {
-            val userProfile = profileUiState.profile
-            if (userProfile != null && !userProfile.commune.isNullOrBlank()) {
-                 selectedRegion = userProfile.region
-                 selectedCommune = userProfile.commune
-            }
-        }
-    }
-    
-    // 📍 UX: Show Toast/Snackbar on Location Update (Background)
-    val locationMsg by sessionViewModel.locationUpdateMessage.collectAsState()
+    // 📍 UX: Mostrar Snackbar con mensajes de ubicación
+    val locationMsg by sessionViewModel.locationUpdateMessage.collectAsStateWithLifecycle()
     LaunchedEffect(locationMsg) {
         locationMsg?.let { msg ->
             snackbarHostState.showSnackbar(
@@ -168,21 +182,7 @@ fun HomeScreen(
             sessionViewModel.clearLocationMessage()
         }
     }
-    
-    // Sync Commune Filter with Server
-    LaunchedEffect(selectedCommune) {
-        eventListViewModel.updateCommune(selectedCommune)
-    }
-    
-    // If GPS is active and returning events, we might want to relax the stiff filters?
-    // For now, keep them. If backend returns nearby events, user must ensure filters match.
-    // OR: We could auto-clear filters if GPS is found? 
-    // Let's keep manual filters as "Overrides".
-    
-    val effectiveCommune = selectedCommune
-    
-    // Map Toggle Logic - Removed shadowing variable
-    // onMapClick parameter is now used directly to navigate to World Map
+
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -243,22 +243,22 @@ fun HomeScreen(
                         }
                     },
                     actions = {
-                        // 🌍 MAP TOGGLE
+                        // 🗺️ MAP / LIST TOGGLE
                         IconButton(onClick = { isMapView = !isMapView }) {
-                            Icon(
-                                imageVector = if (isMapView) Icons.Filled.List else Icons.Filled.LocationOn,
-                                contentDescription = if (isMapView) "Ver Lista" else "Ver Mapa"
+                            Text(
+                                text = if (isMapView) "📋" else "🗺️",
+                                fontSize = 20.sp
                             )
                         }
 
                         // 🔍 SEARCH
                         IconButton(onClick = onSearchClick) {
-                            Icon(Icons.Filled.Search, contentDescription = stringResource(com.eventos.banana.R.string.home_cd_search))
+                            Text("🔍", fontSize = 20.sp)
                         }
 
                         // 👥 FRIENDS
                         IconButton(onClick = onFriendsClick) {
-                            Icon(Icons.Filled.Person, contentDescription = stringResource(com.eventos.banana.R.string.home_cd_friends))
+                            Text("👥", fontSize = 20.sp)
                         }
 
                         // Messages button
@@ -290,13 +290,56 @@ fun HomeScreen(
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
-                FloatingActionButton(onClick = onCreateEventClick) { Text("+") }
+                Column(
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 🎯 BOTÓN CENTRAR (Solo en Mapa)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isMapView,
+                        enter = androidx.compose.animation.scaleIn(),
+                        exit = androidx.compose.animation.scaleOut()
+                    ) {
+                        SmallFloatingActionButton(
+                            onClick = {
+                                val userLoc = uiState.let { if (it is EventListUiState.Success) it.currentUserLocation else null }
+                                userLoc?.let {
+                                    scope.launch {
+                                        cameraPositionState.animate(
+                                            com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(
+                                                com.google.android.gms.maps.model.LatLng(it.latitude, it.longitude),
+                                                15f
+                                            )
+                                        )
+                                    }
+                                }
+                            },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                        ) {
+                            Text("🎯", fontSize = 18.sp)
+                        }
+                    }
+
+                    // ➕ BOTÓN CREAR (Siempre visible)
+                    FloatingActionButton(
+                        onClick = onCreateEventClick,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                    ) {
+                        Text("➕", fontSize = 24.sp)
+                    }
+                }
             }
         ) { paddingValues ->
             Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             
                 // ---------- FILTRO CATEGORÍAS (Horizontales) ----------
-                val selectedCategory by eventListViewModel.selectedCategory.collectAsState()
+                val selectedCategory = uiState.selectedCategory
                 
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -346,21 +389,16 @@ fun HomeScreen(
                 HorizontalDivider()
 
                 // ---------- FILTRO FECHA ----------
-                val selectedDateFilter by eventListViewModel.selectedDateFilter.collectAsState()
-                val searchRadiusKm by eventListViewModel.searchRadiusKm.collectAsState()
+                val selectedDateFilter = uiState.selectedDateFilter
+                val searchRadiusKm by eventListViewModel.searchRadiusKm.collectAsStateWithLifecycle()
                 var showRadiusDialog by remember { mutableStateOf(false) }
 
                 if (showRadiusDialog) {
                     com.eventos.banana.ui.components.RadiusSelectorDialog(
                         currentRadiusKm = searchRadiusKm,
                         onDismiss = { showRadiusDialog = false },
-                        onRadiusSelected = { 
-                            eventListViewModel.updateRadius(it)
-                            // Clear manual location filters to enable radius search
-                            selectedRegion = null
-                            selectedCommune = null
-                            eventListViewModel.updateRegion(null) // ➕ Clear VM Region
-                            eventListViewModel.updateCommune(null) // ➕ Clear VM Commune
+                        onRadiusSelected = { newRadius ->
+                            eventListViewModel.updateRadius(newRadius)
                         }
                     )
                 }
@@ -401,103 +439,49 @@ fun HomeScreen(
                         )
                     }
                 }
-                
-                 // ---------- FILTROS REGION/COMUNA ----------
-            if (!isMapView) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // ... (Dropdowns logic remains same, just visually compacted spacing)
-                
-                var regionExpanded by remember { mutableStateOf(false) }
+                HorizontalDivider()
 
-                ExposedDropdownMenuBox(
-                    expanded = regionExpanded,
-                    onExpandedChange = { regionExpanded = !regionExpanded }
-                ) {
-                    OutlinedTextField(
-                        value = selectedRegion ?: stringResource(com.eventos.banana.R.string.home_filter_all_regions),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(com.eventos.banana.R.string.home_filter_region)) },
-                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = regionExpanded,
-                        onDismissRequest = { regionExpanded = false }
+                // ---------- INDICADOR DE UBICACIÓN (solo en vista Lista) ----------
+                if (!isMapView) {
+                    val userLoc = (uiState as? EventListUiState.Success)?.currentUserLocation
+                    Surface(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .fillMaxWidth()
+                            .clickable { showRadiusDialog = true },
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(com.eventos.banana.R.string.home_filter_all_regions)) },
-                                onClick = {
-                                    selectedRegion = null
-                                    selectedCommune = null
-                                    eventListViewModel.searchAllRegions()
-                                    regionExpanded = false
-                                }
-                            )
-                            locations.keys.sorted().forEach { region ->
-                                DropdownMenuItem(
-                                    text = { Text(region) },
-                                    onClick = {
-                                        selectedRegion = region
-                                        selectedCommune = null
-                                        eventListViewModel.updateRegion(region) // ➕
-                                        eventListViewModel.updateCommune(null)
-                                        regionExpanded = false
-                                    }
-                                )
-                            }
-                    }
-                }
-
-                val communes = selectedRegion?.let { locations[it] }.orEmpty()
-
-                if (communes.isNotEmpty()) {
-                    var communeExpanded by remember { mutableStateOf(false) }
-
-                    ExposedDropdownMenuBox(
-                        expanded = communeExpanded,
-                        onExpandedChange = {
-                            communeExpanded = !communeExpanded
-                        }
-                    ) {
-                        OutlinedTextField(
-                            value = selectedCommune ?: stringResource(com.eventos.banana.R.string.home_filter_all_communes),
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(stringResource(com.eventos.banana.R.string.home_filter_commune)) },
-                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-                        )
-
-                        ExposedDropdownMenu(
-                            expanded = communeExpanded,
-                            onDismissRequest = { communeExpanded = false }
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(com.eventos.banana.R.string.home_filter_all_communes)) },
-                                onClick = {
-                                    selectedCommune = null
-                                    communeExpanded = false
-                                }
+                            Icon(
+                                Icons.Filled.LocationOn,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
                             )
-                            communes.sorted().forEach { commune ->
-                                DropdownMenuItem(
-                                    text = { Text(commune) },
-                                    onClick = {
-                                        selectedCommune = commune
-                                        communeExpanded = false
-                                    }
-                                )
-                            }
+                            Text(
+                                text = if (userLoc != null)
+                                    "🌍 Mostrando eventos en radio de ${searchRadiusKm}km"
+                                else
+                                    "Eventos globales — Activa GPS para filtrar por cercanía",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                Icons.Filled.KeyboardArrowDown,
+                                contentDescription = "Ajustar radio",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
-                } // Column
-            } // End of !isMapView Region/Commune block
 
             // ---------- CONTENIDO PRINCIPAL (LISTA O MAPA) ----------
             when (val state = uiState) {
@@ -514,144 +498,298 @@ fun HomeScreen(
                 }
 
                 is EventListUiState.Success -> {
-                    val now = System.currentTimeMillis()
-                    
-                    // Date Filter Helper
-                    fun checkDate(eventStart: Long, filter: com.eventos.banana.domain.model.DateFilter): Boolean {
-                        val calendar = java.util.Calendar.getInstance()
-                        val currentDayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
-                        val currentYear = calendar.get(java.util.Calendar.YEAR)
-                        
-                        val eventCalendar = java.util.Calendar.getInstance()
-                        eventCalendar.timeInMillis = eventStart
-                        val eventDay = eventCalendar.get(java.util.Calendar.DAY_OF_YEAR)
-                        val eventYear = eventCalendar.get(java.util.Calendar.YEAR)
-
-                        return when (filter) {
-                            com.eventos.banana.domain.model.DateFilter.ALL -> true
-                            com.eventos.banana.domain.model.DateFilter.TODAY -> {
-                                eventYear == currentYear && eventDay == currentDayOfYear
-                            }
-                            com.eventos.banana.domain.model.DateFilter.TOMORROW -> {
-                                // Simplified tomorrow check
-                                calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                                val tomorrowDay = calendar.get(java.util.Calendar.DAY_OF_YEAR)
-                                val tomorrowYear = calendar.get(java.util.Calendar.YEAR)
-                                eventYear == tomorrowYear && eventDay == tomorrowDay
-                            }
-                            com.eventos.banana.domain.model.DateFilter.WEEKEND -> {
-                                // Check if event is this Friday, Saturday, or Sunday
-                                // And we are currently in same week (approx) or upcoming if today is Mon-Thu
-                                // Simplified: Is event within next 7 days AND is Fri/Sat/Sun?
-                                // Better: Start from today, find next Sunday. Event must be <= Next Sunday && >= Today.
-                                // AND Event DayOfWeek must be Fri, Sat, or Sun.
-                                
-                                val dayOfWeek = eventCalendar.get(java.util.Calendar.DAY_OF_WEEK) // Sun=1, Fri=6, Sat=7
-                                val isWeekendDay = dayOfWeek == java.util.Calendar.FRIDAY || 
-                                                   dayOfWeek == java.util.Calendar.SATURDAY || 
-                                                   dayOfWeek == java.util.Calendar.SUNDAY
-                                                   
-                                // Ensure it's upcoming (not last year's weekend) - handled by event.endAt > now check generally
-                                // But let's restrict to next 5 days to be safe "This Weekend"
-                                val diff = eventStart - now
-                                val maxDiff = 5 * 24 * 60 * 60 * 1000L // 5 days
-                                
-                                isWeekendDay && diff >= 0 && diff < maxDiff
-                            }
-                        }
-                    }
-
                     val events = state.events
-                        .filter { event ->
-                            event.status == EventStatus.OPEN &&
-                                    event.endAt > now &&
-                                    (selectedRegion == null || event.region == selectedRegion) &&
-                                    (effectiveCommune == null || event.commune == effectiveCommune) &&
-                                    (selectedCategory == null || event.eventType == selectedCategory) &&
-                                    checkDate(event.startAt, selectedDateFilter)
-                        }
+
 
                     if (isMapView) {
                         // ---------- VISTA DE MAPA ----------
                         var selectedMapEvent by remember { mutableStateOf<Event?>(null) }
                         
-                        // 🚀 OPTIMIZACIÓN SEGURA: Pre-calcular solo datos básicos para evitar lag
-                        // Nota: Evitamos crear BitmapDescriptor aquí porque puede fallar si el SDK no está listo
-                        val markerDataList = remember(events) {
-                            events.mapNotNull { event ->
-                                val lat = event.latitude ?: event.exactLatitude ?: 0.0
-                                val lng = event.longitude ?: event.exactLongitude ?: 0.0
-                                if (lat == 0.0 || lng == 0.0) return@mapNotNull null
-                                
-                                val hue = when (event.eventType) {
-                                    com.eventos.banana.domain.model.EventType.DEPORTES -> 120f // GREEN
-                                    com.eventos.banana.domain.model.EventType.SOCIAL -> 270f // VIOLET
-                                    com.eventos.banana.domain.model.EventType.CULTURAL -> 330f // ROSE
-                                    com.eventos.banana.domain.model.EventType.EDUCATIVO -> 240f // BLUE
-                                    com.eventos.banana.domain.model.EventType.JUEGOS -> 180f // CYAN
-                                    com.eventos.banana.domain.model.EventType.GASTRONOMIA -> 30f // ORANGE
-                                    com.eventos.banana.domain.model.EventType.AIRE_LIBRE -> 150f // GREEN_LIME
-                                    else -> 0f // RED
+                        // Optimización Refinada: Caché de LatLng vinculado a la lista de eventos actual
+                        // Se reinicia cuando la lista total cambia para evitar crecimiento infinito de memoria.
+                        val latLngCache = remember(events) { mutableMapOf<String, com.google.android.gms.maps.model.LatLng>() }
+                        
+                        // derivedStateOf garantiza que el mapa solo se notifique si la lista final de markers procesados cambia,
+                        // evitando recomposiciones por cambios en otros campos del uiState (ej. isRefreshing).
+                        val markerDataList by remember(events, currentUserId) {
+                            derivedStateOf {
+                                events.mapNotNull { event ->
+                                    // 🔐 LÓGICA DE PRIVACIDAD
+                                    val isApproved = currentUserId.isNotEmpty() && event.approvedParticipants.contains(currentUserId)
+                                    val isCreator = currentUserId.isNotEmpty() && event.creatorId == currentUserId
+                                    val useExact = event.isPublic || isCreator || isApproved
+                                    
+                                    val lat = if (useExact) (event.exactLatitude ?: event.latitude ?: 0.0) else (event.latitude ?: 0.0)
+                                    val lng = if (useExact) (event.exactLongitude ?: event.longitude ?: 0.0) else (event.longitude ?: 0.0)
+                                    if (lat == 0.0 || lng == 0.0) return@mapNotNull null
+                                    
+                                    // CacheKey robusta: Incluye coordenadas para detectar cambios en la posición del mismo evento (ej. edición)
+                                    val cacheKey = "${event.id}_${lat}_${lng}_${useExact}"
+                                    val pos = latLngCache.getOrPut(cacheKey) {
+                                        com.google.android.gms.maps.model.LatLng(lat, lng)
+                                    }
+                                    
+                                    MapMarkerInfo(
+                                        event = event,
+                                        markerPosition = pos,
+                                        hue = getEventHue(event.eventType),
+                                        useExact = useExact
+                                    )
                                 }
-                                
-                                com.eventos.banana.ui.home.MapMarkerInfo(
-                                    event = event,
-                                    position = com.google.android.gms.maps.model.LatLng(lat, lng),
-                                    hue = hue
-                                )
                             }
+                        }
+                        
+                        val circleMarkerData = remember(markerDataList) {
+                            markerDataList.filter { !it.useExact }
                         }
 
                         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                            val userLoc = state.currentUserLocation
-                            val cameraPositionState = com.google.maps.android.compose.rememberCameraPositionState {
-                                position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(
-                                    com.google.android.gms.maps.model.LatLng(
-                                        userLoc?.latitude ?: -33.4489,
-                                        userLoc?.longitude ?: -70.6693
-                                    ),
-                                    12f
+                            val userLoc = (uiState as? EventListUiState.Success)?.currentUserLocation
+                            
+                            // 📍 Initial Camera Centering Strategy (Rule 2)
+                            LaunchedEffect(userLoc, profileUiState.profile, hasCenteredCamera) {
+                                if (hasCenteredCamera) return@LaunchedEffect
+                                
+                                val profile = profileUiState.profile
+                                val targetLat = userLoc?.latitude ?: profile?.latitude
+                                val targetLng = userLoc?.longitude ?: profile?.longitude
+                                
+                                if (targetLat != null && targetLng != null) {
+                                    cameraPositionState.animate(
+                                        com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(
+                                            com.google.android.gms.maps.model.LatLng(targetLat, targetLng),
+                                            13f
+                                        )
+                                    )
+                                    hasCenteredCamera = true
+                                }
+                            }
+
+                            // Optimización 2: Memorizar propiedades para evitar flickering y re-configuración del mapa
+                            val mapProperties = remember(hasLocationPermission) {
+                                com.google.maps.android.compose.MapProperties(
+                                    isMyLocationEnabled = hasLocationPermission
+                                )
+                            }
+                            val mapUiSettings = remember {
+                                com.google.maps.android.compose.MapUiSettings(
+                                    myLocationButtonEnabled = true,
+                                    zoomControlsEnabled = false,
+                                    compassEnabled = true
                                 )
                             }
 
                             com.google.maps.android.compose.GoogleMap(
                                 modifier = Modifier.fillMaxSize(),
                                 cameraPositionState = cameraPositionState,
-                                properties = com.google.maps.android.compose.MapProperties(
-                                    isMyLocationEnabled = hasLocationPermission
-                                ),
-                                uiSettings = com.google.maps.android.compose.MapUiSettings(
-                                    myLocationButtonEnabled = true,
-                                    zoomControlsEnabled = false,
-                                    compassEnabled = true
-                                ),
+                                properties = mapProperties,
+                                uiSettings = mapUiSettings,
                                 onMapClick = { selectedMapEvent = null }
                             ) {
-                                markerDataList.forEach { data ->
-                                    val markerIcon = remember(data.hue) {
-                                        try {
-                                            com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(data.hue)
-                                        } catch (e: Exception) {
-                                            null // Fallback to default
+                                // 📍 DRAW RADIUS CIRCLE (Only if location is available)
+                                val userLocForCircle = (uiState as? EventListUiState.Success)?.currentUserLocation
+                                if (userLocForCircle != null) {
+                                    com.google.maps.android.compose.Circle(
+                                        center = com.google.android.gms.maps.model.LatLng(
+                                            userLocForCircle.latitude,
+                                            userLocForCircle.longitude
+                                        ),
+                                        radius = searchRadiusKm * 1000.0,
+                                        fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                                        strokeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                        strokeWidth = 3f
+                                    )
+                                }
+                                
+                                // 🌐 CÍRCULOS DE APROXIMACIÓN (Para eventos privados sin acceso)
+                                circleMarkerData.forEach { data ->
+                                    val color = androidx.compose.ui.graphics.Color.hsv(data.hue, 0.5f, 0.9f)
+                                    com.google.maps.android.compose.Circle(
+                                        center = data.markerPosition,
+                                        radius = 800.0,
+                                        fillColor = color.copy(alpha = 0.15f),
+                                        strokeColor = color.copy(alpha = 0.4f),
+                                        strokeWidth = 2f
+                                    )
+                                }
+
+                                Clustering(
+                                    items = markerDataList,
+                                    onClusterItemClick = { data ->
+                                        selectedMapEvent = data.event
+                                        true
+                                    },
+                                    clusterContent = { cluster ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .background(
+                                                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                                        colors = listOf(
+                                                            MaterialTheme.colorScheme.primary,
+                                                            MaterialTheme.colorScheme.secondary
+                                                        )
+                                                    ),
+                                                    shape = androidx.compose.foundation.shape.CircleShape
+                                                )
+                                                .border(2.dp, Color.White, androidx.compose.foundation.shape.CircleShape)
+                                                .graphicsLayer {
+                                                    shadowElevation = 6.dp.toPx()
+                                                    shape = androidx.compose.foundation.shape.CircleShape
+                                                    clip = true
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = cluster.size.toString(),
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                        }
+                                    },
+                                    clusterItemContent = { data ->
+                                        if (data.useExact) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .background(
+                                                        color = androidx.compose.ui.graphics.Color.hsv(data.hue, 0.7f, 0.9f).copy(alpha = 0.9f),
+                                                        shape = androidx.compose.foundation.shape.CircleShape
+                                                    )
+                                                    .border(2.dp, Color.White, androidx.compose.foundation.shape.CircleShape)
+                                                    .graphicsLayer {
+                                                        shadowElevation = 4.dp.toPx()
+                                                        shape = androidx.compose.foundation.shape.CircleShape
+                                                        clip = true
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    data.event.eventType.emoji,
+                                                    fontSize = 18.sp,
+                                                    modifier = Modifier.padding(bottom = 2.dp)
+                                                )
+                                            }
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .background(
+                                                        color = androidx.compose.ui.graphics.Color.hsv(data.hue, 0.4f, 0.9f).copy(alpha = 0.4f),
+                                                        shape = androidx.compose.foundation.shape.CircleShape
+                                                    )
+                                                    .border(1.dp, Color.White.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    data.event.eventType.emoji,
+                                                    fontSize = 12.sp,
+                                                    modifier = Modifier.alpha(0.6f)
+                                                )
+                                            }
                                         }
                                     }
+                                )
+                            }
+                            
+                            // 🛰️ Rule 2c: NO LOCATION AVAILABLE STATE (UX Overlay)
+                            val isLocationMissing = !hasLocationPermission && profileUiState.profile?.latitude == null
+                            if (isLocationMissing) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.4f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Card(
+                                        modifier = Modifier.padding(32.dp),
+                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(24.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.LocationOn,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(48.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                "Explora tu zona",
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                "Activa el GPS o selecciona una ciudad en tu perfil para ver eventos cerca de ti.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Button(
+                                                onClick = { 
+                                                    permissionLauncher.launch(arrayOf(
+                                                        android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                                        android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                                    ))
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("Habilitar GPS")
+                                            }
+                                            TextButton(onClick = onProfileClick) {
+                                                Text("Ir al Perfil")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
-                                    com.google.maps.android.compose.Marker(
-                                        state = com.google.maps.android.compose.MarkerState(position = data.position),
-                                        title = data.event.title,
-                                        snippet = "${data.event.eventType.emoji} ${data.event.commune}",
-                                        onClick = {
-                                            selectedMapEvent = data.event
-                                            true
-                                        },
-                                        icon = markerIcon
+                            // 📍 CHIP DE RADIO (esquina superior derecha del mapa)
+                            val userLocForChip = (uiState as? EventListUiState.Success)?.currentUserLocation
+                            Card(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(16.dp),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                onClick = { showRadiusDialog = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.LocationOn,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = if (userLocForChip != null) "${searchRadiusKm}km" else "Global",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Icon(
+                                        Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = "Ajustar radio",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 }
                             }
 
-                            // 🎨 LEYENDA DEL MAPA
+                            // 🎨 LEYENDA DEL MAPA (esquina superior izquierda)
                             var isLegendExpanded by remember { mutableStateOf(false) }
-                            
+
                             Card(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
@@ -691,10 +829,41 @@ fun HomeScreen(
                                             verticalArrangement = Arrangement.spacedBy(4.dp),
                                             modifier = Modifier.padding(top = 4.dp)
                                         ) {
+                                            val isAllSelected = selectedCategory == null
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                                    .background(if (isAllSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
+                                                    .clickable { eventListViewModel.selectCategory(null) }
+                                                    .padding(4.dp)
+                                                    .then(if (isAllSelected) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp)) else Modifier)
+                                            ) {
+                                                Text(
+                                                    "🌟 ${stringResource(com.eventos.banana.R.string.home_filter_all)}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            }
+
                                             com.eventos.banana.domain.model.EventType.values().filter { it != com.eventos.banana.domain.model.EventType.OTRO }.forEach { type ->
+                                                val isSelected = selectedCategory == type
                                                 Row(
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                                        .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
+                                                        .clickable { 
+                                                            if (isSelected) eventListViewModel.selectCategory(null)
+                                                            else eventListViewModel.selectCategory(type)
+                                                        }
+                                                        .padding(4.dp)
+                                                        .then(if (isSelected) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp)) else Modifier)
                                                 ) {
                                                     val hue = when (type) {
                                                         com.eventos.banana.domain.model.EventType.DEPORTES -> 120f
@@ -717,16 +886,26 @@ fun HomeScreen(
                                                     Text(
                                                         "${type.emoji} ${type.localizedName()}",
                                                         style = MaterialTheme.typography.labelSmall,
-                                                        fontSize = 10.sp
+                                                        fontSize = 10.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                                     )
+                                                    if (isSelected) {
+                                                        Spacer(Modifier.weight(1f))
+                                                        Icon(
+                                                            imageVector = Icons.Default.Done,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(10.dp),
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
                                 }
                             }
+                        }
 
-                            // 🃏 CARD OVERLAY al seleccionar un pin
+                        // 🃏 CARD OVERLAY al seleccionar un pin
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = selectedMapEvent != null,
                                 enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }) +
@@ -934,11 +1113,43 @@ fun HomeScreen(
             } // when(uiState)
         } // Column modifiers
     } // Box closing
+
+    // Muestra la guía justo cuando el feed tiene datos (o después de 2 segundos)
+    if (!hasSeenHomeGuide.value) {
+        HomeGuideOverlay(
+            onDismiss = {
+                hasSeenHomeGuide.value = true
+                sharedPrefs.edit().putBoolean("home_guide_seen", true).apply()
+            }
+        )
+    }
 } // Scaffold
 } // Fin HomeScreen
 
 data class MapMarkerInfo(
-    val event: Event,
-    val position: com.google.android.gms.maps.model.LatLng,
-    val hue: Float
-)
+    val event: com.eventos.banana.domain.model.Event,
+    val markerPosition: com.google.android.gms.maps.model.LatLng,
+    val hue: Float,
+    val useExact: Boolean
+) : ClusterItem {
+    override fun getPosition(): com.google.android.gms.maps.model.LatLng = markerPosition
+    override fun getTitle(): String = event.title
+    override fun getSnippet(): String = event.description
+    override fun getZIndex(): Float? = if (useExact) 1.0f else 0.0f
+}
+
+/** Helper para obtener el tono de color según categoría */
+private fun getEventHue(type: com.eventos.banana.domain.model.EventType): Float {
+    return when (type) {
+        com.eventos.banana.domain.model.EventType.DEPORTES -> 120f
+        com.eventos.banana.domain.model.EventType.SOCIAL -> 270f
+        com.eventos.banana.domain.model.EventType.CULTURAL -> 330f
+        com.eventos.banana.domain.model.EventType.EDUCATIVO -> 240f
+        com.eventos.banana.domain.model.EventType.JUEGOS -> 180f
+        com.eventos.banana.domain.model.EventType.GASTRONOMIA -> 30f
+        com.eventos.banana.domain.model.EventType.AIRE_LIBRE -> 150f
+        else -> 0f
+    }
+}
+// Fin de archivo
+

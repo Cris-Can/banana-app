@@ -24,6 +24,7 @@ fun NavGraphBuilder.profileGraph(
         val rankingViewModel: RankingViewModel = hiltViewModel()
         RankingScreen(
             viewModel = rankingViewModel,
+            currentUserId = sessionViewModel.currentUserId(),
             onBack = { navController.popBackStack() },
             onUserClick = { uid -> navController.navigate(Screen.PublicProfile(uid).route) }
         )
@@ -105,7 +106,7 @@ fun NavGraphBuilder.profileGraph(
             deleteAccountStatus = deleteStatus,
             onResetDeleteStatus = { sessionViewModel.resetDeleteAccountStatus() },
             onGuideReset = {
-                sharedPreferences.edit().putBoolean("onboarding_seen_v2", false).apply()
+                com.eventos.banana.ui.guide.GuidePreferences(context).resetAllGuides()
                 val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
                 intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 context.startActivity(intent)
@@ -117,12 +118,11 @@ fun NavGraphBuilder.profileGraph(
             onSendPasswordReset = { email -> profileViewModel.sendPasswordReset(email) },
             onVerifyEmail = { sessionViewModel.sendEmailVerification() },
             isEmailVerified = sessionViewModel.isEmailVerified,
-            onRecalculateStats = { uid -> profileViewModel.recalculateStats(uid) },
-            onUpdateLocation = { uid, region, commune, lat, lng ->
+            onUpdateLocation = { uid, region, commune, country, lat, lng ->
                 if (lat != null && lng != null) {
-                    profileViewModel.updateLocationFromDevice(uid, region, commune, lat, lng)
+                    profileViewModel.updateLocationFromDevice(uid, region, commune, country, lat, lng)
                 } else {
-                    profileViewModel.updateLocation(uid, region, commune)
+                    profileViewModel.updateLocation(uid, region, commune, country)
                 }
             },
             onUpdateNotifyCommune = { enabled, region, commune ->
@@ -142,9 +142,9 @@ fun NavGraphBuilder.profileGraph(
             },
             onNavigateToIcons = { navController.navigate(Screen.AppIcons.route) },
             onNavigateToBlockedUsers = { navController.navigate(Screen.BlockedUsers.route) },
-            onMigrateEvents = { profileViewModel.runMigration(context) },
-            migrationStatus = profileViewModel.migrationStatus.collectAsState().value,
-            profileUiState = profileViewModelCallbackUiState
+            profileUiState = profileViewModelCallbackUiState,
+            locationMessage = sessionViewModel.locationUpdateMessage.collectAsState().value,
+            onClearLocationMessage = { sessionViewModel.clearLocationMessage() }
         )
     }
 
@@ -159,6 +159,7 @@ fun NavGraphBuilder.profileGraph(
     // ---------- ADMIN DASHBOARD ----------
     composable(Screen.AdminDashboard.route) {
         AdminDashboardScreen(
+            currentUserId = sessionViewModel.currentUserId(),
             onBack = { navController.popBackStack() },
             onNavigateToProfile = { userId -> navController.navigate(Screen.PublicProfile(userId).route) }
         )

@@ -30,6 +30,15 @@
     ],
     "headers": [
       {
+        "source": "/app-ads.txt",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "text/plain"
+          }
+        ]
+      },
+      {
         "source": "/.well-known/assetlinks.json",
         "headers": [
           {

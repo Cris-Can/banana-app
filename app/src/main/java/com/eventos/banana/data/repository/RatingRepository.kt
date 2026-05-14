@@ -70,10 +70,7 @@ class RatingRepository @Inject constructor(
                 .set(rating.toMap())
                 .await()
 
-            // 🔥 Actualizar el score manualmente (E3 Fix)
-            updateUserScore(toUserId)
-
-
+            // ✅ Score aggregation now handled by Cloud Function onRatingCreated
             Log.d(TAG, "Rating submitted: $fromUserId -> $toUserId = $score")
             Result.success(ratingId)
         } catch (e: Exception) {
@@ -139,9 +136,7 @@ class RatingRepository @Inject constructor(
                 )
                 .await()
 
-            // Recalcular score del usuario
-            updateUserScore(rating.toUserId)
-
+            // ✅ Score recalculation now handled by Cloud Function onRatingCreated
             Log.d(TAG, "Rating edited: $ratingId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -260,55 +255,8 @@ class RatingRepository @Inject constructor(
         }
     }
 
-    /**
-     * Actualizar el score promedio de un usuario
-     */
-    suspend fun updateUserScore(userId: String): Result<Unit> {
-        return try {
-            // Obtener todas las puntuaciones del usuario
-            val snapshot = db.collection(COLLECTION_RATINGS)
-                .whereEqualTo("toUserId", userId)
-                .get()
-                .await()
-
-            val ratings = snapshot.documents.mapNotNull { doc ->
-                UserRating.fromMap(doc.data ?: emptyMap())
-            }
-
-            if (ratings.isEmpty()) {
-                // Sin puntuaciones, resetear
-                db.collection(COLLECTION_USERS)
-                    .document(userId)
-                    .update(
-                        mapOf(
-                            "ratingSum" to 0.0,
-                            "ratingCount" to 0
-                        )
-                    )
-                    .await()
-            } else {
-                val sum = ratings.sumOf { it.score }
-                val count = ratings.size
-
-                db.collection(COLLECTION_USERS)
-                    .document(userId)
-                    .update(
-                        mapOf(
-                            "ratingSum" to sum,
-                            "ratingCount" to count
-                        )
-                    )
-                    .await()
-
-                Log.d(TAG, "Updated score for $userId: $sum / $count = ${sum / count}")
-            }
-
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error updating user score", e)
-            Result.failure(e)
-        }
-    }
+    // ✅ Client-side aggregation REMOVED - Now handled entirely by Cloud Function onRatingCreated
+    // The server-side function uses incremental aggregation with transaction logic to prevent race conditions
 
     /**
      * Marcar un evento como puntuable y calcular deadline
@@ -387,9 +335,16 @@ class RatingRepository @Inject constructor(
      */
     suspend fun hasUserRated(eventId: String, fromUserId: String, toUserId: String): Boolean {
         return try {
-            val result = canUserRate(fromUserId, eventId, toUserId).getOrNull()
-            result == false // If can't rate, means already rated
+            val snapshot = db.collection(COLLECTION_RATINGS)
+                .whereEqualTo("fromUserId", fromUserId)
+                .whereEqualTo("toUserId", toUserId)
+                .whereEqualTo("eventId", eventId)
+                .limit(1)
+                .get()
+                .await()
+            !snapshot.isEmpty
         } catch (e: Exception) {
+            Log.e(TAG, "Error checking if user rated", e)
             false
         }
     }

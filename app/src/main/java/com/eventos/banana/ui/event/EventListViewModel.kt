@@ -3,21 +3,53 @@ package com.eventos.banana.ui.event
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eventos.banana.data.repository.EventRepository
+import com.eventos.banana.data.repository.MainFeedRepository
 import com.eventos.banana.data.repository.UserRepository
+import com.eventos.banana.domain.model.DateFilter
+import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventListUiState
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import com.eventos.banana.domain.model.EventStatus
+import com.eventos.banana.domain.model.EventType
+import com.eventos.banana.domain.model.ExactLocation
+import com.eventos.banana.domain.model.UserProfile
+import com.eventos.banana.util.AppConstants
+import com.eventos.banana.util.GeohashUtils
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
-import com.eventos.banana.domain.model.Event
-import com.eventos.banana.domain.model.EventType
 
-import com.eventos.banana.data.repository.MainFeedRepository
+data class EventQueryParams(
+    val geohash: String?,
+    val radiusKm: Int = AppConstants.DEFAULT_SEARCH_RADIUS_KM,
+    val category: EventType? = null,
+    val dateFilter: DateFilter = DateFilter.ALL
+)
+
+sealed class DataState<out T> {
+    object Loading : DataState<Nothing>()
+    data class Success<T>(val data: T) : DataState<T>()
+    data class Error(val exception: Throwable) : DataState<Nothing>()
+}
+
+private data class PaginationState(
+    val lastVisibleDoc: com.google.firebase.firestore.DocumentSnapshot? = null,
+    val isLastPage: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val paramsAtLastFetch: EventQueryParams? = null
+)
 
 @HiltViewModel
 class EventListViewModel @Inject constructor(
@@ -28,74 +60,360 @@ class EventListViewModel @Inject constructor(
 
     companion object {
         private const val PAGE_SIZE = 20L
-    }
 
-    private val _uiState =
-        MutableStateFlow<EventListUiState>(EventListUiState.Loading)
+        fun checkDate(eventStart: Long, filter: DateFilter, now: Long): Boolean {
+            val calendar = java.util.Calendar.getInstance()
+            calendar.timeInMillis = now
+            val currentDayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
+            val currentYear = calendar.get(java.util.Calendar.YEAR)
+            
+            val eventCalendar = java.util.Calendar.getInstance()
+            eventCalendar.timeInMillis = eventStart
+            val eventDay = eventCalendar.get(java.util.Calendar.DAY_OF_YEAR)
+            val eventYear = eventCalendar.get(java.util.Calendar.YEAR)
 
-    val uiState: StateFlow<EventListUiState> = _uiState
-    
-    // Filtering State
-    private val _selectedCategory = MutableStateFlow<EventType?>(null)
-    val selectedCategory: StateFlow<EventType?> = _selectedCategory
-
-    fun selectCategory(type: EventType?) {
-        _selectedCategory.value = if (_selectedCategory.value == type) null else type
-    }
-
-    private val _selectedDateFilter = MutableStateFlow<com.eventos.banana.domain.model.DateFilter>(com.eventos.banana.domain.model.DateFilter.ALL)
-    val selectedDateFilter: StateFlow<com.eventos.banana.domain.model.DateFilter> = _selectedDateFilter.asStateFlow()
-
-    fun selectDateFilter(filter: com.eventos.banana.domain.model.DateFilter) {
-        _selectedDateFilter.value = filter
-    }
-
-    // Search State
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-
-    fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
-    }
-    
-    // Radius State
-    private val _searchRadiusKm = MutableStateFlow(20) // Default 20km
-    val searchRadiusKm: StateFlow<Int> = _searchRadiusKm.asStateFlow()
-    
-    fun updateRadius(radius: Int) {
-        if (_searchRadiusKm.value != radius) {
-            _searchRadiusKm.value = radius
-            // Re-calculate geohash with new precision if location is known
-            val loc = (_uiState.value as? EventListUiState.Success)?.currentUserLocation
-            if (loc != null) {
-                updateLocation(loc.latitude, loc.longitude) 
+            return when (filter) {
+                DateFilter.ALL -> true
+                DateFilter.TODAY -> eventYear == currentYear && eventDay == currentDayOfYear
+                DateFilter.TOMORROW -> {
+                    calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                    val tomorrowDay = calendar.get(java.util.Calendar.DAY_OF_YEAR)
+                    val tomorrowYear = calendar.get(java.util.Calendar.YEAR)
+                    eventYear == tomorrowYear && eventDay == tomorrowDay
+                }
+                DateFilter.WEEKEND -> {
+                    val dayOfWeek = eventCalendar.get(java.util.Calendar.DAY_OF_WEEK)
+                    val isWeekendDay = dayOfWeek == java.util.Calendar.FRIDAY || 
+                                       dayOfWeek == java.util.Calendar.SATURDAY || 
+                                       dayOfWeek == java.util.Calendar.SUNDAY
+                    val diff = eventStart - now
+                    val maxDiff = 5 * 24 * 60 * 60 * 1000L
+                    isWeekendDay && diff >= 0 && diff < maxDiff
+                }
             }
         }
     }
 
-    // Geolocation State
-    private val _currentGeohash = MutableStateFlow<String?>(null)
-    private val _currentCommune = MutableStateFlow<String?>(null)
-    private val _currentRegion = MutableStateFlow<String?>(null)
-    
-    // 📍 Persistent Location (Independent of UI State)
-    private var lastKnownLocation: com.eventos.banana.domain.model.ExactLocation? = null
+    private val _queryParams = MutableStateFlow(EventQueryParams(geohash = null))
+    val queryParams: StateFlow<EventQueryParams> = _queryParams.asStateFlow()
 
-    // 📄 Pagination
-    private var currentLimit = PAGE_SIZE
-    private val _isLoadingMore = MutableStateFlow(false)
-    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+    private val _refreshTrigger = MutableStateFlow(0)
 
-    private var searchJob: kotlinx.coroutines.Job? = null
-    
-    // 📄 Paginación State
-    private var lastVisibleDocument: com.google.firebase.firestore.DocumentSnapshot? = null
-    private var isLastPage = false
-    private val _currentEvents = MutableStateFlow<List<Event>>(emptyList())
+    private val _searchRadiusKm = MutableStateFlow(AppConstants.DEFAULT_SEARCH_RADIUS_KM)
+    val searchRadiusKm: StateFlow<Int> = _searchRadiusKm.asStateFlow()
+
+    private val _userLocation = MutableStateFlow<ExactLocation?>(null)
+    val userLocation: StateFlow<ExactLocation?> = _userLocation.asStateFlow()
+
+    private val _paginationState = MutableStateFlow(PaginationState())
+
+    private val _extraEvents = MutableStateFlow<List<Event>>(emptyList())
+    val extraEvents: StateFlow<List<Event>> = _extraEvents.asStateFlow()
+
+    private val _creatorProfilesCache = MutableStateFlow<Map<String, UserProfile>>(emptyMap())
+
+    private val queryTriggerFlow: StateFlow<EventQueryParams> = combine(
+        _queryParams,
+        _refreshTrigger
+    ) { params: EventQueryParams, _: Int -> params }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), EventQueryParams(geohash = null))
+
+    private val eventsFlow: StateFlow<DataState<List<Event>>> = queryTriggerFlow
+        .flatMapLatest { params: EventQueryParams ->
+            flow {
+                emit(DataState.Loading)
+                try {
+                    val result = mainFeedRepository.fetchEventsBatch(
+                        geohashPrefix = params.geohash,
+                        commune = null,
+                        region = null,
+                        limit = PAGE_SIZE,
+                        lastSnapshot = null
+                    )
+                    result.onSuccess { (events, _) ->
+                        emit(DataState.Success(events))
+                    }.onFailure { error ->
+                        emit(DataState.Error(error))
+                    }
+                } catch (e: Exception) {
+                    emit(DataState.Error(e))
+                }
+            }.flowOn(Dispatchers.IO)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
+            initialValue = DataState.Loading
+        )
+
+    private val finalEventsFlow: StateFlow<List<Event>> = combine(
+        eventsFlow,
+        _extraEvents
+    ) { eventsState: DataState<List<Event>>, extraEvents: List<Event> ->
+        val baseEvents = when (eventsState) {
+            is DataState.Success -> eventsState.data
+            else -> emptyList()
+        }
+        if (extraEvents.isEmpty()) baseEvents
+        else (baseEvents + extraEvents).distinctBy { it.id }
+    }.distinctUntilChanged()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val creatorProfilesFlow: StateFlow<Map<String, UserProfile>> = finalEventsFlow
+        .mapLatest { events ->
+            val creatorIds = events.map { it.creatorId }.distinct()
+            val existingCache = _creatorProfilesCache.value
+            val newIds = creatorIds.filter { it !in existingCache }
+            
+            if (newIds.isEmpty()) {
+                existingCache
+            } else {
+                withContext(Dispatchers.IO) {
+                    val newProfiles = newIds.mapNotNull { uid ->
+                        userRepository.getUserProfile(uid)?.let { uid to it }
+                    }.toMap()
+                    val updatedCache = existingCache + newProfiles
+                    _creatorProfilesCache.value = updatedCache
+                    updatedCache
+                }
+            }
+        }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    private data class EventsData(
+        val state: DataState<List<Event>>,
+        val allEvents: List<Event>
+    )
+
+    private val eventsDataFlow: StateFlow<EventsData> = combine(eventsFlow, finalEventsFlow) { state, allEvents ->
+        EventsData(state, allEvents)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), EventsData(DataState.Loading, emptyList()))
+
+    private data class ProfilesData(
+        val profiles: Map<String, UserProfile>,
+        val pagination: PaginationState
+    )
+
+    private val profilesDataFlow: StateFlow<ProfilesData> = combine(creatorProfilesFlow, _paginationState) { profiles, pagination ->
+        ProfilesData(profiles, pagination)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), ProfilesData(emptyMap(), PaginationState()))
+
+    private data class LocationData(
+        val params: EventQueryParams,
+        val location: ExactLocation?
+    )
+
+    private val locationDataFlow: StateFlow<LocationData> = combine(_queryParams, _userLocation) { params, location ->
+        LocationData(params, location)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), LocationData(EventQueryParams(geohash = null), null))
+
+    private data class CombinedData(
+        val eventsData: EventsData,
+        val profilesData: ProfilesData,
+        val locationData: LocationData
+    )
+
+    private val combinedDataFlow: StateFlow<CombinedData> = combine(
+        combine(eventsDataFlow, profilesDataFlow) { ed, pd -> Pair(ed, pd) },
+        locationDataFlow
+    ) { pair: Pair<EventsData, ProfilesData>, ld: LocationData ->
+        CombinedData(pair.first, pair.second, ld)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), 
+        CombinedData(EventsData(DataState.Loading, emptyList()), ProfilesData(emptyMap(), PaginationState()), LocationData(EventQueryParams(geohash = null), null)))
+
+    val uiState: StateFlow<EventListUiState> = combinedDataFlow
+        .mapLatest { data ->
+            val eventsState = data.eventsData.state
+            val allEvents = data.eventsData.allEvents
+            val profiles = data.profilesData.profiles
+            val pagination = data.profilesData.pagination
+            val params = data.locationData.params
+            val location = data.locationData.location
+
+            val filteredEvents = applyClientFilters(allEvents, params, location)
+
+            when (eventsState) {
+                is DataState.Loading -> EventListUiState.Loading(params.category, params.dateFilter)
+                is DataState.Error -> {
+                    if (allEvents.isEmpty()) {
+                        EventListUiState.Error(
+                            eventsState.exception.message ?: "Error desconocido",
+                            params.category,
+                            params.dateFilter
+                        )
+                    } else {
+                        EventListUiState.Success(
+                            events = filteredEvents,
+                            creatorProfiles = profiles,
+                            currentUserLocation = location,
+                            canLoadMore = !pagination.isLastPage,
+                            isRefreshing = false,
+                            selectedCategory = params.category,
+                            selectedDateFilter = params.dateFilter
+                        )
+                    }
+                }
+                is DataState.Success -> EventListUiState.Success(
+                    events = filteredEvents,
+                    creatorProfiles = profiles,
+                    currentUserLocation = location,
+                    canLoadMore = !pagination.isLastPage,
+                    isRefreshing = false,
+                    selectedCategory = params.category,
+                    selectedDateFilter = params.dateFilter
+                )
+            }
+        }
+        .distinctUntilChanged { old, new ->
+            if (old is EventListUiState.Success && new is EventListUiState.Success) {
+                old.events === new.events || (
+                    old.events == new.events &&
+                    old.selectedCategory == new.selectedCategory &&
+                    old.selectedDateFilter == new.selectedDateFilter &&
+                    old.isRefreshing == new.isRefreshing &&
+                    old.canLoadMore == new.canLoadMore &&
+                    old.currentUserLocation == new.currentUserLocation &&
+                    old.creatorProfiles == new.creatorProfiles
+                )
+            } else {
+                old == new
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
+            initialValue = EventListUiState.Loading()
+        )
+
+    val isLoadingMore: StateFlow<Boolean> = _paginationState
+        .mapLatest { it.isLoadingMore }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), false)
+
+    fun selectCategory(type: EventType?) {
+        _queryParams.update { 
+            if (it.category == type) it.copy(category = null) 
+            else it.copy(category = type) 
+        }
+        resetPagination()
+    }
+
+    fun selectDateFilter(filter: DateFilter) {
+        _queryParams.update { it.copy(dateFilter = filter) }
+        resetPagination()
+    }
+
+    fun updateRadius(radius: Int) {
+        if (_searchRadiusKm.value != radius) {
+            _searchRadiusKm.value = radius
+            _userLocation.value?.let { loc ->
+                val precision = GeohashUtils.getPrecisionForRadius(radius)
+                val geohash = GeohashUtils.encode(loc.latitude, loc.longitude, precision)
+                _queryParams.update { it.copy(geohash = geohash, radiusKm = radius) }
+            }
+            resetPagination()
+        }
+    }
+
+    fun updateLocation(lat: Double, lng: Double) {
+        val loc = ExactLocation(lat, lng, "")
+        _userLocation.value = loc
+        val radius = _searchRadiusKm.value
+        val precision = GeohashUtils.getPrecisionForRadius(radius)
+        val geohash = GeohashUtils.encode(lat, lng, precision)
+        _queryParams.update { it.copy(geohash = geohash) }
+        resetPagination()
+    }
+
+    fun searchNearLocation(lat: Double, lng: Double, radiusKm: Int = _searchRadiusKm.value) {
+        _searchRadiusKm.value = radiusKm
+        val precision = GeohashUtils.getPrecisionForRadius(radiusKm)
+        val geohash = GeohashUtils.encode(lat, lng, precision)
+        _userLocation.value = ExactLocation(lat, lng, "")
+        _queryParams.update { it.copy(geohash = geohash, radiusKm = radiusKm) }
+        resetPagination()
+    }
+
+    fun searchAllLocations() {
+        _queryParams.update { it.copy(geohash = null) }
+        resetPagination()
+    }
+
+    fun searchAllRegions() = searchAllLocations()
+
+    fun updateCommune(commune: String?) {
+        android.util.Log.d("EventListViewModel", "updateCommune ignorado (modo global): $commune")
+    }
+
+    fun updateRegion(region: String?) {
+        android.util.Log.d("EventListViewModel", "updateRegion ignorado (modo global): $region")
+    }
+
+    fun loadMore() {
+        val state = _paginationState.value
+        if (state.isLoadingMore || state.isLastPage) return
+        
+        val currentParams = _queryParams.value
+        if (state.paramsAtLastFetch != null && state.paramsAtLastFetch != currentParams) {
+            resetPagination()
+            return
+        }
+        
+        _paginationState.value = state.copy(isLoadingMore = true)
+        
+        viewModelScope.launch {
+            try {
+                val result = mainFeedRepository.fetchEventsBatch(
+                    geohashPrefix = currentParams.geohash,
+                    commune = null,
+                    region = null,
+                    limit = PAGE_SIZE,
+                    lastSnapshot = state.lastVisibleDoc
+                )
+                
+                if (_queryParams.value != currentParams) {
+                    _paginationState.value = state.copy(isLoadingMore = false)
+                    return@launch
+                }
+                
+                result.onSuccess { (newEvents, newLastDoc) ->
+                    if (newEvents.isEmpty()) {
+                        _paginationState.value = state.copy(
+                            isLastPage = true,
+                            isLoadingMore = false
+                        )
+                        return@onSuccess
+                    }
+                    
+                    _extraEvents.update { current ->
+                        (current + newEvents).distinctBy { it.id }
+                    }
+                    
+                    val canLoadMore = newEvents.size.toLong() >= PAGE_SIZE
+                    _paginationState.value = state.copy(
+                        lastVisibleDoc = newLastDoc,
+                        isLastPage = !canLoadMore,
+                        isLoadingMore = false,
+                        paramsAtLastFetch = currentParams
+                    )
+                }.onFailure { error ->
+                    android.util.Log.e("EventListViewModel", "Error loading more: ${error.message}")
+                    _paginationState.value = state.copy(isLoadingMore = false)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("EventListViewModel", "Error loading more: ${e.message}")
+                _paginationState.value = state.copy(isLoadingMore = false)
+            }
+        }
+    }
+
+    fun refresh() {
+        _extraEvents.value = emptyList()
+        resetPagination()
+        _refreshTrigger.update { it + 1 }
+    }
 
     init {
-        // Start observing with default (Global or cached)
-        observeEvents()
         markFinishedEvents()
     }
 
@@ -109,205 +427,38 @@ class EventListViewModel @Inject constructor(
         }
     }
 
-    private var isGlobalSearch = false
-
-    fun updateLocation(lat: Double, lng: Double) {
-        // 💾 Store persistent location
-        val newLoc = com.eventos.banana.domain.model.ExactLocation(lat, lng, "")
-        lastKnownLocation = newLoc
-        
-        // Update State for UI immediately if possible
-        val callbackState = _uiState.value
-        if (callbackState is EventListUiState.Success) {
-            _uiState.value = callbackState.copy(currentUserLocation = newLoc)
-        }
-        
-        val radius = _searchRadiusKm.value
-        
-        val newHash = run {
-            val precision = com.eventos.banana.util.GeohashUtils.getPrecisionForRadius(radius)
-            com.eventos.banana.util.GeohashUtils.encode(lat, lng, precision)
-        }
-        
-        // Always update geohash state
-        _currentGeohash.value = newHash
-        
-        // Reset pagination on location change
-        currentLimit = PAGE_SIZE
-        
-        // Refresh events
-        if (_currentCommune.value.isNullOrBlank() && _currentRegion.value.isNullOrBlank() && !isGlobalSearch) {
-             observeEvents(newHash, null, null)
-        }
-    }
-    
-    fun updateCommune(commune: String?) {
-        if (_currentCommune.value != commune) {
-            _currentCommune.value = commune
-            currentLimit = PAGE_SIZE // Reset pagination
-            isGlobalSearch = false
-            observeEvents(_currentGeohash.value, commune, _currentRegion.value)
-        }
+    private fun resetPagination() {
+        _extraEvents.value = emptyList()
+        _paginationState.value = PaginationState()
     }
 
-    fun updateRegion(region: String?) {
-        if (_currentRegion.value != region) {
-            _currentRegion.value = region
-            currentLimit = PAGE_SIZE // Reset pagination
-            isGlobalSearch = false
-            observeEvents(_currentGeohash.value, _currentCommune.value, region)
-        }
-    }
+    private fun applyClientFilters(
+        events: List<Event>,
+        params: EventQueryParams,
+        location: ExactLocation?
+    ): List<Event> {
+        val now = System.currentTimeMillis()
+        val maxRadiusMeters = params.radiusKm * 1000f
+        
+        return events.asSequence().filter { event ->
+            val isNear = if (location != null && event.latitude != null && event.longitude != null) {
+                try {
+                    val results = FloatArray(1)
+                    android.location.Location.distanceBetween(
+                        location.latitude, location.longitude,
+                        event.latitude, event.longitude,
+                        results
+                    )
+                    results[0] <= maxRadiusMeters
+                } catch (e: Exception) { true }
+            } else true
 
-    fun searchAllRegions() {
-        _currentRegion.value = null
-        _currentCommune.value = null
-        isGlobalSearch = true
-        currentLimit = PAGE_SIZE
-        observeEvents(null, null, null)
-    }
+            val matchesCategory = params.category == null || event.eventType == params.category
+            val matchesDate = checkDate(event.startAt, params.dateFilter, now)
+            val isNotClosed = event.status == EventStatus.OPEN
+            val isNotExpired = event.endAt > now
 
-    /** Loads more events by requesting the next batch */
-    fun loadMore() {
-        if (_isLoadingMore.value || isLastPage) return
-        _isLoadingMore.value = true
-        val geo = if (isGlobalSearch) null else _currentGeohash.value
-        observeEvents(geo, _currentCommune.value, _currentRegion.value, isLoadMore = true)
-    }
-
-    /** Refreshes the events list from the beginning */
-    fun refresh() {
-        val geo = if (isGlobalSearch) null else _currentGeohash.value
-        observeEvents(geo, _currentCommune.value, _currentRegion.value, isLoadMore = false)
-    }
-
-
-    private fun observeEvents(geohash: String? = null, commune: String? = null, region: String? = null, isLoadMore: Boolean = false) {
-        if (!isLoadMore) {
-            lastVisibleDocument = null
-            isLastPage = false
-            _currentEvents.value = emptyList()
-            currentLimit = PAGE_SIZE
-        }
-
-        if (isLastPage) {
-            _isLoadingMore.value = false
-            return
-        }
-
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            if (!isLoadMore) {
-                val currentState = _uiState.value
-                if (currentState is EventListUiState.Success) {
-                    _uiState.value = currentState.copy(isRefreshing = true)
-                } else {
-                    _uiState.value = EventListUiState.Loading
-                }
-            }
-
-            val result = mainFeedRepository.fetchEventsBatch(
-                geohashPrefix = geohash,
-                commune = commune,
-                region = region,
-                limit = currentLimit,
-                lastSnapshot = lastVisibleDocument
-            )
-
-            result.onSuccess { (newEvents, newLastDoc) ->
-                if (newEvents.isEmpty() && !isLoadMore) {
-                    _uiState.value = EventListUiState.Success(emptyList(), emptyMap(), lastKnownLocation, false, isRefreshing = false)
-                    isLastPage = true
-                    _isLoadingMore.value = false
-                    return@launch
-                }
-
-                if (newEvents.isEmpty() && isLoadMore) {
-                    isLastPage = true
-                    _isLoadingMore.value = false
-                    val currentState = _uiState.value as? EventListUiState.Success
-                    if (currentState != null) {
-                        _uiState.value = currentState.copy(canLoadMore = false)
-                    }
-                    return@launch
-                }
-                
-                lastVisibleDocument = newLastDoc
-
-                val combinedEvents = if (isLoadMore) {
-                    (_currentEvents.value + newEvents).distinctBy { it.id }
-                } else {
-                    newEvents
-                }
-                
-                _currentEvents.value = combinedEvents
-
-                var filteredEvents = combinedEvents
-
-                // 📏 DISTANCE FILTERING (Client Side)
-                if (commune.isNullOrBlank() && region.isNullOrBlank() && !isGlobalSearch) {
-                     val userLoc = lastKnownLocation
-                     
-                     if (userLoc != null && geohash != null) {
-                         val maxRadiusMeters = _searchRadiusKm.value * 1000f
-                         val results = FloatArray(1)
-                         
-                         filteredEvents = combinedEvents.filter { event ->
-                             val eLat = event.latitude
-                             val eLng = event.longitude
-                             
-                             if (eLat != null && eLng != null) {
-                                 try {
-                                     android.location.Location.distanceBetween(
-                                         userLoc.latitude, userLoc.longitude,
-                                         eLat, eLng,
-                                         results
-                                     )
-                                     results[0] <= maxRadiusMeters
-                                 } catch (e: Exception) {
-                                     false
-                                 }
-                             } else {
-                                 false 
-                             }
-                         }
-                     }
-                }
-
-                // Fetch creator profiles in parallel
-                val creatorIds = filteredEvents.map { it.creatorId }.distinct()
-                
-                val profiles = creatorIds.map { uid ->
-                    async {
-                        try {
-                            val profile = userRepository.getUserProfile(uid)
-                            if (profile != null) uid to profile else null
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                }.awaitAll().filterNotNull().toMap()
-
-                val canLoadMore = newEvents.size.toLong() >= currentLimit
-                if (!canLoadMore) isLastPage = true
-
-                _uiState.value = EventListUiState.Success(
-                    events = filteredEvents, 
-                    creatorProfiles = profiles, 
-                    currentUserLocation = lastKnownLocation, 
-                    canLoadMore = canLoadMore,
-                    isRefreshing = false
-                )
-                _isLoadingMore.value = false
-                
-            }.onFailure { e ->
-                android.util.Log.e("EventListViewModel", "Error in observeEvents: ${e.message}")
-                if (!isLoadMore) {
-                    _uiState.value = EventListUiState.Error("Error al cargar eventos: ${e.message}")
-                }
-                _isLoadingMore.value = false
-            }
-        }
+            isNear && matchesCategory && matchesDate && isNotClosed && isNotExpired
+        }.toList()
     }
 }
-

@@ -9,24 +9,21 @@ class LoginUseCase(
 ) {
     suspend operator fun invoke(email: String, password: String): Result<Boolean> {
         val result = authRepository.login(email, password)
-        
+
         return if (result.isSuccess) {
-            try {
-                authRepository.reloadUser()
-                val isEmailVerified = authRepository.isEmailVerified()
-                
-                if (isEmailVerified) {
-                    val uid = authRepository.currentUid()
-                    if (uid != null) {
+            val isEmailVerified = authRepository.isEmailVerified()
+
+            if (isEmailVerified) {
+                val uid = authRepository.currentUid()
+                if (uid != null) {
+                    try {
                         userRepository.updateVerificationStatus(uid, true)
+                    } catch (e: Exception) {
+                        android.util.Log.w("LoginUseCase", "Failed to sync verification status", e)
                     }
                 }
-                Result.success(isEmailVerified)
-            } catch (e: Exception) {
-                // If sync fails, just return current verification status
-                val isEmailVerified = authRepository.isEmailVerified()
-                Result.success(isEmailVerified)
             }
+            Result.success(isEmailVerified)
         } else {
             Result.failure(Exception("Email o contraseña incorrectos"))
         }

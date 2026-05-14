@@ -1,36 +1,80 @@
 package com.eventos.banana.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.eventos.banana.core.security.RateLimitManager
 import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 
 import javax.inject.Inject
 
 class AuthRepository @Inject constructor(
-    private val firebaseAuth: FirebaseAuth
+    private val firebaseAuth: FirebaseAuth,
+    private val rateLimitManager: RateLimitManager
 ) {
+
+    companion object {
+        private const val TAG = "AuthRepository"
+    }
 
     fun isUserLoggedIn(): Boolean {
         return firebaseAuth.currentUser != null
     }
 
+    /**
+     * Login with rate limiting protection
+     */
     suspend fun login(email: String, password: String): Result<Unit> {
+        // 1. Check rate limit first
+        val rateLimitResult = rateLimitManager.checkRateLimit(RateLimitManager.ACTION_LOGIN)
+        if (!rateLimitResult.success) {
+            Timber.w(TAG, "Login rate limit exceeded for action")
+            return Result.failure(
+                Exception("Too many login attempts. Please wait ${rateLimitResult.timeUntilReset} and try again.")
+            )
+        }
+
+        // 2. Proceed with login
         return try {
             firebaseAuth
                 .signInWithEmailAndPassword(email, password)
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Timber.e(e, TAG, "Login failed")
             Result.failure(e)
         }
     }
 
+    /**
+     * Register with rate limiting and password validation
+     */
     suspend fun register(email: String, password: String): Result<Unit> {
+        // 1. Check rate limit first
+        val rateLimitResult = rateLimitManager.checkRateLimit(RateLimitManager.ACTION_REGISTER)
+        if (!rateLimitResult.success) {
+            Timber.w(TAG, "Register rate limit exceeded")
+            return Result.failure(
+                Exception("Too many registration attempts. Please wait ${rateLimitResult.timeUntilReset} and try again.")
+            )
+        }
+
+        // 2. Validate password strength server-side
+        val passwordValidation = rateLimitManager.validatePasswordStrength(password)
+        if (!passwordValidation.isValid) {
+            Timber.w(TAG, "Password validation failed: ${passwordValidation.errors}")
+            return Result.failure(
+                Exception("Password does not meet security requirements: ${passwordValidation.errors.joinToString(", ")}")
+            )
+        }
+
+        // 3. Proceed with registration
         return try {
             firebaseAuth
                 .createUserWithEmailAndPassword(email, password)
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Timber.e(e, TAG, "Registration failed")
             Result.failure(e)
         }
     }

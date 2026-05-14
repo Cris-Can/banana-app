@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import androidx.core.content.FileProvider
-import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.eventos.banana.domain.model.Event
@@ -20,7 +19,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class ShareHelper(private val context: Context) {
+class ShareHelper(private val context: Context, private val imageLoader: coil.ImageLoader) {
 
     fun shareEvent(event: Event) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -64,13 +63,12 @@ class ShareHelper(private val context: Context) {
 
     private suspend fun downloadImageToCache(imageUrl: String): Uri? {
         return try {
-            val loader = ImageLoader(context)
             val request = ImageRequest.Builder(context)
                 .data(imageUrl)
                 .allowHardware(false) // Must be software bitmap to save
                 .build()
 
-            val result = (loader.execute(request) as? SuccessResult)?.drawable
+            val result = (imageLoader.execute(request) as? SuccessResult)?.drawable
             val originalBitmap = (result as? BitmapDrawable)?.bitmap ?: return null
 
             // 🎨 Watermark removed via user request ("se ve feo")

@@ -34,7 +34,23 @@ class AppFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     override fun onNewToken(token: String) {
-        // If you need to handle token refresh here
+        // 🔑 CRITICAL: Persist rotated FCM token to Firestore
+        // Without this, push notifications stop working after token rotation
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (uid != null) {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(uid)
+                .update("fcmToken", token)
+                .addOnSuccessListener {
+                    android.util.Log.d("FCM", "Token rotated and saved for $uid")
+                }
+                .addOnFailureListener { e ->
+                    android.util.Log.e("FCM", "Failed to save rotated token: ${e.message}")
+                }
+        } else {
+            android.util.Log.w("FCM", "Token rotated but no user logged in — will sync on next login")
+        }
     }
 
     private fun sendNotification(title: String?, messageBody: String?, data: Map<String, String>) {

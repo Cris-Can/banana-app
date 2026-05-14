@@ -107,7 +107,7 @@ class LocationHelper(private val context: Context) {
     suspend fun getCommuneFromLocation(location: Location): String? {
         return try {
             @Suppress("DEPRECATION")
-            val geocoder = Geocoder(context, Locale("es", "CL"))
+            val geocoder = Geocoder(context, Locale.getDefault())
             
             @Suppress("DEPRECATION")
             val addresses = geocoder.getFromLocation(
@@ -117,41 +117,11 @@ class LocationHelper(private val context: Context) {
             )
             
             if (!addresses.isNullOrEmpty()) {
-                // Iterar sobre las direcciones encontradas para buscar una coincidencia válida
-                for (address in addresses) {
-                    Log.d(TAG, "Checking address: $address")
-                    
-                    // Probamos varios campos en orden de probabilidad
-                    val candidates = listOfNotNull(
-                        address.locality,       // Comuna/Ciudad
-                        address.subAdminArea,   // Comuna/Provincia
-                        address.adminArea       // Región (menos probable pero posible)
-                    )
-                    
-                    for (candidate in candidates) {
-                        Log.d(TAG, "Candidate: $candidate")
-                        val match = com.eventos.banana.data.ChileCommunesList.findClosest(candidate)
-                        if (match != null) {
-                            Log.d(TAG, "Match found: $match")
-                            return match
-                        }
-                    }
-                }
+                val address = addresses[0]
+                Log.d(TAG, "Address found: $address")
                 
-                // Fallback: Buscar en la dirección completa (line[0])
-                // Útil cuando locality es un barrio (ej: "Maipo") y la comuna está en el string (ej: "Buin")
-                val fullAddress = addresses.firstOrNull()?.getAddressLine(0)
-                if (!fullAddress.isNullOrBlank()) {
-                    Log.d(TAG, "Trying full address match: $fullAddress")
-                    val match = com.eventos.banana.data.ChileCommunesList.findCommuneInText(fullAddress)
-                    if (match != null) {
-                        Log.d(TAG, "Match found in full address: $match")
-                        return match
-                    }
-                }
-                
-                Log.w(TAG, "No valid commune match found in addresses")
-                null
+                // Retornar la localidad (ciudad/comuna) directamente
+                return address.locality ?: address.subAdminArea ?: address.adminArea
             } else {
                 Log.w(TAG, "No addresses found for location")
                 null
@@ -164,7 +134,7 @@ class LocationHelper(private val context: Context) {
     
     /**
      * Detección completa: GPS + Geocoding
-     * Retorna el nombre de la comuna detectada
+     * Retorna el nombre de la localidad detectada
      */
     suspend fun detectCurrentCommune(): String? {
         val location = getCurrentLocation() ?: return null
@@ -174,23 +144,50 @@ class LocationHelper(private val context: Context) {
     data class LocationDetectionResult(
         val commune: String,
         val region: String,
+        val country: String,
         val latitude: Double,
         val longitude: Double
     )
 
     /**
-     * Detección completa con coordenadas y región
+     * Detección completa a partir de coordenadas específicas
+     */
+    suspend fun detectFromCoordinates(lat: Double, lng: Double): LocationDetectionResult? {
+        return try {
+            @Suppress("DEPRECATION")
+            val geocoder = Geocoder(context, Locale.getDefault())
+            val addresses = geocoder.getFromLocation(lat, lng, 1)
+            
+            if (!addresses.isNullOrEmpty()) {
+                val addr = addresses[0]
+                LocationDetectionResult(
+                    commune = addr.locality ?: addr.subAdminArea ?: "Desconocida",
+                    region = addr.adminArea ?: "Desconocida",
+                    country = addr.countryName ?: "Desconocido",
+                    latitude = lat,
+                    longitude = lng
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in detectFromCoordinates", e)
+            null
+        }
+    }
+
+    /**
+     * Detección completa con coordenadas y región (Global)
      */
     suspend fun detectLocationFull(): LocationDetectionResult? {
         val location = getCurrentLocation() ?: return null
-        val commune = getCommuneFromLocation(location) ?: return null
-        val region = com.eventos.banana.data.ChileCommunesList.getRegionForCommune(commune)
-        
-        return LocationDetectionResult(
-            commune = commune,
-            region = region,
-            latitude = location.latitude,
-            longitude = location.longitude
-        )
+        return detectFromCoordinates(location.latitude, location.longitude)
+    }
+
+    /**
+     * Obtiene el cliente de Google Places de forma compartida
+     */
+    fun getPlacesClient(): com.google.android.libraries.places.api.net.PlacesClient {
+        return com.google.android.libraries.places.api.Places.createClient(context)
     }
 }

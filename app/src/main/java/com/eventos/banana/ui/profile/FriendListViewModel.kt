@@ -6,6 +6,10 @@ import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -49,6 +53,33 @@ class FriendListViewModel @Inject constructor(
     private val pageSize = 30
     val hasMoreFriends = MutableStateFlow(false)
 
+    // ─── In-memory cache ───────────────────────────────────────────────────────
+    // Evicts oldest entries when the cap (100) is exceeded (insertion-order LRU).
+    private val userCache = LinkedHashMap<String, UserProfile>(128, 0.75f, false)
+    private val USER_CACHE_MAX = 100
+
+    private suspend fun getUsersWithCache(ids: List<String>): List<UserProfile> {
+        if (ids.isEmpty()) return emptyList()
+        val missing = ids.filter { it !in userCache }
+        if (missing.isNotEmpty()) {
+            val fetched = userRepository.getUsers(missing)
+            fetched.forEach { profile ->
+                if (userCache.size >= USER_CACHE_MAX) {
+                    // Remove oldest entry
+                    val oldest = userCache.keys.first()
+                    userCache.remove(oldest)
+                }
+                userCache[profile.uid] = profile
+            }
+        }
+        return ids.mapNotNull { userCache[it] }
+    }
+
+    // Reactive observation
+    private var observeJob: Job? = null
+    private var suggestionsJob: Job? = null
+    private var lastGeohashPrefix: String? = null
+
     fun loadData(currentUserId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true) // General loading for all data
@@ -67,14 +98,14 @@ class FriendListViewModel @Inject constructor(
                 allRequestReceivedIds = currentUser.friendRequestsReceived
                 allRequestSentIds = currentUser.friendRequestsSent
 
-                val friendsList = userRepository.getUsers(allFriendIds.take(pageSize))
+                val friendsList = getUsersWithCache(allFriendIds.take(pageSize))
                 
                 _friends.value = friendsList
                 allFriends = friendsList
                 currentPage = 1
                 hasMoreFriends.value = pageSize < allFriendIds.size
 
-                val requestsList = userRepository.getUsers(allRequestReceivedIds)
+                val requestsList = getUsersWithCache(allRequestReceivedIds)
 
                 val region = currentUser.region ?: ""
                 val commune = currentUser.commune ?: ""
@@ -123,7 +154,7 @@ class FriendListViewModel @Inject constructor(
                 val end = (start + pageSize).coerceAtMost(allFriendIds.size)
                 val chunkIds = allFriendIds.subList(start, end)
                 
-                val newFriends = userRepository.getUsers(chunkIds)
+                val newFriends = getUsersWithCache(chunkIds)
                 val updatedList = _friends.value + newFriends
                 
                 _friends.value = updatedList
@@ -165,12 +196,13 @@ class FriendListViewModel @Inject constructor(
                 
                 val globalResults = userRepository.searchUsers(query)
                 
-                // Filter out self and existing friends from search results to avoid duplicates
+                // Filter out self, existing friends and blocked users from search results
                 val finalSearchResults = globalResults.filter { user ->
                     user.uid != currentUserId &&
                     user.uid !in allFriendIds &&
                     user.uid !in allRequestReceivedIds &&
                     user.uid !in allRequestSentIds
+                    // Note: blockedSet not cached here; search is infrequent — acceptable tradeoff
                 }
 
                 _uiState.value = _uiState.value.copy(
@@ -184,26 +216,155 @@ class FriendListViewModel @Inject constructor(
             }
         }
     }
+    fun observeData(currentUserId: String) {
+        observeJob?.cancel()
+        suggestionsJob?.cancel()
+        _uiState.update { it.copy(isLoading = true) }
+
+        // ── Job 1: Amigos + Solicitudes ──────────────────────────────────────────
+        observeJob = viewModelScope.launch {
+            combine(
+                userRepository.observeUserProfile(currentUserId),
+                userRepository.observeActualFriendships(currentUserId),
+                userRepository.observeActualFriendRequestsReceived(currentUserId)
+            ) { profile, actualFriends, actualRequests ->
+                profile.copy(
+                    friends = if (actualFriends.isNotEmpty()) actualFriends else profile.friends,
+                    friendRequestsReceived = if (actualRequests.isNotEmpty()) actualRequests else profile.friendRequestsReceived
+                )
+            }.distinctUntilChanged { old, new ->
+                old.friends == new.friends &&
+                old.friendRequestsReceived == new.friendRequestsReceived
+            }.collect { stableProfile ->
+
+                val previousFriendIds = allFriendIds.toSet()
+                allFriendIds = stableProfile.friends
+                allRequestReceivedIds = stableProfile.friendRequestsReceived
+                allRequestSentIds = stableProfile.friendRequestsSent
+
+                try {
+                    // Carga INCREMENTAL: solo pedir los IDs que no están en cache
+                    val firstPageIds = allFriendIds.take(pageSize)
+                    val newIds = firstPageIds.filter { it !in previousFriendIds }
+
+                    val friendsList = if (newIds.isEmpty() && _friends.value.isNotEmpty()) {
+                        // Sin IDs nuevos: reusar existentes + filtra eliminados
+                        val removedSet = previousFriendIds - allFriendIds.toSet()
+                        _friends.value.filter { it.uid !in removedSet }
+                    } else {
+                        // Hay IDs nuevos: fetch solo los que faltan + mergear
+                        getUsersWithCache(firstPageIds)
+                    }
+
+                    _friends.value = friendsList
+                    allFriends = friendsList
+                    currentPage = 1
+                    hasMoreFriends.value = pageSize < allFriendIds.size
+
+                    allRequests = getUsersWithCache(allRequestReceivedIds)
+
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        friends = _friends.value,
+                        requests = allRequests,
+                        suggestions = allSuggestions,
+                        errorMessage = null
+                    )}
+                } catch (e: Exception) {
+                    android.util.Log.e("FriendListVM", "Error en sincronización amigos", e)
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+        }
+
+        // ── Job 2: Sugerencias — solo cuando cambia el geohash ───────────────────
+        suggestionsJob = viewModelScope.launch {
+            userRepository.observeUserProfile(currentUserId)
+                .distinctUntilChanged { old, new ->
+                    old.geohash?.take(4) == new.geohash?.take(4) &&
+                    old.blockedUsers == new.blockedUsers
+                }
+                .collect { profile ->
+                    val geohashPrefix = profile.geohash?.take(4)
+                    if (geohashPrefix == lastGeohashPrefix && allSuggestions.isNotEmpty()) return@collect
+                    lastGeohashPrefix = geohashPrefix
+
+                    try {
+                        val geohash = profile.geohash ?: ""
+                        val rawSuggestions = if (geohash.isNotBlank()) {
+                            userRepository.getUsersByProximity(geohash, currentUserId)
+                        } else {
+                            val commune = profile.commune ?: ""
+                            val region = profile.region ?: ""
+                            when {
+                                commune.isNotBlank() -> userRepository.getUsersByCommune(commune, currentUserId)
+                                region.isNotBlank() -> userRepository.getUsersByRegion(region, currentUserId)
+                                else -> emptyList()
+                            }
+                        }
+
+                        val friendSet = allFriendIds.toSet()
+                        val requestSentSet = allRequestSentIds.toSet()
+                        val requestReceivedSet = allRequestReceivedIds.toSet()
+                        val blockedSet = profile.blockedUsers.toSet()
+
+                        val newSuggestions = rawSuggestions.filter {
+                            it.uid != currentUserId &&
+                            it.uid !in friendSet &&
+                            it.uid !in requestSentSet &&
+                            it.uid !in requestReceivedSet &&
+                            it.uid !in blockedSet
+                        }
+
+                        val persistentSuggestions = allSuggestions.filter {
+                            it.uid !in friendSet &&
+                            it.uid !in requestSentSet &&
+                            it.uid !in requestReceivedSet &&
+                            it.uid !in blockedSet
+                        }
+                        val existingIds = persistentSuggestions.map { it.uid }.toSet()
+                        val uniqueNewOnes = newSuggestions.filter { it.uid !in existingIds }
+                        allSuggestions = persistentSuggestions + uniqueNewOnes
+
+                        _uiState.update { it.copy(suggestions = allSuggestions) }
+                    } catch (e: Exception) {
+                        android.util.Log.e("FriendListVM", "Error en sugerencias", e)
+                    }
+                }
+        } // end suggestionsJob launch
+    } // end observeData
 
     fun acceptRequest(currentUserId: String, requesterUid: String) {
         viewModelScope.launch {
-            userRepository.acceptFriendRequest(currentUserId, requesterUid)
-            loadData(currentUserId) // Reload to refresh lists
+            val result = userRepository.acceptFriendRequest(requesterUid)
+            if (result.isSuccess) {
+                // Forzar observación inmediata para mitigar delay de Firestore
+                observeData(currentUserId)
+            }
         }
     }
 
     fun sendFriendRequest(currentUserId: String, targetUid: String) {
         viewModelScope.launch {
-            userRepository.sendFriendRequest(currentUserId, targetUid)
-            // Ideally optimistic update, but simple reload works
-            loadData(currentUserId)
+            userRepository.sendFriendRequest(targetUid)
+            // observeData handles updates reactively
         }
     }
 
     fun removeFriend(currentUserId: String, friendUid: String) {
         viewModelScope.launch {
-            userRepository.removeFriend(currentUserId, friendUid)
-            loadData(currentUserId)
+            // Optimistic update
+            val currentFriends = _friends.value.filter { it.uid != friendUid }
+            _friends.value = currentFriends
+            _uiState.value = _uiState.value.copy(friends = currentFriends)
+            
+            val result = userRepository.removeFriend(friendUid)
+            if (result.isSuccess) {
+                // Forzar observación inmediata
+                observeData(currentUserId)
+            } else {
+                _uiState.value = _uiState.value.copy(errorMessage = "Error al eliminar amigo")
+            }
         }
     }
 }

@@ -60,9 +60,7 @@ fun AppNavigation(startDestination: String = "splash") {
         )
     }
 
-    // ---------- GUIDE VIEW MODEL (HILT) ----------
-    // Maintained for compatibility with homeGraph signature, but GuideOverlay is removed
-    val guideViewModel: GuideViewModel = hiltViewModel()
+
 
     // Logic: Start at Splash.
     // If Authenticated -> Check Onboarding -> Home/Onboarding
@@ -98,7 +96,6 @@ fun AppNavigation(startDestination: String = "splash") {
                 homeGraph(
                     navController = navController,
                     sessionViewModel = sessionViewModel,
-                    guideViewModel = guideViewModel,
                     sharedTransitionScope = this@SharedTransitionLayout
                 )
 
@@ -122,49 +119,7 @@ fun AppNavigation(startDestination: String = "splash") {
                     sessionViewModel = sessionViewModel
                 )
 
-                // ---------- HOME ----------
                 
-                
-                // ---------- WORLD MAP ----------
-                
-
-        // ---------- REST OF ROUTES ----------
-
-        
-        // ... (Keep other composables as they are, just ensuring context match) ...
-        // I will use replace_file_content carefully to match the context block.
-
-
-
-
-
-
-
-
-
-        // ---------- NOTIFICATIONS ----------
-        
-
-
-
-
-
-
-
-
-
-
-
-
-        // ---------- SEARCH ----------
-        
-
-        // Scanner route removed (missing dependencies)
-
-
-
-
-        // Email verification has been moved to authGraph
         }
         
     } // End SharedTransitionLayout

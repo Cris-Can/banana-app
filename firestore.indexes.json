@@ -43,6 +43,52 @@
             ]
         },
         {
+            "collectionGroup": "events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "geohash",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "geohash",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "conversations",
             "queryScope": "COLLECTION",
             "fields": [
@@ -54,6 +100,114 @@
                     "fieldPath": "lastMessageTimestamp",
                     "order": "DESCENDING"
                 }
+            ]
+        },
+        {
+            "collectionGroup": "conversations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "participants",
+                    "arrayConfig": "CONTAINS"
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        
+        // =====================================================
+        // 🆕 ÍNDICES PARA SISTEMA DE AMISTADES V2
+        // =====================================================
+        
+        // friend_requests: consultas por sender y status
+        {
+            "collectionGroup": "friend_requests",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "senderId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        
+        // friend_requests: consultas por receiver y status
+        {
+            "collectionGroup": "friend_requests",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "receiverId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        
+        // friend_requests: limpieza de expiradas (status + expiresAt)
+        {
+            "collectionGroup": "friend_requests",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "expiresAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        
+        // friendships: consultas por ownerId (modelo de doble documento)
+        {
+            "collectionGroup": "friendships",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "ownerId",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        
+        // friendships: paginación por ownerId + createdAt
+        {
+            "collectionGroup": "friendships",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "ownerId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "score", "order": "DESCENDING" }
+            ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "ratingSum", "order": "DESCENDING" }
             ]
         }
     ],

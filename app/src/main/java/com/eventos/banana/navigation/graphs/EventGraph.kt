@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import androidx.navigation.*
 import androidx.navigation.compose.*
 import androidx.hilt.navigation.compose.*
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.*
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -112,11 +113,25 @@ fun NavGraphBuilder.eventGraph(
         val hasAttended by vm.hasAttended.collectAsState()
         val checkInState by vm.checkInState.collectAsState()
         val actionState by vm.actionState.collectAsState()
+        val submissionState by vm.joinSubmissionState.collectAsState()
+        val adUnlockState by vm.adUnlockState.collectAsState()
+        val newRequestAlert by vm.newRequestAlert.collectAsState()
+
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        // 🔔 Notificar al creador cuando llega una solicitud en tiempo real
+        LaunchedEffect(newRequestAlert) {
+            val alert = newRequestAlert
+            if (!alert.isNullOrBlank()) {
+                android.widget.Toast.makeText(context, "🔔 $alert", android.widget.Toast.LENGTH_SHORT).show()
+                vm.resetNewRequestAlert()
+            }
+        }
 
         LaunchedEffect(vm, sessionViewModel.currentUserId()) {
             vm.loadUserInteractionState(sessionViewModel.currentUserId())
         }
-        val context = androidx.compose.ui.platform.LocalContext.current
+        
         EventDetailRoute(
             uiState = uiState,
             currentUserId = sessionViewModel.currentUserId(),
@@ -167,7 +182,16 @@ fun NavGraphBuilder.eventGraph(
             onCheckInClick = { vm.performCheckIn(sessionViewModel.currentUserId()) },
             onResetCheckInState = vm::resetCheckInState,
             actionState = actionState,
-            onResetActionState = vm::resetActionState
+            onResetActionState = vm::resetActionState,
+            joinSubmissionState = submissionState,
+            onResetJoinSubmissionState = vm::resetJoinSubmissionState,
+            adUnlockState = adUnlockState,
+            onWatchAd = {
+                (context as? android.app.Activity)?.let { activity ->
+                    vm.watchAd(activity, sessionViewModel.currentUserId())
+                }
+            },
+            onResetAdUnlockState = vm::resetAdUnlockState
         )
     }
 
@@ -183,7 +207,7 @@ fun NavGraphBuilder.eventGraph(
         val uiState by vm.uiState.collectAsState()
         val submissionState by vm.joinSubmissionState.collectAsState()
         val adUnlockState by vm.adUnlockState.collectAsState()
-        val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        val activity = LocalActivity.current
 
         LaunchedEffect(submissionState) {
             if (submissionState is JoinSubmissionState.Success) {
@@ -213,7 +237,7 @@ fun NavGraphBuilder.eventGraph(
             
             LaunchedEffect(submissionState) {
                 if (submissionState is JoinSubmissionState.Error && 
-                    (submissionState as JoinSubmissionState.Error).message.contains("límite")) {
+                    (submissionState as JoinSubmissionState.Error).message == "LIMIT_REACHED") {
                     showAdDialog = true
                 }
             }

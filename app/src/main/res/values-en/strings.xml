@@ -48,6 +48,7 @@
     <string name="auth_location_not_detected">Location not detected</string>
     <string name="auth_your_commune">Your City (Automatic)</string>
     <string name="auth_create_account_button">Create account</string>
+    <string name="auth_invitation_code_label">Invitation Code (optional)</string>
 
     <!-- PROFILE -->
     <string name="profile_title">Profile</string>
@@ -376,6 +377,9 @@
     <string name="create_event_public">Public Event</string>
     <string name="create_event_cd_cover">Cover</string>
     <string name="create_event_cd_go">Go</string>
+    <string name="create_event_image_title">Event Image</string>
+    <string name="create_event_image_hint">Tap to add image</string>
+    <string name="create_event_location_title">Location</string>
 
     <!-- EVENT DETAIL (extra) -->
     <string name="event_detail_boost_title">🚀 Boost Event</string>

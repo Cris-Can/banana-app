@@ -6,11 +6,11 @@
     <!-- Popup del menú de opciones (voltear/rotar): texto negro sobre fondo blanco -->
     <style name="Theme.Banana.Crop.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
 
-    <style name="Theme.Banana.Crop" parent="Theme.AppCompat.DayNight">
-        <item name="colorPrimary">#000000</item>
-        <item name="colorPrimaryDark">#000000</item>
-        <item name="colorAccent">#FFFFFF</item>
-        <item name="android:textColorPrimary">#FFFFFF</item>
+    <style name="Theme.Banana.Crop" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">#FFFFFF</item>
+        <item name="colorPrimaryDark">#E0E0E0</item>
+        <item name="colorAccent">#000000</item>
+        <item name="android:textColorPrimary">#000000</item>
         <item name="android:windowBackground">#000000</item>
         <!-- Forzar popup legible (texto negro en fondo claro) -->
         <item name="actionBarPopupTheme">@style/Theme.Banana.Crop.PopupOverlay</item>

@@ -66,6 +66,9 @@ fun NavGraphBuilder.chatGraph(
             creationCallback = { factory -> factory.create(conversationId, currentUserId) }
         )
         val messageRepository = chatViewModel.repository
+        val userViewModel: UserViewModel = hiltViewModel()
+        val userRepository = userViewModel.userRepository
+        val context = androidx.compose.ui.platform.LocalContext.current
         LaunchedEffect(conversationId) {
             messageRepository.markConversationAsRead(conversationId, currentUserId)
         }
@@ -96,10 +99,41 @@ fun NavGraphBuilder.chatGraph(
                 scope.launch { messageRepository.updateConversationTheme(conversationId, color) }
             },
             onBack = { navController.popBackStack() },
-            onReportUser = { reason -> /* logic handled in screen/vm */ },
-            onBlockUser = { /* logic handled in screen/vm */ },
+            onReportUser = { reason ->
+                if (otherUserId != null) {
+                    scope.launch {
+                        try {
+                            userRepository.reportUser(currentUserId, otherUserId, reason)
+                            android.widget.Toast.makeText(context, "✅ Usuario reportado", android.widget.Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "❌ Error al reportar: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            },
+            onBlockUser = {
+                if (otherUserId != null) {
+                    scope.launch {
+                        try {
+                            userRepository.blockUser(currentUserId, otherUserId)
+                            android.widget.Toast.makeText(context, "🚫 Usuario bloqueado", android.widget.Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "❌ Error al bloquear: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            },
             onDeleteMessage = { msgId ->
-                scope.launch { messageRepository.deleteMessage(conversationId, msgId) }
+                scope.launch { 
+                    val result = messageRepository.deleteMessage(conversationId, msgId) 
+                    result.onFailure { e ->
+                        android.widget.Toast.makeText(context, "❌ Error al borrar mensaje: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                        android.util.Log.e("ChatGraph", "Failed to delete message $msgId", e)
+                    }.onSuccess {
+                        android.widget.Toast.makeText(context, "✅ Mensaje borrado", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
             },
             onEditMessage = { msgId, old, new ->
                 scope.launch { messageRepository.editMessage(conversationId, msgId, old, new) }

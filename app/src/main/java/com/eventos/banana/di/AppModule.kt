@@ -2,8 +2,13 @@ package com.eventos.banana.di
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.eventos.banana.core.security.AppCheckHelper
+import com.eventos.banana.core.security.RateLimitManager
 import com.eventos.banana.util.AudioPlayerHelper
 import com.eventos.banana.util.AudioRecorderHelper
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.ktx.functions
+import com.google.firebase.ktx.Firebase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -54,6 +59,22 @@ object AppModule {
     fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage = 
         com.google.firebase.storage.FirebaseStorage.getInstance()
 
+    @Provides
+    @Singleton
+    fun provideFirebaseFunctions(): FirebaseFunctions = Firebase.functions
+
+    @Provides
+    @Singleton
+    fun provideAppCheckHelper(
+        @ApplicationContext context: Context
+    ): AppCheckHelper = AppCheckHelper(context)
+
+    @Provides
+    @Singleton
+    fun provideRateLimitManager(
+        firebaseFunctions: FirebaseFunctions
+    ): RateLimitManager = RateLimitManager(firebaseFunctions)
+
     @ApplicationScope
     @Provides
     @Singleton
@@ -61,4 +82,24 @@ object AppModule {
         kotlinx.coroutines.CoroutineScope(
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
         )
+
+    @Provides
+    @Singleton
+    fun provideImageLoader(
+        @ApplicationContext context: Context
+    ): coil.ImageLoader = coil.ImageLoader.Builder(context)
+        .memoryCache {
+            coil.memory.MemoryCache.Builder(context)
+                .maxSizePercent(0.25)
+                .build()
+        }
+        .diskCache {
+            coil.disk.DiskCache.Builder()
+                .directory(context.cacheDir.resolve("coil_image_cache"))
+                .maxSizeBytes(100L * 1024 * 1024) // 100 MB
+                .build()
+        }
+        .crossfade(true)
+        .respectCacheHeaders(false) // Firebase Storage no envía headers de cache válidos
+        .build()
 }

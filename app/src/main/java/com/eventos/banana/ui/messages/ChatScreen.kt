@@ -131,7 +131,6 @@ fun ChatScreen(
     val pendingAudioDuration by viewModel.pendingAudioDuration.collectAsState()
     var recordingDuration by remember { mutableLongStateOf(0L) }
     var replyingTo by remember { mutableStateOf<Message?>(null) }
-    
     val scope = rememberCoroutineScope()
     
     val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -174,7 +173,7 @@ fun ChatScreen(
                         // ⌨️ Typing Indicator (PREMIUM ONLY)
                         if (otherUserIsTyping && isGold) {
                             Text(
-                                "Escribiendo... 🖊️",
+                                "Escribiendo... \uD83D\uDD8A\uFE0F",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = activeColor ?: MaterialTheme.colorScheme.primary
                             )
@@ -196,6 +195,7 @@ fun ChatScreen(
                     }
                     var showMenu by remember { mutableStateOf(false) }
                     var showReportDialog by remember { mutableStateOf(false) }
+                    var showBlockDialog by remember { mutableStateOf(false) }
                     
                     IconButton(onClick = { showMenu = !showMenu }) {
                         Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, stringResource(com.eventos.banana.R.string.common_edit))
@@ -210,21 +210,83 @@ fun ChatScreen(
                             text = { Text("🚫 " + stringResource(com.eventos.banana.R.string.profile_block)) },
                             onClick = { 
                                 showMenu = false
-                                onBlockUser()
+                                showBlockDialog = true
                             }
                         )
                     }
                     
+                    if (showBlockDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showBlockDialog = false },
+                            title = { Text("Bloquear Usuario") },
+                            text = { Text("¿Estás seguro de que deseas bloquear a $otherUserNickname? Ya no podrán enviarte mensajes ni ver tu perfil.") },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    onBlockUser()
+                                    showBlockDialog = false
+                                }) { Text("Bloquear", color = MaterialTheme.colorScheme.error) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showBlockDialog = false }) { Text(stringResource(com.eventos.banana.R.string.common_cancel)) }
+                            }
+                        )
+                    }
+
                     if (showReportDialog) {
+                        var selectedReason by remember { mutableStateOf("") }
+                        var customReason by remember { mutableStateOf("") }
+                        val reasons = listOf(
+                            "Contenido inapropiado",
+                            "Spam o publicidad",
+                            "Acoso o bullying",
+                            "Suplantación de identidad",
+                            "Otro"
+                        )
                          AlertDialog(
                              onDismissRequest = { showReportDialog = false },
                              title = { Text(stringResource(com.eventos.banana.R.string.messages_report_title)) },
-                             text = { Text(stringResource(com.eventos.banana.R.string.messages_report_body)) },
+                             text = {
+                                 Column {
+                                     Text(
+                                         stringResource(com.eventos.banana.R.string.messages_report_body),
+                                         style = MaterialTheme.typography.bodyMedium
+                                     )
+                                     Spacer(modifier = Modifier.height(12.dp))
+                                     reasons.forEach { reason ->
+                                         Row(
+                                             verticalAlignment = Alignment.CenterVertically,
+                                             modifier = Modifier
+                                                 .fillMaxWidth()
+                                                 .clickable { selectedReason = reason }
+                                                 .padding(vertical = 4.dp)
+                                         ) {
+                                             RadioButton(
+                                                 selected = selectedReason == reason,
+                                                 onClick = { selectedReason = reason }
+                                             )
+                                             Text(reason, style = MaterialTheme.typography.bodyMedium)
+                                         }
+                                     }
+                                     if (selectedReason == "Otro") {
+                                         OutlinedTextField(
+                                             value = customReason,
+                                             onValueChange = { customReason = it },
+                                             placeholder = { Text("Describe el motivo...") },
+                                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                             maxLines = 2
+                                         )
+                                     }
+                                 }
+                             },
                              confirmButton = {
-                                 TextButton(onClick = {
-                                     onReportUser("Contenido inapropiado")
-                                     showReportDialog = false
-                                 }) { Text(stringResource(com.eventos.banana.R.string.messages_report_button), color = MaterialTheme.colorScheme.error) }
+                                 TextButton(
+                                     onClick = {
+                                         val finalReason = if (selectedReason == "Otro") customReason.ifBlank { "Otro" } else selectedReason
+                                         onReportUser(finalReason)
+                                         showReportDialog = false
+                                     },
+                                     enabled = selectedReason.isNotBlank()
+                                 ) { Text(stringResource(com.eventos.banana.R.string.messages_report_button), color = MaterialTheme.colorScheme.error) }
                              },
                              dismissButton = {
                                  TextButton(onClick = { showReportDialog = false }) { Text(stringResource(com.eventos.banana.R.string.common_cancel)) }
@@ -234,11 +296,11 @@ fun ChatScreen(
                 }
             )
         }
-    ) { padding ->
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(paddingValues)
         ) {
             LazyColumn(
                 modifier = Modifier

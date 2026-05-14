@@ -10,6 +10,8 @@ import com.eventos.banana.ui.splash.SplashScreen
 import com.eventos.banana.ui.login.LoginScreen
 import com.eventos.banana.ui.login.EmailVerificationScreen
 import com.eventos.banana.navigation.Screen
+import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.launch
 
 fun NavGraphBuilder.authGraph(
     navController: NavController,
@@ -42,12 +44,47 @@ fun NavGraphBuilder.authGraph(
     ) {
         val loginUiState by sessionViewModel.loginUiState.collectAsState()
         val registerUiState by sessionViewModel.registerUiState.collectAsState()
+        val hasBiometric by sessionViewModel.hasBiometricCredentials.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
+        var pendingEnableBiometric by remember { mutableStateOf(false) }
+        
         LoginScreen(
             loginUiState = loginUiState,
             registerUiState = registerUiState,
-            onLogin = sessionViewModel::login,
-            onRegister = sessionViewModel::register,
-            onForgotPassword = sessionViewModel::resetPassword
+            onLogin = { email, password ->
+                sessionViewModel.login(email, password)
+                if (pendingEnableBiometric) {
+                    sessionViewModel.enableBiometricLogin(email, password)
+                    pendingEnableBiometric = false
+                }
+            },
+            onRegister = { email, pass, nick, birth, com, reg, country, lat, lng, invitationCode ->
+                sessionViewModel.register(email, pass, nick, birth, com, reg, country, lat, lng, invitationCode)
+            },
+            onForgotPassword = sessionViewModel::resetPassword,
+            hasBiometricCredentials = hasBiometric,
+            onBiometricLogin = {
+                // Launch biometric prompt then auto-login
+                val activity = context as? androidx.fragment.app.FragmentActivity
+                if (activity != null) {
+                    val helper = com.eventos.banana.util.BiometricHelper(
+                        activity = activity,
+                        onAuthSuccess = {
+                            sessionViewModel.loginWithBiometrics()
+                        },
+                        onAuthError = { error ->
+                            // Error handled by ViewModel state
+                        }
+                    )
+                    if (helper.canAuthenticate()) {
+                        helper.authenticate()
+                    }
+                }
+            },
+            onEnableBiometric = {
+                pendingEnableBiometric = true
+            }
         )
     }
 

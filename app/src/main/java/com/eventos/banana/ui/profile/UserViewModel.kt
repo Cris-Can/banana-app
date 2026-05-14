@@ -32,6 +32,9 @@ class UserViewModel @Inject constructor(
     suspend fun banUser(uid: String) = 
         userRepository.banUser(uid)
 
+    suspend fun generateFounderCode(uid: String, durationDays: Int? = null): Result<String> =
+        userRepository.generateFounderCode(uid, durationDays)
+
     suspend fun searchUsers(query: String, currentUserId: String): List<UserProfile> {
         return try {
             val results = mutableSetOf<UserProfile>()
@@ -75,4 +78,7 @@ class UserViewModel @Inject constructor(
             emptyList()
         }
     }
+
+    suspend fun cleanupUsersDatabase(): Result<String> = 
+        userRepository.cleanupUsersDatabase()
 }

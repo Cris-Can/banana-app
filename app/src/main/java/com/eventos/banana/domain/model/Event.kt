@@ -9,9 +9,8 @@ data class Event(
     val description: String = "",
     val category: String = "",
     val eventType: EventType = EventType.OTRO,
-    val archivedAt: Long? = null,
 
-    val country: String = "Chile",
+    val country: String = "",
     val region: String = "",
     val commune: String = "",
 
@@ -32,7 +31,6 @@ data class Event(
     val createdAt: Long = 0L,
     val startAt: Long = 0L,
     val endAt: Long = 0L,
-    var isArchived: Boolean = false,        // evento ya terminó
     val expiresAt: Long? = null,            // cuándo se elimina definitivamente
 
 

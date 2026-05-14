@@ -131,6 +131,7 @@ class MessageRepository @Inject constructor(
             docRef.set(message.copy(id = docRef.id)).await()
             
             // 📩 Update last message and increment unread count
+            var updateFailed = false
             try {
                 // Fetch to identify recipient for both unread count and notification
                 val conversationSnapshot = conversationsCollection.document(conversationId).get().await()
@@ -170,9 +171,14 @@ class MessageRepository @Inject constructor(
 
             } catch (e: Exception) {
                  android.util.Log.e("MessageRepository", "Failed to update conv or notify: ${e.message}")
+                 updateFailed = true
             }
             
-            Result.success(Unit)
+            if (updateFailed) {
+                Result.failure(Exception("Message saved but conversation update failed"))
+            } else {
+                Result.success(Unit)
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -208,39 +214,93 @@ class MessageRepository @Inject constructor(
         }
     }
 
-    // 👁️ MARK AS READ v2 (Round 67)
-    // Marks all unread messages in conversation as read by current user
+    // 👁️ MARK AS READ v3 (Round 67 - Phase 7)
+    // Marks ALL unread messages in conversation as read by current user using pagination
     suspend fun markConversationAsRead(conversationId: String, userId: String): Result<Unit> {
         return try {
-            // 1. Reset unread count
+            // 1. Reset unread count (immediate visual feedback)
             conversationsCollection.document(conversationId).update(
                 "unreadCount.$userId", 0
             ).await()
 
-            // 2. Add user to 'readers' of recent unread messages (Cost optimization: limit to last 20?)
-            // We only update messages that don't have us in 'readers' yet.
-            // Doing this for *every* read might be write-heavy.
-            // Strategy: We will just update the "lastMessage" read status or do a batch update on unread ones.
-            // For simplicity and cost balance: we won't batch update ALL past messages 'readers' field 
-            // because that could be hundreds of writes.
-            // We'll rely on 'unreadCount' for the "grey/blue" check on the CONVERSATION list.
-            // But for individual messages (Double Check), we need to update the message docs.
+            // 2. Paginate through ALL messages to mark as read
+            // 🚀 PERFORMANCE: Use pagination to handle conversations with many messages
+            val pageSize = 100 // Firestore batch limit is 500, but we use 100 for safety
+            var lastDocument: com.google.firebase.firestore.DocumentSnapshot? = null
+            var totalUpdated = 0
             
-            // Let's only update the last 20 messages to save writes, assuming older ones are scrolled past or read.
-            val unreadMessagesQuery = conversationsCollection.document(conversationId)
+            do {
+                // Query messages in ascending order (oldest first) for pagination
+                var query = conversationsCollection.document(conversationId)
+                    .collection("messages")
+                    .orderBy("timestamp", Query.Direction.ASCENDING)
+                    .limit(pageSize.toLong())
+                
+                // Apply pagination cursor
+                if (lastDocument != null) {
+                    query = query.startAfter(lastDocument!!)
+                }
+                
+                val messagesSnapshot = query.get().await()
+                
+                if (messagesSnapshot.isEmpty) {
+                    break // No more messages
+                }
+                
+                val batch = firestore.batch()
+                var batchCount = 0
+                
+                for (doc in messagesSnapshot.documents) {
+                    val readers = doc.get("readers") as? List<*> ?: emptyList<Any>()
+                    
+                    // Only update if user is not already in readers
+                    if (!readers.contains(userId)) {
+                        batch.update(doc.reference, "readers", com.google.firebase.firestore.FieldValue.arrayUnion(userId))
+                        batchCount++
+                        totalUpdated++
+                    }
+                }
+                
+                // Commit batch if there are updates
+                if (batchCount > 0) {
+                    batch.commit().await()
+                }
+                
+                // Update pagination cursor
+                lastDocument = messagesSnapshot.documents.lastOrNull()
+                
+            } while (lastDocument != null && messagesSnapshot.documents.size == pageSize)
+            
+            android.util.Log.d("MessageRepository", "Marked $totalUpdated messages as read for user $userId in conversation $conversationId")
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepository", "Error marking conversation as read: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    // 👁️ MARK AS READ (Optimized version - only updates last N messages for performance)
+    // Use this for quick visual feedback when user opens a chat
+    suspend fun markConversationAsReadQuick(conversationId: String, userId: String, limit: Int = 50): Result<Unit> {
+        return try {
+            // 1. Reset unread count (immediate visual feedback)
+            conversationsCollection.document(conversationId).update(
+                "unreadCount.$userId", 0
+            ).await()
+
+            // 2. Update only the most recent messages (performance optimization)
+            val messagesSnapshot = conversationsCollection.document(conversationId)
                 .collection("messages")
-                .whereArrayContains("participants", userId) // Invalid query for subcollection usually
-                // Better: just query messages where 'readers' does NOT contain userId? Firestore doesn't support "not-array-contains".
-                // So we query last 20 orders by timestamp desc.
                 .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(20)
+                .limit(limit.toLong())
                 .get()
                 .await()
 
             val batch = firestore.batch()
             var updatesCount = 0
 
-            for (doc in unreadMessagesQuery.documents) {
+            for (doc in messagesSnapshot.documents) {
                 val readers = doc.get("readers") as? List<*> ?: emptyList<Any>()
                 if (!readers.contains(userId)) {
                     batch.update(doc.reference, "readers", com.google.firebase.firestore.FieldValue.arrayUnion(userId))
@@ -254,7 +314,8 @@ class MessageRepository @Inject constructor(
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Result.success(Unit)
+            android.util.Log.e("MessageRepository", "Error in quick mark as read: ${e.message}", e)
+            Result.failure(e)
         }
     }
 
@@ -304,11 +365,51 @@ class MessageRepository @Inject constructor(
     // 🗑️ DELETE MESSAGE (Soft Delete)
     suspend fun deleteMessage(conversationId: String, messageId: String): Result<Unit> {
         return try {
-            conversationsCollection.document(conversationId)
+            val messageDoc = conversationsCollection.document(conversationId)
                 .collection("messages")
                 .document(messageId)
-                .update("isDeleted", true)
-                .await()
+            
+            // 1. Mark as deleted
+            messageDoc.update("isDeleted", true).await()
+
+            // 2. Check if it was the last message to update the conversation preview
+            try {
+                val convDoc = conversationsCollection.document(conversationId)
+                
+                // If there's no clear way to know if it's "the" last without its timestamp, 
+                // we can just check if the lastMessage field matches roughly or just update it 
+                // if the deleted message is very recent.
+                // A better way: Query the most recent non-deleted message to restore it as 'lastMessage'.
+                
+                val latestMessages = convDoc.collection("messages")
+                    .whereEqualTo("isDeleted", false)
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(1)
+                    .get()
+                    .await()
+
+                if (latestMessages.isEmpty) {
+                    // No more messages in conversation
+                    convDoc.update(mapOf(
+                        "lastMessage" to "Conversación vacía",
+                        "lastMessageSenderId" to "",
+                        "lastMessageTimestamp" to System.currentTimeMillis()
+                    )).await()
+                } else {
+                    val last = latestMessages.documents.first().toObject(Message::class.java)
+                    if (last != null) {
+                        val displayContent = if (last.audioUrl != null) "🎤 Mensaje de audio" else last.content
+                        convDoc.update(mapOf(
+                            "lastMessage" to displayContent,
+                            "lastMessageSenderId" to last.senderId,
+                            "lastMessageTimestamp" to last.timestamp
+                        )).await()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MessageRepository", "Failed to sync lastMessage after delete: ${e.message}")
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -383,8 +484,13 @@ class MessageRepository @Inject constructor(
                     return@addSnapshotListener
                 }
                 
-                // Get messages and reverse them to show oldest -> newest
-                val messages = snapshot?.toObjects(Message::class.java)?.reversed() ?: emptyList()
+                // Get messages, filter out deleted ones, deduplicate by ID (guards against
+                // Firestore emitting the same message twice: once as a pending write and once
+                // after server confirmation), then reverse to show oldest → newest.
+                val messages = snapshot?.toObjects(Message::class.java)
+                    ?.filter { !it.isDeleted }
+                    ?.distinctBy { it.id }
+                    ?.reversed() ?: emptyList()
                 trySend(messages)
             }
         

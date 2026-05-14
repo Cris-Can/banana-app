@@ -30,6 +30,12 @@ fun ConversationsScreen(
     onDeleteConversation: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    val sharedPrefs = androidx.compose.ui.platform.LocalContext.current
+        .getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE)
+    val hasSeenChatGuide = remember { mutableStateOf(
+        sharedPrefs.getBoolean("chat_guide_seen", false)
+    ) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -68,6 +74,16 @@ fun ConversationsScreen(
                 }
             }
         }
+    }
+
+    // Show guide overlay on first visit (DESPUÉS del Scaffold)
+    if (!hasSeenChatGuide.value) {
+        ChatGuideOverlay(
+            onDismiss = {
+                hasSeenChatGuide.value = true
+                sharedPrefs.edit().putBoolean("chat_guide_seen", true).apply()
+            }
+        )
     }
 }
 

@@ -3,6 +3,10 @@ package com.eventos.banana.ui.auth
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.eventos.banana.data.repository.AuthRepository
+import com.eventos.banana.data.repository.BiometricRepository
+import com.eventos.banana.util.AppConstants
+import com.eventos.banana.util.BiometricHelper
+import com.eventos.banana.util.GeohashUtils
 import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.LoginUiState
 import com.eventos.banana.domain.model.RegisterUiState
@@ -32,7 +36,8 @@ class SessionViewModel @Inject constructor(
     private val registerUseCase: com.eventos.banana.domain.usecase.auth.RegisterUseCase,
     private val createUserProfileUseCase: com.eventos.banana.domain.usecase.profile.CreateUserProfileUseCase,
     private val deleteAccountUseCase: com.eventos.banana.domain.usecase.auth.DeleteAccountUseCase,
-    private val sharedPreferences: android.content.SharedPreferences
+    private val sharedPreferences: android.content.SharedPreferences,
+    private val biometricRepository: BiometricRepository
 ) : androidx.lifecycle.AndroidViewModel(application) {
 
     private var profileJob: kotlinx.coroutines.Job? = null
@@ -56,10 +61,13 @@ class SessionViewModel @Inject constructor(
     private val _unreadNotificationsCount = MutableStateFlow(0)
     val unreadNotificationsCount: StateFlow<Int> = _unreadNotificationsCount
 
+    private val _hasBiometricCredentials = MutableStateFlow(false)
+    val hasBiometricCredentials: StateFlow<Boolean> = _hasBiometricCredentials.asStateFlow()
+
     // 📍 Location Update Feedback
     private val _locationUpdateMessage = MutableStateFlow<String?>(null)
     val locationUpdateMessage: StateFlow<String?> = _locationUpdateMessage.asStateFlow()
-
+    
     fun clearLocationMessage() {
         _locationUpdateMessage.value = null
     }
@@ -163,6 +171,12 @@ class SessionViewModel @Inject constructor(
                         profile = profile
                     )
                     
+                    // 🚀 Defer non-critical Firestore writes so the UI gets the profile immediately
+                    viewModelScope.launch {
+                        userRepository.ensureNotificationsActive(profile.uid)
+                        userRepository.syncNotificationTopics(profile)
+                    }
+                    
                     // 📍 AUTO-DETECT LOCATION if missing (User Request)
                     if (profile.commune.isNullOrBlank() && profile.region.isNullOrBlank()) {
                         checkAndAutoUpdateLocation(profile.uid)
@@ -173,20 +187,16 @@ class SessionViewModel @Inject constructor(
 
 
     // =====================================================
-    // 🔔 REGISTER FCM TOKEN (A11.2)
+    // 🔔 REGISTER & VERIFY FCM TOKEN (Heartbeat)
     // =====================================================
     private fun registerFcmToken() {
         val userId = authRepository.currentUid() ?: return
 
-        FirebaseMessaging.getInstance().token
-            .addOnSuccessListener { token ->
-                viewModelScope.launch {
-                    userRepository.saveFcmToken(
-                        userId = userId,
-                        token = token
-                    )
-                }
-            }
+        viewModelScope.launch {
+            // Heartbeat: compares device token vs Firestore token
+            // Only writes if they differ → efficient and always in sync
+            userRepository.verifyAndSyncFcmToken(userId)
+        }
     }
 
     // =====================================================
@@ -218,6 +228,53 @@ class SessionViewModel @Inject constructor(
     }
 
     // =====================================================
+    // BIOMETRIC LOGIN
+    // =====================================================
+    fun isBiometricLoginAvailable(): Boolean {
+        return biometricRepository.isBiometricLoginEnabled()
+    }
+
+    fun enableBiometricLogin(email: String, password: String) {
+        biometricRepository.setBiometricLoginEnabled(true, email, password)
+        _hasBiometricCredentials.value = true
+    }
+
+    fun disableBiometricLogin() {
+        biometricRepository.clearCredentials()
+        _hasBiometricCredentials.value = false
+    }
+
+    fun loginWithBiometrics(): Boolean {
+        val credentials = biometricRepository.getSavedCredentials()
+            ?: return false
+        
+        val (email, password) = credentials
+        viewModelScope.launch {
+            _loginUiState.value = LoginUiState(isLoading = true)
+            
+            val result = loginUseCase(email, password)
+            
+            if (result.isSuccess) {
+                _loginUiState.value = LoginUiState(isLoading = false)
+                _sessionState.value = SessionState.AUTHENTICATED
+                
+                isEmailVerified = result.getOrDefault(false)
+                sharedPreferences.edit()?.putBoolean("email_verified_cache", isEmailVerified)?.apply()
+                isVerificationChecked = true
+                
+                loadUserProfile()
+                registerFcmToken()
+            } else {
+                _loginUiState.value = LoginUiState(
+                    isLoading = false,
+                    errorMessage = result.exceptionOrNull()?.message ?: "Error de autenticación biométrica"
+                )
+            }
+        }
+        return true
+    }
+
+    // =====================================================
     // RESET PASSWORD
     // =====================================================
     fun resetPassword(email: String, onResult: (Boolean, String?) -> Unit) {
@@ -242,13 +299,15 @@ class SessionViewModel @Inject constructor(
         birthDate: Long,
         commune: String,
         region: String? = null,
+        country: String? = null,
         latitude: Double? = null,
-        longitude: Double? = null
+        longitude: Double? = null,
+        invitationCode: String? = null
     ) {
         viewModelScope.launch {
             _registerUiState.value = RegisterUiState(isLoading = true)
             
-            val result = registerUseCase(email, password, nickname, birthDate, commune, region, latitude, longitude)
+            val result = registerUseCase(email, password, nickname, birthDate, commune, region, country, latitude, longitude, invitationCode)
 
             if (result.isSuccess) {
                 _sessionState.value = SessionState.AUTHENTICATED
@@ -261,6 +320,12 @@ class SessionViewModel @Inject constructor(
                     isLoading = false,
                     isSuccess = true
                 )
+                
+                // 🔔 CRITICAL: Sync FCM token and profile on registration
+                // Without this, new users never receive push notifications
+                loadUserProfile()
+                registerFcmToken()
+                observeNotifications()
             } else {
                 _registerUiState.value = RegisterUiState(
                     isLoading = false,
@@ -279,6 +344,8 @@ class SessionViewModel @Inject constructor(
         notificationsJob?.cancel()
         notificationsJob = null
         
+        _hasBiometricCredentials.value = biometricRepository.isBiometricLoginEnabled()
+
         // Clear states to prevent crashes in UI observing old data
         _profileUiState.value = ProfileUiState()
         _unreadNotificationsCount.value = 0
@@ -339,21 +406,19 @@ class SessionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val helper = com.eventos.banana.util.LocationHelper(getApplication())
-                val location = android.location.Location("gps").apply {
-                    this.latitude = latitude
-                    this.longitude = longitude
-                }
+                val result = helper.detectFromCoordinates(latitude, longitude)
                 
-                val commune = helper.getCommuneFromLocation(location)
-                if (commune != null) {
-                    val region = com.eventos.banana.data.ChileCommunesList.getRegionForCommune(commune)
-                    val geohash = com.eventos.banana.util.GeohashUtils.encode(latitude, longitude, 9)
+                if (result != null) {
+                    val commune = result.commune
+                    val region = result.region
+                    val country = result.country
+                    val geohash = GeohashUtils.encode(latitude, longitude, GeohashUtils.getPrecisionForRadius(AppConstants.DEFAULT_SEARCH_RADIUS_KM))
                     
                     // Only update if it's different to save Firestore writes
                     val currentProfile = _profileUiState.value.profile
-                    if (currentProfile?.commune != commune || currentProfile.region != region) {
-                        userRepository.updateLocation(uid, region, commune, latitude, longitude, geohash)
-                        android.util.Log.d("SessionViewModel", "📍 Profile location auto-updated: $commune")
+                    if (currentProfile?.commune != commune || currentProfile.region != region || currentProfile.country != country) {
+                        userRepository.updateLocation(uid, region, commune, country, latitude, longitude, geohash)
+                        android.util.Log.d("SessionViewModel", "📍 Profile location auto-updated: $commune, $country")
                     }
                 }
             } catch (e: Exception) {
@@ -372,5 +437,6 @@ class SessionViewModel @Inject constructor(
 
     init {
         checkSession()
+        _hasBiometricCredentials.value = biometricRepository.isBiometricLoginEnabled()
     }
 }

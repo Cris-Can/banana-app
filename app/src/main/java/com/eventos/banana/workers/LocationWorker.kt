@@ -11,6 +11,8 @@ import kotlinx.coroutines.withContext
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import androidx.hilt.work.HiltWorker
+import com.eventos.banana.util.AppConstants
+import com.eventos.banana.util.GeohashUtils
 
 @HiltWorker
 class LocationWorker @AssistedInject constructor(
@@ -40,18 +42,25 @@ class LocationWorker @AssistedInject constructor(
             
             if (location != null) {
                 // 4. Update Firestore
-                val geohash = com.eventos.banana.util.GeohashUtils.encode(location.latitude, location.longitude, 9)
+                val geohash = GeohashUtils.encode(location.latitude, location.longitude, GeohashUtils.getPrecisionForRadius(AppConstants.DEFAULT_SEARCH_RADIUS_KM))
                 
                 userRepository.updateLocation(
                     uid, 
                     location.region, 
                     location.commune,
+                    location.country,
                     location.latitude,
                     location.longitude,
                     geohash
                 )
                 
-                android.util.Log.d("LocationWorker", "Location updated in background: ${location.commune} ($geohash)")
+                // Sync notification topics for the new commune (Requested "ON" by default sync)
+                val profile = userRepository.getUserProfile(uid, forceRefresh = true)
+                if (profile != null) {
+                    userRepository.syncNotificationTopics(profile)
+                }
+                
+                android.util.Log.d("LocationWorker", "Location and topics updated in background: ${location.commune} ($geohash)")
                 return@withContext Result.success()
             } else {
                 return@withContext Result.retry()

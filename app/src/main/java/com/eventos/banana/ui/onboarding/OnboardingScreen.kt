@@ -33,6 +33,25 @@ import androidx.compose.runtime.setValue
 fun OnboardingScreen(
     onFinish: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var detectedCommune by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (com.eventos.banana.util.LocationHelper.hasLocationPermissions(context)) {
+            val helper = com.eventos.banana.util.LocationHelper(context)
+            val result = helper.detectLocationFull()
+            if (result != null) {
+                detectedCommune = result.commune
+            }
+        }
+    }
+
+    val locationDescription = if (detectedCommune != null) {
+        "Banana usa tu ubicación para mostrarte eventos cerca de $detectedCommune. ¡Ve los panoramas más cercanos primero!"
+    } else {
+        stringResource(com.eventos.banana.R.string.onboarding_desc_4)
+    }
+
     // 4 Slides: Events, Security, Ratings, Location
     val pages = listOf(
         OnboardingPage(
@@ -52,7 +71,7 @@ fun OnboardingScreen(
         ),
         OnboardingPage(
             title = stringResource(com.eventos.banana.R.string.onboarding_title_4),
-            description = stringResource(com.eventos.banana.R.string.onboarding_desc_4),
+            description = locationDescription,
             icon = Icons.Filled.LocationOn
         )
     )
@@ -98,7 +117,10 @@ fun OnboardingScreen(
                 state = pagerState,
                 modifier = Modifier.fillMaxWidth()
             ) { pageIndex ->
-                OnboardingPageContent(page = pages[pageIndex])
+                OnboardingPageContent(
+                    page = pages[pageIndex],
+                    detectedCommune = if (pageIndex == 3) detectedCommune else null
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -152,7 +174,7 @@ fun OnboardingScreen(
 }
 
 @Composable
-fun OnboardingPageContent(page: OnboardingPage) {
+fun OnboardingPageContent(page: OnboardingPage, detectedCommune: String? = null) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -179,6 +201,24 @@ fun OnboardingPageContent(page: OnboardingPage) {
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        
+        if (page.icon == Icons.Filled.LocationOn) {
+            if (detectedCommune != null) {
+                Text(
+                    text = "📍 Eventos cerca de $detectedCommune aparecerán primero",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            } else {
+                Text(
+                    text = "📍 Activa tu ubicación para ver eventos de tu comuna",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
     }
 }
 

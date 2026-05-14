@@ -6,6 +6,7 @@ import androidx.compose.foundation.border // ➕
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex // ➕
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
@@ -33,18 +34,15 @@ fun PublicProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // 🛡️ Track blocked state
-    var isBlocked by remember { mutableStateOf(false) }
-    LaunchedEffect(targetUserId) {
-        // block check moved here, profile load is now in VM init
-        val userRepo = viewModel.userRepository
-        val authRepo = viewModel.authRepository
-        val currentUid = authRepo.currentUid()
-        if (currentUid != null) {
-            val blockedList = userRepo.getBlockedUsers(currentUid)
-            isBlocked = blockedList.contains(targetUserId)
-        }
-    }
+    // 🎯 Guide overlay (first visit only)
+    val sharedPrefs = androidx.compose.ui.platform.LocalContext.current
+        .getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE)
+    val hasSeenProfileGuide = remember { mutableStateOf(
+        sharedPrefs.getBoolean("profile_guide_seen", false)
+    ) }
+
+    // 🛡️ Track blocked state reactively from ViewModel
+    val isBlocked by viewModel.isBlocked.collectAsState()
 
     Scaffold(
         topBar = {
@@ -81,7 +79,6 @@ fun PublicProfileScreen(
                                 onClick = { 
                                     showMenu = false
                                     viewModel.unblockUser(targetUserId)
-                                    isBlocked = false
                                     android.widget.Toast.makeText(context, "✅ Usuario desbloqueado", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
@@ -92,7 +89,6 @@ fun PublicProfileScreen(
                                 onClick = { 
                                     showMenu = false
                                     viewModel.blockUser(targetUserId)
-                                    isBlocked = true
                                     android.widget.Toast.makeText(context, "🚫 Usuario bloqueado", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
@@ -127,7 +123,29 @@ fun PublicProfileScreen(
             .animateContentSize()
         ) {
             if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(androidx.compose.ui.Alignment.Center))
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    com.eventos.banana.ui.components.SkeletonCircle(120.dp)
+                    Spacer(Modifier.height(24.dp))
+                    com.eventos.banana.ui.components.SkeletonTextLine(180.dp)
+                    Spacer(Modifier.height(12.dp))
+                    com.eventos.banana.ui.components.SkeletonTextLine(120.dp)
+                    Spacer(Modifier.height(12.dp))
+                    com.eventos.banana.ui.components.SkeletonTextLine(150.dp)
+                    
+                    var showFallback by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(2000)
+                        showFallback = true
+                    }
+                    if (showFallback) {
+                        Spacer(Modifier.height(24.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                }
             } else {
                 val profile = uiState.profile
                 if (profile != null) {
@@ -323,47 +341,86 @@ fun PublicProfileScreen(
                             }
                         }
                         
-                        // Friend Action Button & Messaging
-                        when (uiState.friendStatus) {
-                            FriendStatus.NONE -> {
-                                Button(onClick = { viewModel.sendFriendRequest(profile.uid) }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(stringResource(com.eventos.banana.R.string.public_profile_add_friend))
-                                }
-                                // Messaging blocked if not friends
-                            }
-                            FriendStatus.REQUEST_SENT -> {
-                                Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                                    Text(stringResource(com.eventos.banana.R.string.public_profile_request_sent))
-                                }
-                            }
-                            FriendStatus.REQUEST_RECEIVED -> {
-                                Button(onClick = { viewModel.acceptFriendRequest(profile.uid) }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(stringResource(com.eventos.banana.R.string.public_profile_accept_request))
-                                }
-                            }
-                            FriendStatus.FRIEND -> {
-                                // Only allow messaging if BOTH are friends AND verified (per strict user request)
-                                val isTargetVerified = profile.isVerified
-                                
-                                if (isCurrentUserVerified && isTargetVerified) {
-                                    Button(onClick = { onMessageClick(profile.uid) }, modifier = Modifier.fillMaxWidth()) {
-                                        Text(stringResource(com.eventos.banana.R.string.public_profile_send_message))
-                                    }
-                                } else {
-                                    OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                                        val reason = if (!isCurrentUserVerified) stringResource(com.eventos.banana.R.string.public_profile_verify_to_message) else stringResource(com.eventos.banana.R.string.public_profile_user_not_verified)
-                                        Text("⚠️ $reason")
+                        // Social Action Buttons
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        ) {
+                            when (uiState.friendStatus) {
+                                FriendStatus.NONE -> {
+                                    Button(
+                                        onClick = { viewModel.sendFriendRequest(profile.uid) },
+                                        modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp)
+                                    ) {
+                                        Text(stringResource(com.eventos.banana.R.string.public_profile_add_friend))
                                     }
                                 }
+                                FriendStatus.REQUEST_SENT -> {
+                                    Button(
+                                        onClick = {}, 
+                                        enabled = false, 
+                                        modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp)
+                                    ) {
+                                        Text(stringResource(com.eventos.banana.R.string.public_profile_request_sent))
+                                    }
+                                }
+                                FriendStatus.REQUEST_RECEIVED -> {
+                                    Button(
+                                        onClick = { viewModel.acceptFriendRequest(profile.uid) },
+                                        modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp)
+                                    ) {
+                                        Text(stringResource(com.eventos.banana.R.string.public_profile_accept_request))
+                                    }
+                                }
+                                FriendStatus.FRIEND -> {
+                                    val isTargetVerified = profile.isVerified
+                                    if (isCurrentUserVerified && isTargetVerified) {
+                                        Button(
+                                            onClick = { onMessageClick(profile.uid) },
+                                            modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp)
+                                        ) {
+                                            Text(stringResource(com.eventos.banana.R.string.public_profile_send_message))
+                                        }
+                                    } else {
+                                        OutlinedButton(
+                                            onClick = {}, 
+                                            enabled = false,
+                                            modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp)
+                                        ) {
+                                            val reason = if (!isCurrentUserVerified) stringResource(com.eventos.banana.R.string.public_profile_verify_to_message) else stringResource(com.eventos.banana.R.string.public_profile_user_not_verified)
+                                            Text("⚠️ $reason")
+                                        }
+                                    }
+                                }
+                                FriendStatus.SELF -> {
+                                    OutlinedCard(
+                                        colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Box(modifier = Modifier.padding(16.dp).fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                            Text(stringResource(com.eventos.banana.R.string.public_profile_this_is_you), color = MaterialTheme.colorScheme.onSurface)
+                                        }
+                                    }
+                                }
                             }
-                            FriendStatus.SELF -> {
-                                OutlinedCard(
-                                    colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent),
-                                    modifier = Modifier.fillMaxWidth()
+                            
+                            // Block/Unblock Button
+                            if (uiState.friendStatus != FriendStatus.SELF) {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (isBlocked) {
+                                            viewModel.unblockUser(targetUserId)
+                                        } else {
+                                            viewModel.blockUser(targetUserId)
+                                        }
+                                    },
+                                    modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = if (isBlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                    )
                                 ) {
-                                    Box(modifier = Modifier.padding(16.dp).fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                                        Text(stringResource(com.eventos.banana.R.string.public_profile_this_is_you), color = MaterialTheme.colorScheme.onSurface)
-                                    }
+                                    Text(if (isBlocked) "Desbloquear" else stringResource(com.eventos.banana.R.string.public_profile_block_user))
                                 }
                             }
                         }
@@ -382,9 +439,17 @@ fun PublicProfileScreen(
                         // Interests
                         if (profile.interests.isNotEmpty()) {
                             Text(stringResource(com.eventos.banana.R.string.public_profile_interests), style = MaterialTheme.typography.titleMedium)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                            ) {
                                 profile.interests.forEach {
-                                    AssistChip(onClick = {}, label = { Text(it) })
+                                    AssistChip(
+                                        modifier = Modifier.defaultMinSize(minWidth = 120.dp).height(48.dp),
+                                        onClick = {}, 
+                                        label = { Text(it) }
+                                    )
                                 }
                             }
                         }
@@ -397,9 +462,9 @@ fun PublicProfileScreen(
                             var selectedGalleryPhoto by remember { mutableStateOf<String?>(null) }
 
                             FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 profile.photos.forEach { photoUrl ->
                                     AsyncImage(
@@ -443,5 +508,15 @@ fun PublicProfileScreen(
                 }
             }
         }
+    }
+
+    // Show profile guide overlay on first visit
+    if (!hasSeenProfileGuide.value) {
+        ProfileGuideOverlay(
+            onDismiss = {
+                hasSeenProfileGuide.value = true
+                sharedPrefs.edit().putBoolean("profile_guide_seen", true).apply()
+            }
+        )
     }
 }

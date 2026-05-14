@@ -11,9 +11,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.eventos.banana.ui.auth.SessionViewModel
-import com.eventos.banana.ui.onboarding.GuideViewModel
 import com.eventos.banana.ui.home.HomeScreen
-import com.eventos.banana.ui.home.HomeGuideOverlay
 import com.eventos.banana.ui.notifications.NotificationViewModel
 import com.eventos.banana.ui.notifications.NotificationsScreen
 import com.eventos.banana.ui.messages.ConversationsViewModel
@@ -26,7 +24,6 @@ import com.eventos.banana.navigation.Screen
 fun NavGraphBuilder.homeGraph(
     navController: NavController,
     sessionViewModel: SessionViewModel,
-    guideViewModel: GuideViewModel,
     sharedTransitionScope: SharedTransitionScope
 ) {
     composable(Screen.Home.route) {
@@ -34,19 +31,11 @@ fun NavGraphBuilder.homeGraph(
         val conversationsViewModel: ConversationsViewModel = hiltViewModel()
         val currentId = sessionViewModel.currentUserId() ?: ""
 
-        // Controlar visibilidad del HomeGuide — se muestra solo la primera vez
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val prefs = remember {
-            context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
-        }
-        var showGuide by androidx.compose.runtime.saveable.rememberSaveable {
-            mutableStateOf(!prefs.getBoolean("home_guide_v1", false))
-        }
+
 
         LaunchedEffect(currentId) {
             notificationViewModel.start(currentId)
             conversationsViewModel.startUnreadMessagesObservation(currentId)
-            // Ya no iniciamos el GuideViewModel — el nuevo overlay lo reemplaza
         }
         
         val unreadCount by notificationViewModel.unreadCount.collectAsState()
@@ -69,15 +58,6 @@ fun NavGraphBuilder.homeGraph(
                 onMapClick = { navController.navigate(Screen.WorldMap.route) }
             )
 
-            // 🎓 Tutorial unificado: flechas + card inferior sin bloquear la pantalla
-            if (showGuide) {
-                com.eventos.banana.ui.home.HomeGuideOverlay(
-                    onDismiss = {
-                        prefs.edit().putBoolean("home_guide_v1", true).commit() // commit() es síncrono para evitar loop en recomposición rápida
-                        showGuide = false
-                    }
-                )
-            }
         }
     }
 

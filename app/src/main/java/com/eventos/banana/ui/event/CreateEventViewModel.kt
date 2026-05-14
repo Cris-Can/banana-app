@@ -37,7 +37,8 @@ class CreateEventViewModel @Inject constructor(
         val currentLongitude: Double? = null,
         val questions: List<JoinQuestion> = emptyList(),
         val isPublic: Boolean = false, // 🌍 NEW
-        val notificationRange: String = "COMMUNE" // 🔔 NEW: "COMMUNE", "REGION", "NATIONAL"
+        val notificationRange: String = "COMMUNE", // 🔔 NEW: "COMMUNE", "REGION", "NATIONAL"
+        val country: String = "Chile" // Default for legacy, but will be updated
     )
 
     private val _formState = MutableStateFlow(EventFormState())
@@ -49,6 +50,7 @@ class CreateEventViewModel @Inject constructor(
     fun updateMinimumScore(value: Double?) { _formState.value = _formState.value.copy(minimumScore = value) }
     fun updateRegion(value: String) { _formState.value = _formState.value.copy(region = value) }
     fun updateCommune(value: String) { _formState.value = _formState.value.copy(commune = value) }
+    fun updateCountry(value: String) { _formState.value = _formState.value.copy(country = value) }
     fun updateAddress(value: String) { _formState.value = _formState.value.copy(address = value) }
     fun updateMaxParticipants(value: String) { _formState.value = _formState.value.copy(maxParticipants = value) }
     fun updateStartAt(value: Long?) { _formState.value = _formState.value.copy(startAt = value) }
@@ -65,10 +67,11 @@ class CreateEventViewModel @Inject constructor(
     }
     fun updateSelectedImageUri(value: android.net.Uri?) { _formState.value = _formState.value.copy(selectedImageUri = value) }
 
-    fun updateLocationResult(region: String, commune: String, lat: Double?, lng: Double?) {
+    fun updateLocationResult(region: String, commune: String, country: String, lat: Double?, lng: Double?) {
         _formState.value = _formState.value.copy(
             region = region, 
             commune = commune,
+            country = country,
             currentLatitude = lat,
             currentLongitude = lng
         )

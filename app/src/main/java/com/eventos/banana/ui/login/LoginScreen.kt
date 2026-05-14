@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
@@ -26,8 +27,11 @@ fun LoginScreen(
     loginUiState: LoginUiState,
     registerUiState: com.eventos.banana.domain.model.RegisterUiState,
     onLogin: (String, String) -> Unit,
-    onRegister: (String, String, String, Long, String, String, Double?, Double?) -> Unit, // 🌍 Added Region, Lat, Lng
-    onForgotPassword: (String, (Boolean, String?) -> Unit) -> Unit
+    onRegister: (String, String, String, Long, String, String, String?, Double?, Double?, String?) -> Unit, 
+    onForgotPassword: (String, (Boolean, String?) -> Unit) -> Unit,
+    hasBiometricCredentials: Boolean = false,
+    onBiometricLogin: () -> Unit = {},
+    onEnableBiometric: () -> Unit = {}
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -35,11 +39,13 @@ fun LoginScreen(
     
     // 🌍 LOCATION STATE
     var commune by remember { mutableStateOf("") } // City Name
-    var selectedRegion by remember { mutableStateOf("") } // Secondary Text (Region/Country)
+    var selectedRegion by remember { mutableStateOf("") } // Secondary Text (Region)
+    var selectedCountry by remember { mutableStateOf("") } // Country Name
     var selectedLat by remember { mutableStateOf<Double?>(null) }
     var selectedLng by remember { mutableStateOf<Double?>(null) }
     
     var birthDate by remember { mutableStateOf<Long?>(null) }
+    var invitationCode by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     var isRegistering by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf<String?>(null) }
@@ -52,13 +58,14 @@ fun LoginScreen(
     var isSendingReset by remember { mutableStateOf(false) }
     
     val context = androidx.compose.ui.platform.LocalContext.current
-    val placesClient = remember { com.google.android.libraries.places.api.Places.createClient(context) }
+    val placesClient = remember { com.eventos.banana.util.LocationHelper(context).getPlacesClient() }
 
     // Use current state based on mode
     val isLoading = if (isRegistering) registerUiState.isLoading else loginUiState.isLoading
     val errorMessage = if (isRegistering) registerUiState.errorMessage else loginUiState.errorMessage
 
     val snackbarHostState = remember { SnackbarHostState() }
+    var showBiometricDialog by remember { mutableStateOf(false) }
 
     // Show errors in Snackbar
     LaunchedEffect(errorMessage) {
@@ -76,6 +83,7 @@ fun LoginScreen(
                 if (result != null) {
                     commune = result.commune
                     selectedRegion = result.region ?: ""
+                    selectedCountry = result.country ?: ""
                     selectedLat = result.latitude
                     selectedLng = result.longitude
                 }
@@ -323,30 +331,39 @@ fun LoginScreen(
                     
                     // 🌍 LOCATION SELECTION (Dialog Mode)
                     var showPlaceSearchDialog by remember { mutableStateOf(false) }
+                    var isFetchingCoordinates by remember { mutableStateOf(false) }
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                    Box(modifier = Modifier.fillMaxWidth().animateContentSize()) {
                         OutlinedTextField(
-                            value = commune,
+                            value = if (isFetchingCoordinates) "Obteniendo coordenadas..." else commune,
                             onValueChange = {},
                             readOnly = true,
                             label = { Text(stringResource(com.eventos.banana.R.string.auth_city_label)) },
                             placeholder = { Text(stringResource(com.eventos.banana.R.string.auth_city_placeholder)) },
-                            trailingIcon = { Text("📍") },
+                            trailingIcon = { 
+                                if (isFetchingCoordinates) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text("📍") 
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 disabledTextColor = MaterialTheme.colorScheme.onSurface,
                                 disabledBorderColor = MaterialTheme.colorScheme.outline,
                                 disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                // For ReadOnly look
-                            )
+                            ),
+                            enabled = !isFetchingCoordinates
                         )
                         // Invisible overlay to catch clicks
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable { showPlaceSearchDialog = true }
-                        )
+                        if (!isFetchingCoordinates) {
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clickable { showPlaceSearchDialog = true }
+                            )
+                        }
                     }
 
                     if (showPlaceSearchDialog) {
@@ -354,11 +371,13 @@ fun LoginScreen(
                             onDismiss = { showPlaceSearchDialog = false },
                             onPlaceSelected = { placeId, fullText ->
                                 showPlaceSearchDialog = false // Close dialog
+                                isFetchingCoordinates = true
                                 
                                 // 1. Update text
                                 val parts = fullText.split(",")
                                 commune = parts.firstOrNull()?.trim() ?: fullText
-                                selectedRegion = if (parts.size > 1) parts[1].trim() else fullText
+                                selectedRegion = if (parts.size > 1) parts[1].trim() else ""
+                                selectedCountry = if (parts.size > 2) parts.last().trim() else selectedRegion
                                 
                                 // 2. Fetch Coordinates
                                 val fields = listOf(com.google.android.libraries.places.api.model.Place.Field.LAT_LNG)
@@ -368,16 +387,27 @@ fun LoginScreen(
                                     val place = response.place
                                     selectedLat = place.latLng?.latitude
                                     selectedLng = place.latLng?.longitude
+                                    isFetchingCoordinates = false
                                 }.addOnFailureListener {
                                     selectedLat = null
                                     selectedLng = null
+                                    isFetchingCoordinates = false
                                 }
                             }
                         )
                     }
                     
-                    if (commune.isNotBlank()) {
-                         Text(stringResource(com.eventos.banana.R.string.auth_location_selected, commune, selectedRegion), style = MaterialTheme.typography.bodySmall)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = commune.isNotBlank() && !isFetchingCoordinates,
+                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+                    ) {
+                         Text(
+                             stringResource(com.eventos.banana.R.string.auth_location_selected, commune, selectedRegion), 
+                             style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.primary,
+                             modifier = Modifier.padding(start = 4.dp)
+                         )
                     }
                 }
 
@@ -414,6 +444,37 @@ fun LoginScreen(
                     }
                 }
 
+                if (isRegistering) {
+                    OutlinedTextField(
+                        value = invitationCode,
+                        onValueChange = { invitationCode = it.uppercase().trim() },
+                        label = { Text("Código de Invitación (Opcional)") },
+                        placeholder = { Text("Ej: FOUNDER-XXXX") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = com.eventos.banana.ui.theme.BananaGold,
+                            focusedLabelColor = com.eventos.banana.ui.theme.BananaGold
+                        )
+                    )
+                }
+
+                // 🔐 BIOMETRIC LOGIN BUTTON
+                if (hasBiometricCredentials) {
+                    com.eventos.banana.ui.components.BananaOutlinedButton(
+                        onClick = { onBiometricLogin() },
+                        text = "🔓 Entrar con huella digital",
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    )
+                    
+                    Text(
+                        text = "— o usa email y contraseña —",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
                 com.eventos.banana.ui.components.BananaButton(
                     onClick = { 
                         if (validateEmail(email)) {
@@ -431,7 +492,11 @@ fun LoginScreen(
                                     // Show error toast or similar? For now rely on button disabled
                                     return@BananaButton
                                 }
-                                onRegister(email, password, nickname, birthDate!!, commune, selectedRegion, selectedLat, selectedLng)
+                                onRegister(
+                                    email, password, nickname, birthDate!!,
+                                    commune, selectedRegion, selectedCountry,
+                                    selectedLat, selectedLng, invitationCode.ifBlank { null }
+                                )
                             } else {
                                 onLogin(email, password)
                             }
@@ -452,6 +517,35 @@ fun LoginScreen(
                            else stringResource(com.eventos.banana.R.string.auth_no_account),
                     enabled = !isLoading
                 )
+
+                // 🧬 ENABLE BIOMETRIC LOGIN (Solo en modo login, NO en registro)
+                if (!isRegistering && email.isNotBlank() && password.isNotBlank()) {
+                    var enableBiometric by remember { mutableStateOf(false) }
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = enableBiometric,
+                            onCheckedChange = { enabled ->
+                                enableBiometric = enabled
+                                if (enabled) onEnableBiometric()
+                            }
+                        )
+                        Text(
+                            text = "Recordar acceso con huella digital",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.clickable { 
+                                enableBiometric = !enableBiometric
+                                if (enableBiometric) onEnableBiometric()
+                            }
+                        )
+                    }
+                }
             }
         }
         }

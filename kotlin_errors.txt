@@ -1,1 +1,0 @@
-e: file:///C:/Users/crist/AndroidStudioProjects/Banana%20-%20copia/app/src/main/java/com/eventos/banana/ui/rating/RateParticipantsScreen.kt:326:21 The API of this layout is experimental and is likely to change in the future.

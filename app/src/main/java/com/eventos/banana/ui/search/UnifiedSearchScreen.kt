@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +41,23 @@ fun UnifiedSearchScreen(
     currentUserId: String
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var debouncedSearchQuery by remember { mutableStateOf("") }
+    
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isBlank()) {
+            debouncedSearchQuery = ""
+        } else {
+            delay(300)
+            debouncedSearchQuery = searchQuery
+        }
+    }
+
+    val sharedPrefs = androidx.compose.ui.platform.LocalContext.current
+        .getSharedPreferences("banana_prefs", android.content.Context.MODE_PRIVATE)
+    val hasSeenSearchGuide = remember { mutableStateOf(
+        sharedPrefs.getBoolean("search_guide_seen", false)
+    ) }
+
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val eventsTabLabel = stringResource(com.eventos.banana.R.string.search_tab_events)
     val usersTabLabel = stringResource(com.eventos.banana.R.string.search_tab_users)
@@ -92,12 +110,12 @@ fun UnifiedSearchScreen(
 
             when (selectedTabIndex) {
                 0 -> EventsSearchTab(
-                    query = searchQuery,
+                    query = debouncedSearchQuery,
                     viewModel = eventListViewModel,
                     onEventClick = { eventId -> navController.navigate("event_detail/$eventId") }
                 )
                 1 -> UsersSearchTab(
-                    query = searchQuery,
+                    query = debouncedSearchQuery,
                     viewModel = userViewModel,
                     currentUserId = currentUserId,
                     onUserClick = { userId -> 
@@ -110,6 +128,16 @@ fun UnifiedSearchScreen(
                 )
             }
         }
+    }
+
+    // Show guide overlay on first visit (DESPUÉS del Scaffold)
+    if (!hasSeenSearchGuide.value) {
+        SearchGuideOverlay(
+            onDismiss = {
+                hasSeenSearchGuide.value = true
+                sharedPrefs.edit().putBoolean("search_guide_seen", true).apply()
+            }
+        )
     }
 }
 

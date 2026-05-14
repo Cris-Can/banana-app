@@ -1,6 +1,7 @@
 package com.eventos.banana.util
 
 import android.content.Context
+import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -17,10 +18,30 @@ class BiometricHelper(
 
     fun canAuthenticate(): Boolean {
         val biometricManager = BiometricManager.from(activity)
-        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        return biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
     }
 
-    fun authenticate() {
+    fun authenticate(
+        title: String = "Desbloqueo Biométrico",
+        subtitle: String = "Usa tu huella, rostro o PIN para entrar a Banana",
+        allowDeviceCredential: Boolean = true
+    ) {
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setSubtitle(subtitle)
+            .setConfirmationRequired(true)
+
+        if (allowDeviceCredential && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            promptInfo.setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+        } else {
+            promptInfo.setNegativeButtonText("Cancelar")
+        }
+
         val biometricPrompt = BiometricPrompt(activity, executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
@@ -30,21 +51,16 @@ class BiometricHelper(
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
-                    onAuthError(errString.toString())
+                    if (errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                        onAuthError(errString.toString())
+                    }
                 }
 
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
-                    // Optional: Handle soft failures (try again)
                 }
             })
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Desbloqueo Biométrico")
-            .setSubtitle("Usa tu huella para entrar a Banana App")
-            .setNegativeButtonText("Cancelar")
-            .build()
-
-        biometricPrompt.authenticate(promptInfo)
+        biometricPrompt.authenticate(promptInfo.build())
     }
 }

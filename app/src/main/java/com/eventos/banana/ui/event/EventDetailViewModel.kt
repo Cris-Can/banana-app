@@ -55,6 +55,13 @@ class EventDetailViewModel @AssistedInject constructor(
     private val _adUnlockState = MutableStateFlow<UnlockState>(UnlockState.Idle)
     val adUnlockState: StateFlow<UnlockState> = _adUnlockState
 
+    // 🔔 New-request alert: emitted once per batch of new pending requests
+    private val _newRequestAlert = MutableStateFlow<String?>(null)
+    val newRequestAlert: StateFlow<String?> = _newRequestAlert
+
+    // Tracks last known pending count to detect growth
+    private var lastKnownPendingCount = -1 // -1 = not yet initialized
+
     init {
         loadEvent()
     }
@@ -84,8 +91,18 @@ class EventDetailViewModel @AssistedInject constructor(
                             )
 
                             // 1. Emit event immediately (Sanitized)
-                            val currentProfiles = (_uiState.value as? EventDetailUiState.Success)?.userProfiles ?: emptyMap()
+                            val currentState = _uiState.value
+                            val currentProfiles = (currentState as? EventDetailUiState.Success)?.userProfiles ?: emptyMap()
                             _uiState.value = EventDetailUiState.Success(sanitizedEvent, userProfiles = currentProfiles)
+
+                            // 🔔 Detect new pending requests (only after first load)
+                            val newPendingCount = safePending.size
+                            if (lastKnownPendingCount >= 0 && newPendingCount > lastKnownPendingCount) {
+                                val delta = newPendingCount - lastKnownPendingCount
+                                val alertMsg = if (delta == 1) "Nueva solicitud de unirse" else "$delta nuevas solicitudes de unirse"
+                                _newRequestAlert.value = alertMsg
+                            }
+                            lastKnownPendingCount = newPendingCount
         
                             // 2. Batch fetch profiles for creator + participants + APPLICANTS
                             val applicants = sanitizedEvent.pendingRequests.map { it.userId }
@@ -155,6 +172,10 @@ class EventDetailViewModel @AssistedInject constructor(
         _actionState.value = ActionState.Idle
     }
 
+    fun resetNewRequestAlert() {
+        _newRequestAlert.value = null
+    }
+
 
 
     fun requestJoinEventWithAnswers(
@@ -173,9 +194,7 @@ class EventDetailViewModel @AssistedInject constructor(
             // Check Limits
             val canJoin = subscriptionRepository.canJoinEvent(userId)
             if (canJoin.isFailure || !canJoin.getOrDefault(false)) {
-                _joinSubmissionState.value = JoinSubmissionState.Error(
-                    "Has alcanzado tu límite mensual de solicitudes (3/mes). ¡Mejórate a Premium!"
-                )
+                _joinSubmissionState.value = JoinSubmissionState.Error("LIMIT_REACHED")
                 return@launch
             }
 
@@ -231,6 +250,10 @@ class EventDetailViewModel @AssistedInject constructor(
         _adUnlockState.value = UnlockState.Idle
     }
 
+    fun resetAdUnlockState() {
+        _adUnlockState.value = UnlockState.Idle
+    }
+
     // ---------- ADS LOGIC ----------
     fun watchAd(activity: android.app.Activity, userId: String) {
         _adUnlockState.value = UnlockState.LoadingAd
@@ -260,10 +283,6 @@ class EventDetailViewModel @AssistedInject constructor(
                  }
             }
         )
-    }
-
-    fun resetAdUnlockState() {
-        _adUnlockState.value = UnlockState.Idle
     }
 
     // ---------- A15.1 MODERACIÓN ----------

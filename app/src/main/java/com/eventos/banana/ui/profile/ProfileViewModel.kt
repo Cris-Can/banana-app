@@ -2,6 +2,7 @@ package com.eventos.banana.ui.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.eventos.banana.data.remote.model.EventDto
 import com.eventos.banana.data.repository.UserRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -25,6 +26,7 @@ sealed class ProfileUiState {
 class ProfileViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val authRepository: com.eventos.banana.data.repository.AuthRepository,
+    private val eventRepository: com.eventos.banana.data.repository.EventRepository,
     private val uploadProfilePhotoUseCase: com.eventos.banana.domain.usecase.profile.UploadProfilePhotoUseCase,
     private val manageFriendsUseCase: com.eventos.banana.domain.usecase.profile.ManageFriendsUseCase,
     private val updateProfileSettingsUseCase: com.eventos.banana.domain.usecase.profile.UpdateProfileSettingsUseCase,
@@ -65,10 +67,10 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun updateLocation(uid: String, region: String, commune: String) {
+    fun updateLocation(uid: String, region: String, commune: String, country: String? = null) {
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
-            val result = updateProfileSettingsUseCase.updateLocation(uid, region, commune)
+            val result = updateProfileSettingsUseCase.updateLocation(uid, region, commune, country)
             if (result.isSuccess) {
                 _uiState.value = ProfileUiState.Success
             } else {
@@ -115,12 +117,13 @@ class ProfileViewModel @Inject constructor(
         uid: String,
         region: String,
         commune: String,
+        country: String,
         lat: Double,
         lng: Double
     ) {
         viewModelScope.launch {
             _uiState.value = ProfileUiState.Loading
-            val result = updateProfileSettingsUseCase.updateLocationFromDevice(uid, region, commune, lat, lng)
+            val result = updateProfileSettingsUseCase.updateLocationFromDevice(uid, region, commune, country, lat, lng)
             if (result.isSuccess) {
                 _uiState.value = ProfileUiState.Success
             } else {
@@ -217,9 +220,9 @@ class ProfileViewModel @Inject constructor(
     // =====================================================
     // 🤝 A20 — FRIENDS
     // =====================================================
-    fun sendFriendRequest(currentUid: String, targetUid: String) {
+    fun sendFriendRequest(targetUid: String) {
         viewModelScope.launch {
-            val result = manageFriendsUseCase.sendFriendRequest(currentUid, targetUid)
+            val result = manageFriendsUseCase.sendFriendRequest(targetUid)
             if (result.isSuccess) {
                 _uiState.value = ProfileUiState.Success
             } else {
@@ -228,9 +231,9 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun acceptFriendRequest(currentUid: String, requesterUid: String) {
+    fun acceptFriendRequest(requesterUid: String) {
         viewModelScope.launch {
-            val result = manageFriendsUseCase.acceptFriendRequest(currentUid, requesterUid)
+            val result = manageFriendsUseCase.acceptFriendRequest(requesterUid)
             if (result.isSuccess) {
                 _uiState.value = ProfileUiState.Success
             } else {
@@ -284,95 +287,38 @@ class ProfileViewModel @Inject constructor(
             var firestoreProfile = userRepository.getUserProfile(uid)
             val firestoreEmail = firestoreProfile?.email ?: "No FS Profile"
             
-            // 🔧 AUTO-REPAIR MECHANISM
-            if (firestoreProfile == null && currentUser != null) {
-                 _debugStatus.value = "⚠️ Perfil corrupto. Intentando autoreparación..."
-                 
-                 // 📊 ANALYTICS: Log Attempt (using Crashlytics for stability monitoring)
-                 com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().log("Auto-Repair: Attempting to repair missing profile for UID: $uid")
-                 
-                 try {
-                     val repairedProfile = com.eventos.banana.domain.model.UserProfile(
-                        uid = uid,
-                        email = authEmail,
-                        nickname = authEmail.substringBefore('@'),
-                        createdAt = System.currentTimeMillis() // Reset creation date
-                     )
-                     createUserProfileUseCase(repairedProfile).getOrThrow()
-                     _debugStatus.value = "✅ Perfil reparado. Recargando..."
-                     
-                     // 📊 ANALYTICS: Log Success
-                     com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().log("Auto-Repair: SUCCESS for UID: $uid")
-                     com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().setCustomKey("repaired_profile", true)
-
-                     // Reload local variable
-                     firestoreProfile = repairedProfile
-                 } catch (e: Exception) {
-                     _debugStatus.value = "❌ Error reparando: ${e.message}"
-                     
-                     // 📊 ANALYTICS: Log Failure
-                     com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().recordException(
-                        Exception("Auto-Repair Failed for $uid: ${e.message}")
-                     )
-                 }
-            } else {
-                 _debugStatus.value = "Cargando... \nUID: $uid\nAuth: $authEmail\nFS: $firestoreEmail"
-            }
+            // 🔧 Removed AUTO-REPAIR mechanism to reduce latency. Missing profiles should be handled during Login/Registration.
+            _debugStatus.value = "Cargando... \nUID: $uid\nAuth: $authEmail\nFS: $firestoreEmail"
 
             try {
-                // OPTIMIZATION: Force SERVER to bypass any stuck local cache
-                val source = com.google.firebase.firestore.Source.SERVER
+                // OPTIMIZATION: Use DEFAULT (cache-first, server fallback) for faster loads
+                val source = com.google.firebase.firestore.Source.DEFAULT
                 
                 // PARALLEL FETCH
                 val createdEventsJob = async {
                     try {
-                        val res = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                            .collection("events")
-                            .whereEqualTo("creatorId", uid)
-                            .get(source).await()
-                        res.toObjects(com.eventos.banana.domain.model.Event::class.java)
+                        eventRepository.getEventsByCreatorId(uid, source)
                     } catch (e: Exception) { 
                         _debugStatus.value = "Error Created: ${e.message}"
-                        emptyList<com.eventos.banana.domain.model.Event>() 
+                        emptyList() 
                     }
                 }
                 
                 val participatedEventsJob = async {
                     try {
-                        val res = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                            .collection("events")
-                            .whereArrayContains("approvedParticipants", uid)
-                            .get(source).await()
-                        res.toObjects(com.eventos.banana.domain.model.Event::class.java)
+                        eventRepository.getEventsByParticipantId(uid, source)
                     } catch (e: Exception) { 
                         _debugStatus.value = "Error Participated: ${e.message}"
-                        emptyList<com.eventos.banana.domain.model.Event>() 
+                        emptyList() 
                     }
                 }
 
                 val savedEventsJob = async {
-                     if (savedEventIds.isNotEmpty()) {
-                        try {
-                            if (savedEventIds.size <= 30) {
-                                val chunks = savedEventIds.chunked(10)
-                                val results = mutableListOf<com.eventos.banana.domain.model.Event>()
-                                chunks.forEach { chunk ->
-                                     val snapshot = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                        .collection("events")
-                                        .whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
-                                        .get(source).await()
-                                     results.addAll(snapshot.toObjects(com.eventos.banana.domain.model.Event::class.java))
-                                }
-                                results
-                            } else {
-                                emptyList<com.eventos.banana.domain.model.Event>() 
-                            }
-                        } catch (e: Exception) { 
-                            emptyList<com.eventos.banana.domain.model.Event>() 
-                        }
-                     } else {
-                         emptyList<com.eventos.banana.domain.model.Event>()
-                     }
+                    try {
+                        eventRepository.getEventsByIds(savedEventIds, source)
+                    } catch (e: Exception) { 
+                        emptyList() 
+                    }
                 }
 
                 val created: List<com.eventos.banana.domain.model.Event> = createdEventsJob.await()
@@ -428,12 +374,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    @Deprecated("Debe hacerse mediante Cloud Functions")
-    fun recalculateStats(uid: String) {
-        // NO-OP: Se evita recalcular stats desde el cliente para evitar corrupciones.
-        android.util.Log.w("ProfileViewModel", "recalculateStats fue llamado, pero está deprecado. Ignorando.")
-        _uiState.value = ProfileUiState.Success
-    }
+
 
     private fun getFriendlyErrorMessage(e: Throwable?): String {
         if (e == null) return "Error desconocido"
@@ -487,11 +428,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // =========================================================
-    // MIGRATION TOOL (A29)
-    // =========================================================
-    private val _migrationStatus = MutableStateFlow<String?>(null)
-    val migrationStatus: StateFlow<String?> = _migrationStatus.asStateFlow()
+
 
 
     // 🏆 LEADERBOARD
@@ -516,13 +453,6 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    @Deprecated("Debe hacerse en servidor/backend")
-    fun runMigration(context: android.content.Context) {
-        viewModelScope.launch {
-            _migrationStatus.value = "⚠️ Funcionalidad movida a Cloud Functions"
-            kotlinx.coroutines.delay(4000)
-            _migrationStatus.value = null
-        }
-    }
+
 }
 

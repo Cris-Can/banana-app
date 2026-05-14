@@ -6,6 +6,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 
 import javax.inject.Inject
 
@@ -14,6 +15,7 @@ class NotificationRepository @Inject constructor(
 ) {
 
     private val notificationsCollection = firestore.collection("notifications")
+    private val usersCollection = firestore.collection("users")
 
     fun observeNotifications(userId: String): Flow<List<AppNotification>> =
         callbackFlow {
@@ -63,9 +65,12 @@ class NotificationRepository @Inject constructor(
             awaitClose { listener.remove() }
         }
 
-    // ✅ A9 — enviar notificación
-    suspend fun sendNotification(notification: AppNotification) {
-        try {
+    /**
+     * ✅ A9 — Send notification with proper error handling
+     * Returns Result to allow callers to handle failures appropriately
+     */
+    suspend fun sendNotification(notification: AppNotification): Result<Unit> {
+        return try {
             val doc = notificationsCollection.document()
             
             // 🔥 Inject current user uid to satisfy Firestore Security Rules
@@ -85,9 +90,116 @@ class NotificationRepository @Inject constructor(
                 "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
             )
             doc.set(data).await()
+            
+            Timber.d("Notification sent: %s to %s", notification.type.name, notification.userId)
+            Result.success(Unit)
         } catch (e: Exception) {
-            // Log error, but don't crash app if notification fails
-            android.util.Log.e("NotificationRepo", "Failed to send notification: ${e.message}")
+            Timber.e(e, "Failed to send notification: %s", e.message)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 📧 Send notification only if user has enabled the corresponding preference
+     * Respects notifyEventsByCommune and notifyByInterest settings
+     */
+    suspend fun sendNotificationWithPreferences(
+        notification: AppNotification,
+        requireEventsByCommune: Boolean = false,
+        requireByInterest: Boolean = false
+    ): Result<Unit> {
+        return try {
+            // Check user preferences
+            val userDoc = usersCollection.document(notification.userId).get().await()
+            if (!userDoc.exists()) {
+                Timber.w("User %s not found for notification", notification.userId)
+                return Result.failure(Exception("User not found"))
+            }
+            
+            val userData = userDoc.data ?: emptyMap<String, Any>()
+            
+            // Check notifyEventsByCommune preference
+            if (requireEventsByCommune) {
+                val notifyByCommune = userData["notifyEventsByCommune"] as? Boolean ?: false
+                if (!notifyByCommune) {
+                    Timber.d("User %s has notifyEventsByCommune disabled, skipping", notification.userId)
+                    return Result.success(Unit) // Success but not sent
+                }
+            }
+            
+            // Check notifyByInterest preference
+            if (requireByInterest) {
+                val notifyByInterest = userData["notifyByInterest"] as? Boolean ?: true // Default true
+                if (!notifyByInterest) {
+                    Timber.d("User %s has notifyByInterest disabled, skipping", notification.userId)
+                    return Result.success(Unit) // Success but not sent
+                }
+            }
+            
+            // Send the notification
+            sendNotification(notification)
+        } catch (e: Exception) {
+            Timber.e(e, "Error checking preferences for notification: %s", e.message)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 📧 Batch send notifications with preference checking
+     * Useful for event notifications that should respect user preferences
+     */
+    suspend fun sendBatchNotificationWithPreferences(
+        notifications: List<AppNotification>,
+        requireEventsByCommune: Boolean = false,
+        requireByInterest: Boolean = false
+    ): Result<Int> {
+        return try {
+            // Get all user IDs
+            val userIds = notifications.map { it.userId }.distinct()
+            
+            // Fetch all user preferences in batch
+            val userDocs = mutableMapOf<String, Map<String, Any>>()
+            val chunks = userIds.chunked(10) // Firestore 'in' query limit
+            
+            for (chunk in chunks) {
+                val snapshot = usersCollection
+                    .whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
+                    .get()
+                    .await()
+                
+                snapshot.documents.forEach { doc ->
+                    userDocs[doc.id] = doc.data ?: emptyMap()
+                }
+            }
+            
+            // Filter notifications based on preferences
+            val notificationsToSend = notifications.filter { notification ->
+                val userData = userDocs[notification.userId] ?: return@filter true
+                
+                if (requireEventsByCommune) {
+                    val notifyByCommune = userData["notifyEventsByCommune"] as? Boolean ?: false
+                    if (!notifyByCommune) return@filter false
+                }
+                
+                if (requireByInterest) {
+                    val notifyByInterest = userData["notifyByInterest"] as? Boolean ?: true
+                    if (!notifyByInterest) return@filter false
+                }
+                
+                true
+            }
+            
+            // Send filtered notifications
+            var sentCount = 0
+            for (notification in notificationsToSend) {
+                sendNotification(notification).onSuccess { sentCount++ }
+            }
+            
+            Timber.d("Batch notification: %d/%d sent", sentCount, notificationsToSend.size)
+            Result.success(sentCount)
+        } catch (e: Exception) {
+            Timber.e(e, "Error in batch notification: %s", e.message)
+            Result.failure(e)
         }
     }
 

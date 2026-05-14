@@ -36,7 +36,7 @@ fun FriendListScreen(
     var isSearchActive by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentUserId) {
-        viewModel.loadData(currentUserId)
+        viewModel.observeData(currentUserId)
     }
 
     Scaffold(
@@ -190,7 +190,25 @@ fun FriendListScreen(
                 }
     
                 if (uiState.isLoading) {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        repeat(3) {
+                            com.eventos.banana.ui.components.SkeletonCard()
+                        }
+                        
+                        var showFallback by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            kotlinx.coroutines.delay(2000)
+                            showFallback = true
+                        }
+                        if (showFallback) {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        }
+                    }
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(16.dp),

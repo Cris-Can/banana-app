@@ -56,11 +56,28 @@ fun BlockedUsersScreen(
     ) { padding ->
         when {
             isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    CircularProgressIndicator()
+                    repeat(2) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.eventos.banana.ui.components.SkeletonCircle(48.dp)
+                            Spacer(Modifier.width(16.dp))
+                            com.eventos.banana.ui.components.SkeletonTextLine(100.dp)
+                        }
+                    }
+                    
+                    var showFallback by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(2000)
+                        showFallback = true
+                    }
+                    if (showFallback) {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    }
                 }
             }
             blockedProfiles.isEmpty() -> {

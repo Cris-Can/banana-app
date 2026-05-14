@@ -71,19 +71,21 @@ class FeedViewModel @AssistedInject constructor(
             android.util.Log.d("FeedViewModel", "🔵 Starting to collect posts...")
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
+                // 🛡️ BLOCKING LOGIC — se carga UNA sola vez antes del collect
+                val currentUid = authRepository.currentUid()
+                val blockedUsers: Set<String> = if (currentUid != null) {
+                    userRepository.getUserProfile(currentUid)?.blockedUsers?.toSet() ?: emptySet()
+                } else {
+                    emptySet()
+                }
+
                 repository.getPosts(eventId).collect { posts ->
                     android.util.Log.d("FeedViewModel", "🟢 Collected ${posts.size} posts from repository")
-                    
-                    // 🛡️ BLOCKING LOGIC
-                    val currentUid = authRepository.currentUid()
-                    val blockedUsers = if (currentUid != null) {
-                        userRepository.getUserProfile(currentUid)?.blockedUsers ?: emptyList()
+
+                    val filteredPosts = if (blockedUsers.isEmpty()) {
+                        posts
                     } else {
-                        emptyList()
-                    }
-                    
-                    val filteredPosts = posts.filter { post ->
-                        !blockedUsers.contains(post.userId)
+                        posts.filter { post -> post.userId !in blockedUsers }
                     }
 
                     android.util.Log.d("FeedViewModel", "🛡️ Filtered ${posts.size - filteredPosts.size} blocked posts")
@@ -91,7 +93,7 @@ class FeedViewModel @AssistedInject constructor(
                     filteredPosts.forEachIndexed { index, post ->
                         android.util.Log.d("FeedViewModel", "  ViewModel Post $index: content='${post.content}'")
                     }
-                    
+
                     _uiState.value = _uiState.value.copy(
                         posts = filteredPosts,
                         isLoading = false,
@@ -173,17 +175,7 @@ class FeedViewModel @AssistedInject constructor(
             }
         }
     }
-    fun blockUser(targetUid: String) {
-        viewModelScope.launch {
-            try {
-                // Get current user ID (assuming we can get it from repository or pass it in)
-                // For this VM, we might need to pass currentUserId to the function or get it from Auth
-                // Since FeedViewModel doesn't have AuthRepository injected, we'll rely on the caller passing ID 
-                // OR we inject AuthRepository.
-                // Simpler: FeedViewModel is often scoped to Event, let's pass currentUserId to the function
-            } catch (e: Exception) { }
-        }
-    }
+
     
     // Better approach: Since we already call createPost with userId, we can do the same here.
     fun blockUser(currentUid: String, targetUid: String) {
@@ -195,7 +187,7 @@ class FeedViewModel @AssistedInject constructor(
                      posts = _uiState.value.posts.filter { it.userId != targetUid }
                  )
              } catch (e: Exception) {
-                 // Log
+                 android.util.Log.e("FeedViewModel", "Error blocking user", e)
              }
          }
     }
@@ -204,7 +196,7 @@ class FeedViewModel @AssistedInject constructor(
         viewModelScope.launch {
             try {
                 userRepository.reportUser(currentUid, post.userId, "POST_REPORT: ${post.id} - $reason")
-            } catch (e: Exception) { }
+            } catch (e: Exception) { android.util.Log.e("FeedViewModel", "Error reporting post", e) }
         }
     }
 }

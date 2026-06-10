@@ -1,6 +1,5 @@
 package com.eventos.banana.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Color
@@ -12,14 +11,11 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-
-// 🎨 ESQUEMAS DE COLOR
-
-// 1. BANANA (Harmonic Dark - Premium Gold)
+// 1. BANANA (Original Theme)
 private val BananaScheme = darkColorScheme(
     primary = BananaGold,
     onPrimary = Color.Black,
-    primaryContainer = BananaGoldDim, 
+    primaryContainer = BananaGoldDim,
     onPrimaryContainer = Color.White,
     secondary = BananaGold,
     onSecondary = Color.Black,
@@ -33,55 +29,83 @@ private val BananaScheme = darkColorScheme(
     error = ErrorSoft
 )
 
-// 2. DARK (Standard OLED)
-private val DarkScheme = darkColorScheme(
-    primary = BananaGold,
+// 2. PANORAMAS (Premium Dark - Gold + Coral)
+private val PanoramasDarkScheme = darkColorScheme(
+    primary = PanoramasGold,
     onPrimary = Color.Black,
-    secondary = BananaGoldDim,
-    background = StandardDarkBackground,
-    surface = StandardDarkSurface,
-    onBackground = Color.White,
-    onSurface = Color.White,
+    primaryContainer = PanoramasGoldDim,
+    onPrimaryContainer = Color.White,
+    secondary = PanoramasGold,
+    onSecondary = Color.Black,
+    tertiary = PanoramasAccent,
+    background = PanoramasBackground,
+    surface = PanoramasSurface,
+    onBackground = PanoramasOnBackground,
+    onSurface = PanoramasOnBackground,
+    surfaceVariant = PanoramasSurfaceVariant,
+    onSurfaceVariant = PanoramasOnSurfaceVariant,
     error = ErrorSoft
 )
 
-// 3. LIGHT (Fresh & Clean)
+// 3. DARK (Pure OLED)
+private val DarkScheme = darkColorScheme(
+    primary = DarkGold,
+    onPrimary = Color.Black,
+    primaryContainer = DarkGold,
+    onPrimaryContainer = Color.Black,
+    secondary = DarkGold,
+    onSecondary = Color.Black,
+    tertiary = DarkTertiary,
+    background = DarkBackground,
+    surface = DarkSurface,
+    onBackground = DarkOnBackground,
+    onSurface = DarkOnBackground,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = Color(0xFFB0B0B0),
+    error = ErrorSoft
+)
+
+// 4. LIGHT (Clean white)
 private val LightScheme = lightColorScheme(
     primary = BananaGold,
     onPrimary = Color.Black,
-    secondary = BananaGoldDim,
+    primaryContainer = BananaGoldDim,
+    onPrimaryContainer = Color.White,
+    secondary = BananaGold,
+    onSecondary = Color.Black,
+    tertiary = LightTertiary,
     background = BananaLightBackground,
     surface = BananaLightBackground,
-    onBackground = BananaBlack,
-    onSurface = BananaBlack,
+    onBackground = LightOnBackground,
+    onSurface = LightOnBackground,
+    surfaceVariant = Color(0xFFE0E0E0),
+    onSurfaceVariant = Color(0xFF666666),
     error = ErrorSoft
 )
 
 @Composable
-fun BananaTheme(
-    // 🎨 Theme Mode: "BANANA", "DARK", "LIGHT", "DYNAMIC"
+fun PanoramasTheme(
     themeMode: String = "BANANA",
-    dynamicColor: Boolean = false, // Set to true to enable Material You
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
     val systemDark = isSystemInDarkTheme()
-    
-    // Determine effective dynamic flag
-    val useDynamic = (dynamicColor || themeMode == "DYNAMIC") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val useDynamic = dynamicColor && (themeMode == "DYNAMIC") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val colorScheme = when {
         useDynamic -> {
             if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+        themeMode == "PANORAMAS" -> PanoramasDarkScheme
         themeMode == "LIGHT" -> LightScheme
         themeMode == "DARK" -> DarkScheme
-        else -> BananaScheme // "BANANA" is default
+        else -> BananaScheme
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = PanoramasTypography,
         content = content
     )
 }

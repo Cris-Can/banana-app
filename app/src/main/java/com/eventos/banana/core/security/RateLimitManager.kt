@@ -31,6 +31,7 @@ class RateLimitManager @Inject constructor(
         const val ACTION_PROFILE_VIEW = "profileView"
         const val ACTION_SEND_MESSAGE = "sendMessage"
         const val ACTION_EVENT_CREATION = "eventCreation"
+        const val ACTION_RATING = "rating"
         
         // Cache duration for rate limit status (5 minutes)
         internal const val CACHE_DURATION_MS = 5 * 60 * 1000L
@@ -146,32 +147,58 @@ class RateLimitManager @Inject constructor(
     }
     
     /**
-     * Validate password strength using server-side validation.
+     * Validate password strength locally.
      */
-    suspend fun validatePasswordStrength(password: String): PasswordValidationResult {
-        return try {
-            val data = hashMapOf("password" to password)
-            
-            val result = firebaseFunctions
-                .getHttpsCallable("validatePasswordStrength")
-                .call(data)
-                .await()
-            
-            val responseData = result.data as? Map<*, *>
-            
-            PasswordValidationResult(
-                isValid = responseData?.get("isValid") as? Boolean ?: false,
-                strength = (responseData?.get("strength") as? Number)?.toInt() ?: 0,
-                errors = (responseData?.get("errors") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-            )
-        } catch (e: Exception) {
-            Timber.e(e, "$TAG: Failed to validate password strength")
-            PasswordValidationResult(
-                isValid = false,
-                strength = 0,
-                errors = listOf("Failed to validate password. Please try again.")
-            )
+    fun validatePasswordStrength(password: String): PasswordValidationResult {
+        val minLength = 8
+        val maxLength = 128
+        val hasUpperCase = password.any { it.isUpperCase() }
+        val hasLowerCase = password.any { it.isLowerCase() }
+        val hasNumbers = password.any { it.isDigit() }
+        val hasSpecialChar = password.any { !it.isLetterOrDigit() }
+
+        val errors = mutableListOf<String>()
+
+        if (password.length < minLength) {
+            errors.add("Password must be at least $minLength characters long")
         }
+        if (password.length > maxLength) {
+            errors.add("Password must not exceed $maxLength characters")
+        }
+        if (!hasUpperCase) {
+            errors.add("Password must contain at least one uppercase letter")
+        }
+        if (!hasLowerCase) {
+            errors.add("Password must contain at least one lowercase letter")
+        }
+        if (!hasNumbers) {
+            errors.add("Password must contain at least one number")
+        }
+        if (!hasSpecialChar) {
+            errors.add("Password must contain at least one special character")
+        }
+
+        val commonPatterns = listOf(
+            Regex("(?i)^(password|123456|12345678|qwerty|abc123)"),
+            Regex("(.)\\1{2,}") // Same character repeated 3+ times
+        )
+
+        for (pattern in commonPatterns) {
+            if (pattern.containsMatchIn(password)) {
+                errors.add("Password contains a common or weak pattern")
+                break
+            }
+        }
+
+        val isValid = errors.isEmpty()
+        val conditionsMet = listOf(hasUpperCase, hasLowerCase, hasNumbers, hasSpecialChar, password.length >= 12).count { it }
+        val strength = if (isValid) Math.min(5, conditionsMet) else 0
+
+        return PasswordValidationResult(
+            isValid = isValid,
+            strength = strength,
+            errors = errors
+        )
     }
     
     /**

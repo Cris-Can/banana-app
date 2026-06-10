@@ -1,5 +1,6 @@
 package com.eventos.banana.data.repository
 
+import com.eventos.banana.core.security.RateLimitManager
 import com.eventos.banana.domain.model.*
 import com.google.firebase.firestore.FirebaseFirestore
 import com.eventos.banana.data.remote.model.EventDto
@@ -13,12 +14,22 @@ import javax.inject.Inject
 class EventRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val notificationRepository: NotificationRepository,
-    private val storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
+    private val notificationHelper: EventNotificationHelper,
+    private val storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource,
+    private val rateLimitManager: RateLimitManager
 ) {
 
     private val eventsCollection = firestore.collection("events")
 
     suspend fun createEvent(event: Event, imageBytes: ByteArray? = null): Result<Unit> {
+        // Rate limit: prevent spam event creation
+        val rateLimitResult = rateLimitManager.checkRateLimit(RateLimitManager.ACTION_EVENT_CREATION)
+        if (!rateLimitResult.success) {
+            return Result.failure(
+                Exception("Demasiados eventos creados. Espera ${rateLimitResult.timeUntilReset} e inténtalo de nuevo.")
+            )
+        }
+
         val docRef = eventsCollection.document()
         val imagePath = "events_covers/${docRef.id}.jpg"
         
@@ -47,32 +58,6 @@ class EventRepository @Inject constructor(
         }
     }
 
-
-    // =========================================================
-    // ARCHIVAR EVENTOS PASADOS (A17 base)
-    // =========================================================
-    suspend fun archivePastEvents(): Result<Unit> {
-        return try {
-            val now = System.currentTimeMillis()
-
-            val snapshot = eventsCollection
-                .whereLessThan("endAt", now)
-                .get()
-                .await()
-
-            snapshot.documents.forEach { doc ->
-                doc.reference.update(
-                    mapOf(
-                        "status" to EventStatus.CLOSED
-                    )
-                ).await()
-            }
-
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
 
     // =========================================================
     // DETALLES DE EVENTO (REALTIME)
@@ -115,6 +100,8 @@ class EventRepository @Inject constructor(
         return try {
             val snapshot = eventsCollection
                 .whereEqualTo("creatorId", creatorId)
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(100)
                 .get(source).await()
             snapshot.toObjects(EventDto::class.java).map { it.toDomain() }
         } catch (e: Exception) {
@@ -126,6 +113,8 @@ class EventRepository @Inject constructor(
         return try {
             val snapshot = eventsCollection
                 .whereArrayContains("approvedParticipants", participantId)
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(100)
                 .get(source).await()
             snapshot.toObjects(EventDto::class.java).map { it.toDomain() }
         } catch (e: Exception) {
@@ -276,19 +265,15 @@ class EventRepository @Inject constructor(
                 return Result.failure(Exception("Evento no encontrado"))
             }
             
-            // Notify existing participants
-            participantsToNotify.forEach { participantId ->
-                if (participantId != userId) {
-                    notificationRepository.sendNotification(
-                        AppNotification(
-                            userId = participantId,
-                            title = "Nuevo participante",
-                            message = "¡Un nuevo usuario se ha unido al evento \"$eventTitle\"!",
-                            eventId = eventId,
-                            type = NotificationType.JOIN_APPROVED // Fix reference
-                        )
-                    )
-                }
+            if (participantsToNotify.isNotEmpty()) {
+                notificationHelper.notifyBatch(
+                    participantIds = participantsToNotify,
+                    excludeUserId = userId,
+                    title = "Nuevo participante",
+                    message = "¡Un nuevo usuario se ha unido al evento \"$eventTitle\"!",
+                    eventId = eventId,
+                    type = NotificationType.JOIN_APPROVED
+                )
             }
             
             Result.success(Unit)
@@ -347,7 +332,7 @@ class EventRepository @Inject constructor(
                 return Result.failure(Exception("Evento no encontrado"))
             }
 
-            // 1. Notify the JOINER (solo al usuario aceptado)
+            // Notify the joiner
             notificationRepository.sendNotification(
                 AppNotification(
                     userId = userId,
@@ -357,20 +342,15 @@ class EventRepository @Inject constructor(
                     type = NotificationType.JOIN_APPROVED
                 )
             )
-            
-            // 2. Notify OTHER participants (NO al usuario recién aceptado)
-            participantsToNotify.forEach { participantId ->
-                if (participantId != userId) {
-                    notificationRepository.sendNotification(
-                        AppNotification(
-                            userId = participantId,
-                            title = "Nuevo participante",
-                            message = "¡Un nuevo usuario se ha unido al evento \"$eventTitle\"!",
-                            eventId = eventId,
-                            type = NotificationType.EVENT_UPDATE
-                        )
-                    )
-                }
+            // Notify other participants
+            if (participantsToNotify.isNotEmpty()) {
+                notificationHelper.notifyBatch(
+                    participantIds = participantsToNotify,
+                    title = "Nuevo participante",
+                    message = "¡Un nuevo usuario se ha unido al evento \"$eventTitle\"!",
+                    eventId = eventId,
+                    type = NotificationType.EVENT_UPDATE
+                )
             }
 
             Result.success(Unit)
@@ -468,16 +448,13 @@ class EventRepository @Inject constructor(
                 return Result.failure(Exception("Evento no encontrado"))
             }
 
-            // Notify all participants
-            participantsToNotify.forEach { participantId ->
-                notificationRepository.sendNotification(
-                    AppNotification(
-                        userId = participantId,
-                        title = "Evento Cancelado 🚫",
-                        message = "El evento \"$eventTitle\" ha sido cancelado: $reason",
-                        eventId = eventId,
-                        type = NotificationType.EVENT_CANCELLED
-                    )
+            if (participantsToNotify.isNotEmpty()) {
+                notificationHelper.notifyBatch(
+                    participantIds = participantsToNotify,
+                    title = "Evento Cancelado 🚫",
+                    message = "El evento \"$eventTitle\" ha sido cancelado: $reason",
+                    eventId = eventId,
+                    type = NotificationType.EVENT_CANCELLED
                 )
             }
 
@@ -508,16 +485,13 @@ class EventRepository @Inject constructor(
                 return Result.failure(Exception("Evento no encontrado"))
             }
 
-            // Notify all participants
-            participantsToNotify.forEach { participantId ->
-                notificationRepository.sendNotification(
-                    AppNotification(
-                        userId = participantId,
-                        title = "Evento Finalizado 🏁",
-                        message = "El evento \"$eventTitle\" ha concluido. ¡No olvides calificar!",
-                        eventId = eventId,
-                        type = NotificationType.EVENT_CLOSED
-                    )
+            if (participantsToNotify.isNotEmpty()) {
+                notificationHelper.notifyBatch(
+                    participantIds = participantsToNotify,
+                    title = "Evento Finalizado 🏁",
+                    message = "El evento \"$eventTitle\" ha concluido. ¡No olvides calificar!",
+                    eventId = eventId,
+                    type = NotificationType.EVENT_CLOSED
                 )
             }
 
@@ -588,54 +562,6 @@ class EventRepository @Inject constructor(
     }
 
      // Lógica de feeds movida a MainFeedRepository
-
-    // =========================================================
-    // AUTO-MARK EVENTS AS RATABLE (Round 11)
-    // =========================================================
-    /**
-     * Marca eventos finalizados como puntuables y establece el deadline de 5 días.
-     * Esta función debe llamarse periódicamente (ej: cada vez que se abre la app o en un worker).
-     */
-    suspend fun markFinishedEventsAsRatable(): Result<Int> {
-        return try {
-            val now = System.currentTimeMillis()
-            
-            // Buscar eventos cerrados que ya terminaron pero aún no están marcados como puntuables
-            val eventsToMark = eventsCollection
-                .whereEqualTo("status", EventStatus.CLOSED.name)
-                .whereLessThan("endAt", now)
-                .whereEqualTo("canBeRated", false)
-                .get()
-                .await()
-            
-            var markedCount = 0
-            val batch = com.google.firebase.firestore.FirebaseFirestore.getInstance().batch()
-            
-            eventsToMark.documents.forEach { doc ->
-                val eventDto = doc.toObject(EventDto::class.java)
-                if (eventDto != null) {
-                    val event = eventDto.toDomain()
-                    val ratingDeadline = event.endAt + (5 * 24 * 60 * 60 * 1000) // +5 días
-                    
-                    batch.update(doc.reference, mapOf(
-                        "canBeRated" to true,
-                        "ratingDeadline" to ratingDeadline
-                    ))
-                    markedCount++
-                }
-            }
-            
-            if (markedCount > 0) {
-                batch.commit().await()
-                android.util.Log.d("EventRepository", "Marked $markedCount events as ratable")
-            }
-            
-            Result.success(markedCount)
-        } catch (e: Exception) {
-            android.util.Log.e("EventRepository", "Error marking events as ratable", e)
-            Result.failure(e)
-        }
-    }
 
     // =========================================================
     // MONETIZACIÓN: BOOST EVENT (Round 42)

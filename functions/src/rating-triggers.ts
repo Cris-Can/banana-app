@@ -56,25 +56,31 @@ export const onRatingCreated = onDocumentCreated(
       return;
     }
 
-    // VALIDATION 5: Verify encounter exists (at least one confirmed encounter for this event)
-    const encounters = await db.collection("encounters")
-      .where("eventId", "==", ratingEventId || "")
-      .where("userId1", "==", fromUserId)
-      .limit(1)
-      .get();
-
-    if (encounters.empty) {
-      // Try the other user order
-      const encounters2 = await db.collection("encounters")
+    // VALIDATION 5: Verify encounter exists (encounter OR GPS check-in)
+    // Run checks concurrently to simplify and speed up validation
+    const [encounters1, encounters2, checkins] = await Promise.all([
+      db.collection("encounters")
+        .where("eventId", "==", ratingEventId || "")
+        .where("userId1", "==", fromUserId)
+        .limit(1)
+        .get(),
+      db.collection("encounters")
         .where("eventId", "==", ratingEventId || "")
         .where("userId2", "==", fromUserId)
         .limit(1)
-        .get();
+        .get(),
+      db.collection("event_checkins")
+        .where("eventId", "==", ratingEventId || "")
+        .where("userId", "==", fromUserId)
+        .limit(1)
+        .get()
+    ]);
 
-      if (encounters2.empty) {
-        console.log(`[RATING] No encounter found. ${fromUserId} cannot rate ${toUserId} for event ${ratingEventId}`);
-        return;
-      }
+    const hasEncounter = !encounters1.empty || !encounters2.empty || !checkins.empty;
+
+    if (!hasEncounter) {
+      console.log(`[RATING] No encounter or check-in found. ${fromUserId} cannot rate for event ${ratingEventId}`);
+      return;
     }
 
     console.log(`[RATING] All validations passed. ${fromUserId} → ${toUserId} score=${score}`);

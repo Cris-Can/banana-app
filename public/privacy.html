@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>+panoramas – Política de Privacidad y Términos de Servicio</title>
+  <meta name="description" content="Política de Privacidad y Términos de Servicio de +panoramas – Plataforma social de eventos. Bilingual: Español / English." />
+  <meta name="robots" content="index, follow" />
+  <!-- Open Graph -->
+  <meta property="og:title" content="+panoramas – Política de Privacidad y Términos de Servicio" />
+  <meta property="og:description" content="Consulta nuestra política de privacidad y términos de uso." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://eventos.banana.app/icon_play_store.png" />
+  <!-- Favicon emoji -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍌</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f1a;
+      --surface: #1a1a2e;
+      --surface2: #16213e;
+      --border: #2a2a4a;
+      --accent: #FFD700;
+      --accent2: #FFA500;
+      --text: #e0e0e0;
+      --text-muted: #9090b0;
+      --text-heading: #ffffff;
+      --danger: #ff6b6b;
+      --success: #4ade80;
+      --radius: 12px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15, 15, 26, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-right { display: flex; align-items: center; gap: 16px; }
+    .nav-back {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: color .2s;
+    }
+    .nav-back:hover { color: var(--accent); }
+
+    /* ── LANGUAGE SWITCHER ── */
+    .lang-switcher {
+      display: flex;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .lang-btn {
+      padding: 4px 12px;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--text-muted);
+      transition: all .2s;
+    }
+    .lang-btn:hover, .lang-btn.active { background: var(--accent); color: #000; }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+      padding: 64px 24px 48px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-emoji { font-size: 3rem; display: block; margin-bottom: 16px; }
+    .hero h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text-heading);
+      margin-bottom: 8px;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero-sub {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .badge-updated {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    /* ── LANG SECTIONS ── */
+    .lang-section { display: block; }
+
+    /* ── LAYOUT ── */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── TOC ── */
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 48px;
+    }
+    .toc h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .toc ol {
+      padding-left: 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 24px;
+    }
+    @media (max-width: 600px) { .toc ol { grid-template-columns: 1fr; } }
+    .toc a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.88rem;
+      transition: color .2s;
+    }
+    .toc a:hover { color: var(--accent); }
+
+    /* ── SECTIONS ── */
+    .section {
+      margin-bottom: 40px;
+      scroll-margin-top: 80px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--accent);
+    }
+    .section-number {
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 3px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .section h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-heading);
+    }
+    .subsection {
+      margin-bottom: 24px;
+      scroll-margin-top: 80px;
+    }
+    .subsection h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .subsection h3::before {
+      content: '';
+      display: inline-block;
+      width: 3px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .subsection p { margin-bottom: 8px; }
+    .subsection ul, .subsection ol {
+      padding-left: 22px;
+      margin-top: 4px;
+    }
+    .subsection li { margin-bottom: 5px; }
+
+    /* ── CALLOUT BOXES ── */
+    .callout {
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      border-left: 4px solid;
+      font-size: 0.9rem;
+    }
+    .callout-warning { background: rgba(255, 107, 107, 0.08); border-color: var(--danger); }
+    .callout-info { background: rgba(255, 215, 0, 0.06); border-color: var(--accent); }
+    .callout-success { background: rgba(74, 222, 128, 0.06); border-color: var(--success); }
+    .callout strong { display: block; margin-bottom: 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .05em; }
+    .callout-warning strong { color: var(--danger); }
+    .callout-info strong { color: var(--accent); }
+    .callout-success strong { color: var(--success); }
+
+    /* ── PLACEHOLDER ── */
+    .placeholder {
+      background: rgba(255,215,0,0.1);
+      border: 1px dashed var(--accent2);
+      border-radius: 4px;
+      padding: 2px 8px;
+      color: var(--accent2);
+      font-style: italic;
+      font-size: 0.9em;
+    }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    /* ── LANG SEPARATOR ── */
+    .lang-separator {
+      text-align: center;
+      position: relative;
+      margin: 64px 0;
+    }
+    .lang-separator::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--accent), transparent);
+    }
+    .lang-separator span {
+      position: relative;
+      background: var(--bg);
+      padding: 0 20px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 32px 24px;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 480px) {
+      .hero { padding: 40px 16px 32px; }
+      .container { padding: 32px 16px 60px; }
+      nav { padding: 0 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ NAV ═══════════════════════════ -->
+<nav>
+  <a href="#es" class="nav-logo">🍌 +panoramas</a>
+  <div class="nav-right">
+    <div class="lang-switcher">
+      <a href="#es" class="lang-btn active" id="btn-es" onclick="setLang('es')">ES</a>
+      <a href="#en" class="lang-btn" id="btn-en" onclick="setLang('en')">EN</a>
+    </div>
+    <a href="/" class="nav-back">← Inicio</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════ HERO ═══════════════════════════ -->
+<div class="hero">
+  <span class="hero-emoji">🍌</span>
+  <h1>+panoramas – <span>Privacidad &amp; Términos</span></h1>
+  <p class="hero-sub">Privacy Policy &amp; Terms of Service</p>
+  <span class="badge-updated">Última actualización / Last updated: 21/05/2026</span>
+</div>
+
+<!-- ════════════════════════ SPANISH SECTION ════════════════════════ -->
+<div id="es" class="lang-section">
+<div class="container">
+
+  <!-- TOC ES -->
+  <div class="toc">
+    <h2>📋 Índice de contenidos</h2>
+    <ol>
+      <li><a href="#es-1-1">1.1 Responsable del Tratamiento</a></li>
+      <li><a href="#es-1-2">1.2 Datos que Recopilamos</a></li>
+      <li><a href="#es-1-3">1.3 Cómo Recopilamos los Datos</a></li>
+      <li><a href="#es-1-4">1.4 Finalidad del Tratamiento</a></li>
+      <li><a href="#es-1-5">1.5 Base Legal</a></li>
+      <li><a href="#es-1-6">1.6 Destinatarios / Terceros</a></li>
+      <li><a href="#es-1-7">1.7 Transferencias Internacionales</a></li>
+      <li><a href="#es-1-8">1.8 Retención de Datos</a></li>
+      <li><a href="#es-1-9">1.9 Derechos del Usuario</a></li>
+      <li><a href="#es-1-10">1.10 Seguridad</a></li>
+      <li><a href="#es-1-11">1.11 Menores de Edad</a></li>
+      <li><a href="#es-1-12">1.12 Cambios a la Política</a></li>
+      <li><a href="#es-1-13">1.13 Eliminación de Cuenta y Datos</a></li>
+      <li><a href="#es-2-1">2.1–2.4 Aceptación / Elegibilidad / Contenido</a></li>
+      <li><a href="#es-2-7">2.7 Indemnización (CRÍTICO)</a></li>
+      <li><a href="#es-2-8">2.8 Limitación de Responsabilidad</a></li>
+      <li><a href="#es-2-15">2.15 Contacto</a></li>
+    </ol>
+  </div>
+
+  <!-- ── SECCIÓN 1: POLÍTICA DE PRIVACIDAD ── -->
+  <div class="section" id="es-privacy">
+    <div class="section-header">
+      <span class="section-number">SECCIÓN 1</span>
+      <h2>🔒 Política de Privacidad</h2>
+    </div>
+
+    <div class="subsection" id="es-1-1">
+      <h3>1.1 Responsable del Tratamiento</h3>
+      <ul>
+        <li><strong>Nombre del desarrollador:</strong> <span class="placeholder">Cristian Cantillana</span></li>
+        <li><strong>Aplicación:</strong> +panoramas (<code>com.eventos.banana</code>)</li>
+        <li><strong>Contacto:</strong> <span class="placeholder">ideality.can@gmail.com</span></li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-1-2">
+      <h3>1.2 Datos que Recopilamos</h3>
+      <ul>
+        <li><strong>Datos de cuenta:</strong> email, nickname, fecha de nacimiento, edad</li>
+        <li><strong>Datos de ubicación:</strong> coordenadas GPS (latitud, longitud), geohash, región, comuna, país</li>
+        <li><strong>Datos biométricos:</strong> email/contraseña almacenados en almacenamiento encriptado (AES-256-GCM) <em>solo si el usuario activa el login biométrico</em></li>
+        <li><strong>Fotos e imágenes:</strong> foto de perfil, foto de portada, fotos de galería</li>
+        <li><strong>Documentos de identidad:</strong> foto frontal de cédula de identidad (solo para verificación +18, revisada por administradores)</li>
+        <li><strong>Mensajes:</strong> contenido de texto, mensajes de audio, reacciones, historial de ediciones</li>
+        <li><strong>Datos de eventos:</strong> títulos, descripciones, ubicaciones, fechas, listas de participantes</li>
+        <li><strong>Datos sociales:</strong> lista de amigos, solicitudes de amistad, usuarios bloqueados</li>
+        <li><strong>Calificaciones:</strong> puntuaciones (1–5), comentarios, registros de asistencia a eventos</li>
+        <li><strong>Datos del dispositivo:</strong> token FCM (notificaciones push), ID de publicidad (AdMob), modelo de dispositivo (Crashlytics)</li>
+        <li><strong>Compras:</strong> tokens de compra validados contra Google Play, tipo de suscripción</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-1-3">
+      <h3>1.3 Cómo Recopilamos los Datos</h3>
+      <ul>
+        <li>Registro de cuenta (email, nickname, fecha de nacimiento)</li>
+        <li>GPS del dispositivo (con permiso explícito del usuario)</li>
+        <li>Carga voluntaria de fotos y documentos</li>
+        <li>Actividad dentro de la app (eventos creados, mensajes enviados, calificaciones)</li>
+        <li>SDKs de terceros: Firebase Analytics, Crashlytics, AdMob</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-1-4">
+      <h3>1.4 Finalidad del Tratamiento</h3>
+      <ul>
+        <li>Proveer y operar la plataforma de eventos sociales</li>
+        <li>Conectar usuarios con eventos cercanos basados en ubicación</li>
+        <li>Verificar identidad para contenido +18</li>
+        <li>Enviar notificaciones push sobre eventos y mensajes</li>
+        <li>Mostrar anuncios de video recompensado (AdMob)</li>
+        <li>Procesar compras in-app y suscripciones</li>
+        <li>Mejorar la app mediante analytics y reportes de errores</li>
+        <li>Moderar contenido y prevenir abusos (reportes, bloqueos)</li>
+        <li>Cumplir con obligaciones legales</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-1-5">
+      <h3>1.5 Base Legal</h3>
+      <ul>
+        <li>Ejecución del contrato de servicios (art. 6.1.b GDPR)</li>
+        <li>Consentimiento del usuario (ubicación, fotos, notificaciones)</li>
+        <li>Interés legítimo (mejora del servicio, seguridad, prevención de fraude)</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-1-6">
+      <h3>1.6 Destinatarios de los Datos (Compartir con Terceros)</h3>
+      <ul>
+        <li><strong>Firebase (Google LLC):</strong> Firestore, Storage, Auth, Functions, Messaging, Analytics, Crashlytics, App Check</li>
+        <li><strong>Google Maps Platform:</strong> Google Maps SDK, Places API</li>
+        <li><strong>Google Play Billing:</strong> Procesamiento de pagos y suscripciones</li>
+        <li><strong>Google AdMob:</strong> Anuncios publicitarios</li>
+      </ul>
+      <div class="callout callout-success">
+        <strong>✅ Compromiso</strong>
+        NO vendemos datos personales a terceros. NO compartimos datos con fines de marketing sin consentimiento expreso.
+      </div>
+    </div>
+
+    <div class="subsection" id="es-1-7">
+      <h3>1.7 Transferencias Internacionales</h3>
+      <p>Los datos se almacenan en servidores de Google Cloud (Firebase) ubicados en Estados Unidos y Europa. Google cumple con el Marco de Privacidad de Datos UE-EE.UU. (Data Privacy Framework).</p>
+    </div>
+
+    <div class="subsection" id="es-1-8">
+      <h3>1.8 Retención de Datos</h3>
+      <ul>
+        <li><strong>Cuenta:</strong> mientras el usuario mantenga la cuenta activa</li>
+        <li><strong>Eventos:</strong> hasta que el creador los elimine o expire el evento</li>
+        <li><strong>Mensajes:</strong> hasta que el usuario elimine la conversación</li>
+        <li><strong>Documentos de identidad:</strong> hasta completar la verificación (+90 días como respaldo)</li>
+        <li><strong>Analytics:</strong> 14 meses (Firebase Analytics)</li>
+        <li><strong>Crash reports:</strong> 90 días (Crashlytics)</li>
+        <li><strong>Sesión:</strong> mientras el usuario esté autenticado</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-1-9">
+      <h3>1.9 Derechos del Usuario (GDPR / Ley de Chile)</h3>
+      <ul>
+        <li><strong>Acceso:</strong> solicitar copia de todos los datos personales</li>
+        <li><strong>Rectificación:</strong> corregir datos inexactos</li>
+        <li><strong>Supresión:</strong> solicitar eliminación de la cuenta y datos asociados</li>
+        <li><strong>Portabilidad:</strong> recibir los datos en formato estructurado</li>
+        <li><strong>Oposición:</strong> oponerse al tratamiento para marketing</li>
+        <li><strong>Limitación:</strong> restringir el tratamiento en ciertos casos</li>
+        <li><strong>Retirar consentimiento:</strong> en cualquier momento, sin afectar la legalidad del tratamiento previo</li>
+      </ul>
+      <div class="callout callout-info">
+        <strong>📩 Cómo ejercer tus derechos</strong>
+        Escríbenos a: <span class="placeholder">ideality.can@gmail.com</span>
+      </div>
+    </div>
+
+    <div class="subsection" id="es-1-10">
+      <h3>1.10 Seguridad de los Datos</h3>
+      <ul>
+        <li>Firebase Security Rules (Firestore + Storage) restringen el acceso a datos</li>
+        <li>Firebase App Check (Play Integrity) verifica dispositivos legítimos</li>
+        <li>Rate limiting del lado del servidor para prevenir abusos</li>
+        <li>EncryptedSharedPreferences (AES-256-GCM) para datos biométricos</li>
+        <li>Validación server-side de compras in-app</li>
+        <li>Validación de fortaleza de contraseñas</li>
+        <li>Documentos de identidad solo accesibles por el usuario y administradores</li>
+        <li>Ubicaciones exactas de eventos privados ofuscadas (±3.3 km)</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-1-11">
+      <h3>1.11 Menores de Edad</h3>
+      <div class="callout callout-warning">
+        <strong>⚠️ Restricción de edad</strong>
+        La app está diseñada exclusivamente para mayores de 18 años. No recopilamos intencionadamente datos de menores. El contenido +18 requiere verificación de identidad con documento oficial. Si descubrimos que un menor nos ha proporcionado datos, los eliminaremos de inmediato.
+      </div>
+    </div>
+
+    <div class="subsection" id="es-1-12">
+      <h3>1.12 Cambios a la Política de Privacidad</h3>
+      <p>Notificaremos cambios sustanciales a través de la app o por email. La versión actualizada se publicará siempre en esta URL.</p>
+    </div>
+
+    <div class="subsection" id="es-1-13">
+      <h3 id="eliminacion-cuenta">1.13 Eliminación de Cuenta y Datos</h3>
+      <p>Los usuarios pueden solicitar la eliminación completa de su cuenta y datos personales de las siguientes maneras:</p>
+      
+      <p><strong>Opción 1 — Desde la app:</strong></p>
+      <ol>
+        <li>Abre +panoramas</li>
+        <li>Ve a Perfil → Configuración</li>
+        <li>Presiona "Eliminar cuenta"</li>
+        <li>Confirma la eliminación</li>
+        <li>Tu cuenta de autenticación será eliminada inmediatamente</li>
+      </ol>
+      
+      <p style="margin-top: 12px;"><strong>Opción 2 — Solicitud por correo electrónico:</strong></p>
+      <p>Envía un correo a ideality.can@gmail.com con el asunto "SOLICITUD DE ELIMINACIÓN DE CUENTA" e incluye:</p>
+      <ul>
+        <li>Tu nombre de usuario (nickname) en +panoramas</li>
+        <li>El correo electrónico asociado a tu cuenta</li>
+        <li>Una solicitud explícita de eliminación de todos tus datos</li>
+      </ul>
+      
+      <p style="margin-top: 12px;"><strong>Datos que se eliminarán:</strong></p>
+      <ul>
+        <li>Cuenta de autenticación (inicio de sesión)</li>
+        <li>Perfil de usuario (nickname, foto, biografía, intereses)</li>
+        <li>Eventos creados</li>
+        <li>Mensajes y conversaciones</li>
+        <li>Fotos y archivos subidos</li>
+        <li>Calificaciones y reseñas</li>
+        <li>Datos de ubicación almacenados</li>
+      </ul>
+      
+      <p style="margin-top: 12px;"><strong>Datos que podrían conservarse (por obligaciones legales):</strong></p>
+      <ul>
+        <li>Registros de transacciones de compras in-app (obligación fiscal)</li>
+        <li>Reportes de usuarios (por moderación y seguridad)</li>
+        <li>Datos anonimizados de analytics (no identificables)</li>
+      </ul>
+      
+      <p style="margin-top: 12px;"><strong>Plazo de eliminación:</strong></p>
+      <p>Las solicitudes se procesarán en un máximo de 30 días hábiles. Para solicitudes por correo electrónico, te confirmaremos cuando la eliminación haya sido completada.</p>
+      
+      <p style="margin-top: 12px;">Si tienes dificultades con el proceso, contacta a: ideality.can@gmail.com</p>
+    </div>
+  </div>
+
+  <hr class="section-divider" />
+
+  <!-- ── SECCIÓN 2: TÉRMINOS DE SERVICIO ── -->
+  <div class="section" id="es-terms">
+    <div class="section-header">
+      <span class="section-number">SECCIÓN 2</span>
+      <h2>📜 Términos de Servicio</h2>
+    </div>
+
+    <div class="subsection" id="es-2-1">
+      <h3>2.1 Aceptación</h3>
+      <p>Al usar +panoramas, aceptas estos términos en su totalidad. Si no estás de acuerdo con alguna disposición, por favor deja de usar la app.</p>
+    </div>
+
+    <div class="subsection" id="es-2-2">
+      <h3>2.2 Elegibilidad</h3>
+      <ul>
+        <li>Debes tener al menos <strong>18 años</strong></li>
+        <li>Debes proporcionar información precisa durante el registro</li>
+        <li>Solo se permite <strong>una cuenta por persona</strong></li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-3">
+      <h3>2.3 Registro y Seguridad de Cuenta</h3>
+      <ul>
+        <li>Eres responsable de mantener la confidencialidad de tu contraseña</li>
+        <li>Debes notificar inmediatamente cualquier uso no autorizado de tu cuenta</li>
+        <li>No puedes compartir tu cuenta con terceros</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-4">
+      <h3>2.4 Contenido Prohibido</h3>
+      <p>NO puedes publicar, crear ni compartir:</p>
+      <ul>
+        <li>Contenido ilegal, violento, terrorista o que promueva delitos</li>
+        <li>Contenido sexualmente explícito fuera de la categoría +18</li>
+        <li>Discurso de odio, discriminación o acoso</li>
+        <li>Información falsa o engañosa</li>
+        <li>Spam, publicidad no solicitada o promoción de productos ilegales</li>
+        <li>Contenido que infrinja derechos de autor o propiedad intelectual</li>
+        <li>Contenido que suplante a otra persona o entidad</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-5">
+      <h3>2.5 Conducta Prohibida</h3>
+      <p>NO puedes:</p>
+      <ul>
+        <li>Acosar, intimidar o amenazar a otros usuarios</li>
+        <li>Usar la app para actividades ilegales</li>
+        <li>Manipular ubicaciones o falsificar asistencia a eventos</li>
+        <li>Crear eventos falsos o engañosos</li>
+        <li>Intentar vulnerar la seguridad de la app o acceso no autorizado</li>
+        <li>Usar bots, scrapers u otros medios automatizados</li>
+        <li>Crear múltiples cuentas para evadir restricciones</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-6">
+      <h3>2.6 Responsabilidad del Usuario</h3>
+      <div class="callout callout-info">
+        <strong>⚖️ Cláusula importante</strong>
+        El usuario es el único responsable de todo el contenido que publique (eventos, mensajes, fotos, comentarios), del cumplimiento de las leyes aplicables en su jurisdicción, de las consecuencias de sus interacciones con otros usuarios, de la veracidad de la información proporcionada durante el registro y verificación, y del uso que haga de la información de otros usuarios obtenida a través de la app.
+      </div>
+    </div>
+
+    <div class="subsection" id="es-2-7">
+      <h3>2.7 Indemnización</h3>
+      <div class="callout callout-warning">
+        <strong>⚠️ Cláusula crítica</strong>
+        El usuario acepta indemnizar, defender y mantener indemne al desarrollador, sus afiliados, directores, empleados y agentes de y contra cualquier reclamo, demanda, pérdida, responsabilidad, daño, costo o gasto (incluyendo honorarios legales razonables) que surjan de: (a) el contenido que el usuario publique o comparta en la app; (b) el uso que el usuario haga de la app; (c) la violación de estos términos; (d) la violación de derechos de terceros; o (e) cualquier daño causado por el usuario a otros usuarios.
+      </div>
+    </div>
+
+    <div class="subsection" id="es-2-8">
+      <h3>2.8 Limitación de Responsabilidad</h3>
+      <div class="callout callout-warning">
+        <strong>⚠️ Cláusula crítica – Leer atentamente</strong>
+        EN LA MÁXIMA MEDIDA PERMITIDA POR LA LEY APLICABLE: La app se proporciona <strong>"TAL CUAL"</strong> y <strong>"SEGÚN DISPONIBILIDAD"</strong>, sin garantías de ningún tipo. El desarrollador NO será responsable por daños indirectos, incidentales, especiales, consecuentes o punitivos, ni por daños derivados de: interacciones entre usuarios (físicas o virtuales); cancelación o modificación de eventos; pérdida de datos; daños causados por otros usuarios; uso indebido de la información de ubicación; fallos técnicos o interrupciones del servicio; o actos de terceros, incluyendo otros usuarios. La responsabilidad total del desarrollador se limita al monto pagado por el usuario en los últimos 12 meses o USD $100 (lo que sea menor).
+      </div>
+    </div>
+
+    <div class="subsection" id="es-2-9">
+      <h3>2.9 Verificación de Identidad</h3>
+      <ul>
+        <li>La verificación +18 se realiza mediante revisión manual de documentos oficiales</li>
+        <li>El desarrollador no garantiza la precisión absoluta del proceso de verificación</li>
+        <li>Los documentos de identidad se almacenan de forma segura y solo son accesibles por administradores</li>
+        <li>El desarrollador se reserva el derecho de rechazar solicitudes de verificación</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-10">
+      <h3>2.10 Suspensión y Cancelación</h3>
+      <p>El desarrollador se reserva el derecho, sin previo aviso ni responsabilidad, de:</p>
+      <ul>
+        <li>Suspender o cancelar cuentas que violen estos términos</li>
+        <li>Eliminar contenido inapropiado o ilegal</li>
+        <li>Restringir el acceso a la app por razones de seguridad</li>
+        <li>Cancelar cuentas inactivas por más de 12 meses</li>
+        <li>Rechazar el registro de nuevas cuentas</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-11">
+      <h3>2.11 Moderación</h3>
+      <ul>
+        <li>Los reportes de usuarios y contenido son revisados por administradores</li>
+        <li>Las decisiones de moderación son definitivas</li>
+        <li>El usuario acepta no crear una cuenta sustituta si su cuenta ha sido suspendida</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-12">
+      <h3>2.12 Propiedad Intelectual</h3>
+      <ul>
+        <li>El código, diseño y marca de +panoramas son propiedad del desarrollador</li>
+        <li>El usuario conserva la propiedad de su contenido, pero otorga una licencia no exclusiva para operar la app</li>
+        <li>No puedes usar el nombre o logo de +panoramas sin autorización escrita</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-13">
+      <h3>2.13 Compras In-App y Suscripciones</h3>
+      <ul>
+        <li>Las compras se procesan a través de <strong>Google Play Billing</strong></li>
+        <li>Los reembolsos están sujetos a la política de reembolsos de Google Play</li>
+        <li>Las suscripciones se renuevan automáticamente salvo que se cancelen 24 horas antes del fin del período actual</li>
+        <li>El desarrollador <strong>no almacena</strong> información de pago (datos de tarjeta, etc.)</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-14">
+      <h3>2.14 Ley Aplicable y Jurisdicción</h3>
+      <ul>
+        <li>Estos términos se rigen por las leyes de <span class="placeholder">Chile</span></li>
+        <li>Cualquier disputa se resolverá en los tribunales de <span class="placeholder">Buín, Región Metropolitana</span></li>
+        <li>Si alguna disposición es inválida, las demás permanecen en pleno vigor</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="es-2-15">
+      <h3>2.15 Contacto</h3>
+      <p>Para preguntas sobre esta política o para ejercer tus derechos:</p>
+      <ul>
+        <li><strong>Email:</strong> <span class="placeholder">ideality.can@gmail.com</span></li>
+        <li><strong>App:</strong> +panoramas → Perfil → Configuración</li>
+      </ul>
+    </div>
+  </div>
+
+</div><!-- /container ES -->
+</div><!-- /lang-section ES -->
+
+<!-- ══════════════════════ SEPARATOR ══════════════════════ -->
+<div class="lang-separator"><span>🌐 English Version</span></div>
+
+<!-- ════════════════════════ ENGLISH SECTION ════════════════════════ -->
+<div id="en" class="lang-section">
+<div class="container">
+
+  <!-- TOC EN -->
+  <div class="toc">
+    <h2>📋 Table of Contents</h2>
+    <ol>
+      <li><a href="#en-1-1">1.1 Data Controller</a></li>
+      <li><a href="#en-1-2">1.2 Data We Collect</a></li>
+      <li><a href="#en-1-3">1.3 How We Collect Data</a></li>
+      <li><a href="#en-1-4">1.4 Purpose of Processing</a></li>
+      <li><a href="#en-1-5">1.5 Legal Basis</a></li>
+      <li><a href="#en-1-6">1.6 Third-Party Sharing</a></li>
+      <li><a href="#en-1-7">1.7 International Transfers</a></li>
+      <li><a href="#en-1-8">1.8 Data Retention</a></li>
+      <li><a href="#en-1-9">1.9 User Rights</a></li>
+      <li><a href="#en-1-10">1.10 Security</a></li>
+      <li><a href="#en-1-11">1.11 Minors</a></li>
+      <li><a href="#en-1-12">1.12 Policy Changes</a></li>
+      <li><a href="#en-1-13">1.13 Account and Data Deletion</a></li>
+      <li><a href="#en-2-1">2.1–2.4 Acceptance / Eligibility / Content</a></li>
+      <li><a href="#en-2-7">2.7 Indemnification (CRITICAL)</a></li>
+      <li><a href="#en-2-8">2.8 Limitation of Liability</a></li>
+      <li><a href="#en-2-15">2.15 Contact</a></li>
+    </ol>
+  </div>
+
+  <!-- ── SECTION 1: PRIVACY POLICY ── -->
+  <div class="section" id="en-privacy">
+    <div class="section-header">
+      <span class="section-number">SECTION 1</span>
+      <h2>🔒 Privacy Policy</h2>
+    </div>
+
+    <div class="subsection" id="en-1-1">
+      <h3>1.1 Data Controller</h3>
+      <ul>
+        <li><strong>Developer name:</strong> <span class="placeholder">Cristian Cantillana</span></li>
+        <li><strong>Application:</strong> +panoramas (<code>com.eventos.banana</code>)</li>
+        <li><strong>Contact:</strong> <span class="placeholder">ideality.can@gmail.com</span></li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-1-2">
+      <h3>1.2 Data We Collect</h3>
+      <ul>
+        <li><strong>Account data:</strong> email, nickname, date of birth, age</li>
+        <li><strong>Location data:</strong> GPS coordinates (latitude, longitude), geohash, region, district, country</li>
+        <li><strong>Biometric data:</strong> email/password stored in encrypted storage (AES-256-GCM) <em>only if the user enables biometric login</em></li>
+        <li><strong>Photos and images:</strong> profile photo, cover photo, gallery photos</li>
+        <li><strong>Identity documents:</strong> front photo of national ID card (only for +18 verification, reviewed by administrators)</li>
+        <li><strong>Messages:</strong> text content, voice messages, reactions, edit history</li>
+        <li><strong>Event data:</strong> titles, descriptions, locations, dates, participant lists</li>
+        <li><strong>Social data:</strong> friend list, friend requests, blocked users</li>
+        <li><strong>Ratings:</strong> scores (1–5), comments, event attendance records</li>
+        <li><strong>Device data:</strong> FCM token (push notifications), advertising ID (AdMob), device model (Crashlytics)</li>
+        <li><strong>Purchases:</strong> purchase tokens validated against Google Play, subscription type</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-1-3">
+      <h3>1.3 How We Collect Data</h3>
+      <ul>
+        <li>Account registration (email, nickname, date of birth)</li>
+        <li>Device GPS (with explicit user permission)</li>
+        <li>Voluntary upload of photos and documents</li>
+        <li>In-app activity (events created, messages sent, ratings given)</li>
+        <li>Third-party SDKs: Firebase Analytics, Crashlytics, AdMob</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-1-4">
+      <h3>1.4 Purpose of Data Processing</h3>
+      <ul>
+        <li>Provide and operate the social events platform</li>
+        <li>Connect users with nearby events based on location</li>
+        <li>Verify identity for +18 content</li>
+        <li>Send push notifications about events and messages</li>
+        <li>Display rewarded video ads (AdMob)</li>
+        <li>Process in-app purchases and subscriptions</li>
+        <li>Improve the app through analytics and error reporting</li>
+        <li>Moderate content and prevent abuse (reports, blocks)</li>
+        <li>Comply with legal obligations</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-1-5">
+      <h3>1.5 Legal Basis</h3>
+      <ul>
+        <li>Performance of service contract (Art. 6.1.b GDPR)</li>
+        <li>User consent (location, photos, notifications)</li>
+        <li>Legitimate interest (service improvement, security, fraud prevention)</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-1-6">
+      <h3>1.6 Data Sharing with Third Parties</h3>
+      <ul>
+        <li><strong>Firebase (Google LLC):</strong> Firestore, Storage, Auth, Functions, Messaging, Analytics, Crashlytics, App Check</li>
+        <li><strong>Google Maps Platform:</strong> Google Maps SDK, Places API</li>
+        <li><strong>Google Play Billing:</strong> Payment and subscription processing</li>
+        <li><strong>Google AdMob:</strong> Advertising</li>
+      </ul>
+      <div class="callout callout-success">
+        <strong>✅ Our commitment</strong>
+        We do NOT sell personal data to third parties. We do NOT share data for marketing purposes without explicit consent.
+      </div>
+    </div>
+
+    <div class="subsection" id="en-1-7">
+      <h3>1.7 International Transfers</h3>
+      <p>Data is stored on Google Cloud (Firebase) servers located in the United States and Europe. Google complies with the EU-U.S. Data Privacy Framework.</p>
+    </div>
+
+    <div class="subsection" id="en-1-8">
+      <h3>1.8 Data Retention</h3>
+      <ul>
+        <li><strong>Account:</strong> while the user keeps the account active</li>
+        <li><strong>Events:</strong> until the creator deletes them or the event expires</li>
+        <li><strong>Messages:</strong> until the user deletes the conversation</li>
+        <li><strong>Identity documents:</strong> until verification is complete (+90 days as backup)</li>
+        <li><strong>Analytics:</strong> 14 months (Firebase Analytics)</li>
+        <li><strong>Crash reports:</strong> 90 days (Crashlytics)</li>
+        <li><strong>Session:</strong> while the user is authenticated</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-1-9">
+      <h3>1.9 User Rights (GDPR / Chilean Law)</h3>
+      <ul>
+        <li><strong>Access:</strong> request a copy of all personal data</li>
+        <li><strong>Rectification:</strong> correct inaccurate data</li>
+        <li><strong>Erasure:</strong> request deletion of account and associated data</li>
+        <li><strong>Portability:</strong> receive data in a structured format</li>
+        <li><strong>Objection:</strong> object to processing for marketing purposes</li>
+        <li><strong>Restriction:</strong> restrict processing in certain cases</li>
+        <li><strong>Withdraw consent:</strong> at any time, without affecting the lawfulness of prior processing</li>
+      </ul>
+      <div class="callout callout-info">
+        <strong>📩 How to exercise your rights</strong>
+        Contact us at: <span class="placeholder">[developer email]</span>
+      </div>
+    </div>
+
+    <div class="subsection" id="en-1-10">
+      <h3>1.10 Data Security</h3>
+      <ul>
+        <li>Firebase Security Rules (Firestore + Storage) restrict data access</li>
+        <li>Firebase App Check (Play Integrity) verifies legitimate devices</li>
+        <li>Server-side rate limiting to prevent abuse</li>
+        <li>EncryptedSharedPreferences (AES-256-GCM) for biometric data</li>
+        <li>Server-side validation of in-app purchases</li>
+        <li>Password strength validation</li>
+        <li>Identity documents accessible only by the user and administrators</li>
+        <li>Exact locations of private events obfuscated (±3.3 km)</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-1-11">
+      <h3>1.11 Minors</h3>
+      <div class="callout callout-warning">
+        <strong>⚠️ Age restriction</strong>
+        The app is designed exclusively for users aged 18 and over. We do not intentionally collect data from minors. +18 content requires identity verification with an official document. If we discover that a minor has provided us with data, we will delete it immediately.
+      </div>
+    </div>
+
+    <div class="subsection" id="en-1-12">
+      <h3>1.12 Changes to the Privacy Policy</h3>
+      <p>We will notify users of material changes through the app or by email. The updated version will always be published at this URL.</p>
+    </div>
+
+    <div class="subsection" id="en-1-13">
+      <h3 id="account-deletion">1.13 Account and Data Deletion</h3>
+      <p>Users can request the complete deletion of their account and personal data through the following methods:</p>
+      
+      <p><strong>Option 1 — From the app:</strong></p>
+      <ol>
+        <li>Open +panoramas</li>
+        <li>Go to Profile → Settings</li>
+        <li>Press "Delete account"</li>
+        <li>Confirm deletion</li>
+        <li>Your authentication account will be deleted immediately</li>
+      </ol>
+      <p><em>Note: This currently deletes your login but does NOT automatically delete your Firestore data (profile, events, messages, photos). For complete data deletion, use Option 2.</em></p>
+      
+      <p style="margin-top: 12px;"><strong>Option 2 — Email request:</strong></p>
+      <p>Send an email to ideality.can@gmail.com with subject "ACCOUNT DELETION REQUEST" including:</p>
+      <ul>
+        <li>Your +panoramas nickname</li>
+        <li>The email address associated with your account</li>
+        <li>An explicit request to delete all your data</li>
+      </ul>
+      
+      <p style="margin-top: 12px;"><strong>Data that will be deleted:</strong></p>
+      <ul>
+        <li>Authentication account (login)</li>
+        <li>User profile (nickname, photo, bio, interests)</li>
+        <li>Created events</li>
+        <li>Messages and conversations</li>
+        <li>Uploaded photos and files</li>
+        <li>Ratings and reviews</li>
+        <li>Stored location data</li>
+      </ul>
+      
+      <p style="margin-top: 12px;"><strong>Data that may be retained (due to legal obligations):</strong></p>
+      <ul>
+        <li>In-app purchase transaction records (tax obligations)</li>
+        <li>User reports (for moderation and safety)</li>
+        <li>Anonymized analytics data (non-identifiable)</li>
+      </ul>
+      
+      <p style="margin-top: 12px;"><strong>Deletion timeline:</strong></p>
+      <p>Requests will be processed within a maximum of 30 business days. For email requests, we will confirm once the deletion is complete.</p>
+      
+      <p style="margin-top: 12px;">If you have difficulties with the process, contact: ideality.can@gmail.com</p>
+    </div>
+  </div>
+
+  <hr class="section-divider" />
+
+  <!-- ── SECTION 2: TERMS OF SERVICE ── -->
+  <div class="section" id="en-terms">
+    <div class="section-header">
+      <span class="section-number">SECTION 2</span>
+      <h2>📜 Terms of Service</h2>
+    </div>
+
+    <div class="subsection" id="en-2-1">
+      <h3>2.1 Acceptance</h3>
+      <p>By using +panoramas, you accept these terms in their entirety. If you disagree with any provision, please stop using the app.</p>
+    </div>
+
+    <div class="subsection" id="en-2-2">
+      <h3>2.2 Eligibility</h3>
+      <ul>
+        <li>You must be at least <strong>18 years old</strong></li>
+        <li>You must provide accurate information during registration</li>
+        <li>Only <strong>one account per person</strong> is permitted</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-3">
+      <h3>2.3 Account Registration and Security</h3>
+      <ul>
+        <li>You are responsible for maintaining the confidentiality of your password</li>
+        <li>You must immediately notify us of any unauthorized use of your account</li>
+        <li>You may not share your account with third parties</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-4">
+      <h3>2.4 Prohibited Content</h3>
+      <p>You may NOT post, create, or share:</p>
+      <ul>
+        <li>Illegal, violent, terrorist, or crime-promoting content</li>
+        <li>Sexually explicit content outside the +18 category</li>
+        <li>Hate speech, discrimination, or harassment</li>
+        <li>False or misleading information</li>
+        <li>Spam, unsolicited advertising, or promotion of illegal products</li>
+        <li>Content that infringes copyright or intellectual property rights</li>
+        <li>Content impersonating another person or entity</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-5">
+      <h3>2.5 Prohibited Conduct</h3>
+      <p>You may NOT:</p>
+      <ul>
+        <li>Harass, intimidate, or threaten other users</li>
+        <li>Use the app for illegal activities</li>
+        <li>Manipulate locations or falsify event attendance</li>
+        <li>Create false or misleading events</li>
+        <li>Attempt to breach app security or gain unauthorized access</li>
+        <li>Use bots, scrapers, or other automated means</li>
+        <li>Create multiple accounts to evade restrictions</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-6">
+      <h3>2.6 User Responsibility</h3>
+      <div class="callout callout-info">
+        <strong>⚖️ Important clause</strong>
+        The user is solely responsible for all content they publish (events, messages, photos, comments), compliance with all applicable laws in their jurisdiction, the consequences of their interactions with other users, the accuracy of information provided during registration and verification, and the use they make of other users' information obtained through the app.
+      </div>
+    </div>
+
+    <div class="subsection" id="en-2-7">
+      <h3>2.7 Indemnification</h3>
+      <div class="callout callout-warning">
+        <strong>⚠️ Critical clause</strong>
+        You agree to indemnify, defend, and hold harmless the developer, its affiliates, directors, employees, and agents from and against any claims, demands, losses, liabilities, damages, costs, or expenses (including reasonable legal fees) arising from: (a) content you post or share in the app; (b) your use of the app; (c) your violation of these terms; (d) your violation of third-party rights; or (e) any damage you cause to other users.
+      </div>
+    </div>
+
+    <div class="subsection" id="en-2-8">
+      <h3>2.8 Limitation of Liability</h3>
+      <div class="callout callout-warning">
+        <strong>⚠️ Critical clause – Please read carefully</strong>
+        TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW: The app is provided <strong>"AS IS"</strong> and <strong>"AS AVAILABLE"</strong>, without warranties of any kind. The developer will NOT be liable for indirect, incidental, special, consequential, or punitive damages, nor for damages arising from: user interactions (physical or virtual); event cancellation or modification; data loss; damage caused by other users; misuse of location information; technical failures or service interruptions; or acts of third parties, including other users. The developer's total liability is limited to the amount paid by the user in the last 12 months or USD $100, whichever is less.
+      </div>
+    </div>
+
+    <div class="subsection" id="en-2-9">
+      <h3>2.9 Identity Verification</h3>
+      <ul>
+        <li>+18 verification is performed through manual review of official documents</li>
+        <li>The developer does not guarantee absolute accuracy of the verification process</li>
+        <li>Identity documents are stored securely and accessible only by administrators</li>
+        <li>The developer reserves the right to reject verification requests</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-10">
+      <h3>2.10 Suspension and Termination</h3>
+      <p>The developer reserves the right, without prior notice or liability, to:</p>
+      <ul>
+        <li>Suspend or terminate accounts that violate these terms</li>
+        <li>Remove inappropriate or illegal content</li>
+        <li>Restrict access to the app for security reasons</li>
+        <li>Terminate accounts inactive for more than 12 months</li>
+        <li>Refuse registration of new accounts</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-11">
+      <h3>2.11 Moderation</h3>
+      <ul>
+        <li>User and content reports are reviewed by administrators</li>
+        <li>Moderation decisions are final</li>
+        <li>You agree not to create a substitute account if your account has been suspended</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-12">
+      <h3>2.12 Intellectual Property</h3>
+      <ul>
+        <li>The code, design, and brand of +panoramas are the property of the developer</li>
+        <li>You retain ownership of your content but grant a non-exclusive license to operate the app</li>
+        <li>You may not use the +panoramas name or logo without written authorization</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-13">
+      <h3>2.13 In-App Purchases and Subscriptions</h3>
+      <ul>
+        <li>Purchases are processed through <strong>Google Play Billing</strong></li>
+        <li>Refunds are subject to Google Play's refund policy</li>
+        <li>Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period</li>
+        <li>The developer does <strong>not store</strong> payment information (card details, etc.)</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-14">
+      <h3>2.14 Governing Law and Jurisdiction</h3>
+      <ul>
+        <li>These terms are governed by the laws of <span class="placeholder">Chile</span></li>
+        <li>Any dispute shall be resolved in the courts of <span class="placeholder">Buín, Región Metropolitana</span></li>
+        <li>If any provision is found invalid, the remaining provisions remain in full force</li>
+      </ul>
+    </div>
+
+    <div class="subsection" id="en-2-15">
+      <h3>2.15 Contact</h3>
+      <p>For questions about this policy or to exercise your rights:</p>
+      <ul>
+        <li><strong>Email:</strong> <span class="placeholder">[developer email]</span></li>
+        <li><strong>App:</strong> +panoramas → Profile → Settings</li>
+      </ul>
+    </div>
+  </div>
+
+</div><!-- /container EN -->
+</div><!-- /lang-section EN -->
+
+<!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
+<footer>
+  <p>🍌 <strong>+panoramas</strong> &nbsp;·&nbsp; <span class="placeholder">[Nombre del desarrollador]</span></p>
+  <p style="margin-top:8px;">
+    <a href="#es">Español</a> &nbsp;·&nbsp; <a href="#en">English</a> &nbsp;·&nbsp; <a href="/">Inicio / Home</a>
+  </p>
+  <p style="margin-top:12px;color:#555;">© <span id="year"></span> +panoramas. All rights reserved.</p>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  function setLang(lang) {
+    document.getElementById('btn-es').classList.toggle('active', lang === 'es');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+  }
+
+  // Auto-detect active language button based on hash
+  function detectLang() {
+    const hash = window.location.hash;
+    if (hash.startsWith('#en')) setLang('en');
+    else setLang('es');
+  }
+  window.addEventListener('hashchange', detectLang);
+  detectLang();
+</script>
+
+</body>
+</html>

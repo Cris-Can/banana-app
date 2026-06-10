@@ -2,6 +2,7 @@ package com.eventos.banana.util
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
@@ -53,7 +54,7 @@ class ShareHelper(private val context: Context, private val imageLoader: coil.Im
             
             ${event.description}
             
-            📲 ¿Ya tienes Banana? Ábrelo aquí: $deepLink
+            📲 ¿Ya tienes +panoramas? Ábrelo aquí: $deepLink
             
             📱 ¿No la tienes? Descárgala gratis: $playStoreLink
             
@@ -88,7 +89,7 @@ class ShareHelper(private val context: Context, private val imageLoader: coil.Im
                 file
             )
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("ShareHelper", "Error sharing", e)
             null
         }
     }

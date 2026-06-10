@@ -3,8 +3,9 @@ package com.eventos.banana.domain.usecase.profile
 import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.util.AppConstants
 import com.eventos.banana.util.GeohashUtils
+import javax.inject.Inject
 
-class UpdateProfileSettingsUseCase(
+class UpdateProfileSettingsUseCase @Inject constructor(
     private val userRepository: UserRepository
 ) {
     suspend fun updateAppTheme(uid: String, theme: String): Result<Unit> {

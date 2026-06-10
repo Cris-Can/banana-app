@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -61,8 +62,9 @@ class BillingRepository @Inject constructor(
 
     // 💰 PRODUCT IDs (Must match Google Play Console)
     companion object {
-        const val SUB_BANANA_GOLD = "banana_plus_monthly"
+        const val SUB_BANANA_GOLD = "banana_plus_subscription"
         const val INAPP_EVENT_BOOST = "event_boost_24h"
+        const val INAPP_CREDITS_3PACK = "rating_credits_3pack"
         
         // Periodic verification interval (1 hour)
         private const val PERIODIC_VERIFICATION_INTERVAL_MS = 60 * 60 * 1000L
@@ -214,6 +216,10 @@ class BillingRepository @Inject constructor(
                     QueryProductDetailsParams.Product.newBuilder()
                         .setProductId(INAPP_EVENT_BOOST)
                         .setProductType(BillingClient.ProductType.INAPP)
+                        .build(),
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(INAPP_CREDITS_3PACK)
+                        .setProductType(BillingClient.ProductType.INAPP)
                         .build()
                 )
             ).build()
@@ -309,7 +315,6 @@ class BillingRepository @Inject constructor(
         
         purchase.products.forEach { productId ->
             try {
-                // Call server-side validation Cloud Function
                 val data = hashMapOf(
                     "purchaseToken" to purchase.purchaseToken,
                     "productId" to productId,
@@ -321,25 +326,26 @@ class BillingRepository @Inject constructor(
                 functions
                     .getHttpsCallable("validateAndGrantPurchase")
                     .call(data)
-                    .addOnSuccessListener {
-                        timber.log.Timber.d("Purchase validated server-side for $productId")
-                        if (productId == INAPP_EVENT_BOOST) {
-                            pendingBoostEventId = null // Clear pending boost
-                            
-                            // Consume the purchase to allow buying again
-                            val consumeParams = ConsumeParams.newBuilder()
-                                .setPurchaseToken(purchase.purchaseToken)
-                                .build()
-                            billingClient.consumeAsync(consumeParams) { _, _ -> }
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        timber.log.Timber.e(e, "Server validation failed for $productId.")
-                    }
+                    .await()
+                
+                Timber.d("Purchase validated server-side for $productId")
+                if (productId == INAPP_EVENT_BOOST) {
+                    pendingBoostEventId = null
+                    consumePurchase(purchase.purchaseToken)
+                } else if (productId == INAPP_CREDITS_3PACK) {
+                    consumePurchase(purchase.purchaseToken)
+                }
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "Error calling validateAndGrantPurchase")
+                Timber.e(e, "Server validation failed for $productId.")
             }
         }
+    }
+
+    private fun consumePurchase(purchaseToken: String) {
+        val consumeParams = ConsumeParams.newBuilder()
+            .setPurchaseToken(purchaseToken)
+            .build()
+        billingClient.consumeAsync(consumeParams) { _, _ -> }
     }
     
     fun checkActiveSubscriptions() {
@@ -410,7 +416,7 @@ class BillingRepository @Inject constructor(
         val profile = userRepository.getUserProfile(uid)
         
         // Check local profile first
-        if (profile?.isGold == true || profile?.isFounder == true || profile?.subscriptionType == "GOLD" || profile?.subscriptionType == "FOUNDER") {
+        if (profile?.isGold == true) {
             return true
         }
         

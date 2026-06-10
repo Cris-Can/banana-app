@@ -22,6 +22,8 @@ fun EventDetailCreatorCard(
     isCreator: Boolean,
     onUserClick: (String) -> Unit,
     onBoostClick: () -> Unit,
+    onBoostWithCredit: () -> Unit = {},
+    credits: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -148,6 +150,26 @@ fun EventDetailCreatorCard(
                             }
 
                             Text(stringResource(com.eventos.banana.R.string.event_detail_boost_confirm), fontWeight = FontWeight.Bold)
+
+                            if (credits > 0) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "💳 Tus créditos: $credits disponibles",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Button(
+                                    onClick = { showBoostDialog = false; onBoostWithCredit() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondary,
+                                        contentColor = MaterialTheme.colorScheme.onSecondary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("🚀 Usar 1 crédito ($credits disponibles)")
+                                }
+                            }
                         }
                     },
                     confirmButton = {

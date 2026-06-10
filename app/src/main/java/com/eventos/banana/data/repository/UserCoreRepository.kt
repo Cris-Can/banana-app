@@ -92,6 +92,10 @@ class UserCoreRepository @Inject constructor(
         users.document(uid).set(mapOf("isVerified" to verified), SetOptions.merge()).await()
     }
 
+    suspend fun updateIdentityVerification(uid: String, verified: Boolean) {
+        users.document(uid).set(mapOf("identityVerified" to verified), SetOptions.merge()).await()
+    }
+
     suspend fun updateSocialProfile(uid: String, aboutMe: String, interests: List<String>) {
         users.document(uid).update(mapOf("aboutMe" to aboutMe, "interests" to interests)).await()
     }
@@ -131,17 +135,15 @@ class UserCoreRepository @Inject constructor(
     /**
      * Búsqueda por proximidad usando Geohash (Escalable y Económico)
      */
-    suspend fun getUsersByProximity(geohash: String, excludeUid: String, limit: Int = 30): List<UserProfile> {
+    suspend fun getUsersByProximity(geohash: String, excludeUid: String, limit: Int = 30, precision: Int = 4): List<UserProfile> {
         if (geohash.isBlank()) return emptyList()
         return try {
-            // Un geohash de 4 caracteres cubre aprox 20km. 
-            // Usamos el prefijo para una consulta de rango eficiente.
-            val prefix = geohash.take(4) 
+            val prefix = geohash.take(precision)
             val snapshot = users
                 .orderBy("geohash")
                 .startAt(prefix)
                 .endAt(prefix + "\uf8ff")
-                .limit(limit.toLong() * 2) // Pedimos más para filtrar el propio usuario y amigos después
+                .limit(limit.toLong() * 2)
                 .get()
                 .await()
             

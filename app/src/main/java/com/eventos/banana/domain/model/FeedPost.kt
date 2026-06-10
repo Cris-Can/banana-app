@@ -12,6 +12,7 @@ data class FeedPost(
     val imageUrl: String? = null,
     val timestamp: Any? = null,
     @PropertyName("isUserVerified") val isUserVerified: Boolean = false,
+    @PropertyName("isUserIdentityVerified") val isUserIdentityVerified: Boolean = false,
     val replyToId: String? = null,
     val replyToNickname: String? = null,
     val replyToContent: String? = null,

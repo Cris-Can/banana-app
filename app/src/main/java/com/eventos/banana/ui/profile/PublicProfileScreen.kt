@@ -15,6 +15,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.Alignment
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import androidx.compose.ui.draw.clip
@@ -270,6 +273,25 @@ fun PublicProfileScreen(
                                     }
                                 }
                                 Text(profile.nickname, style = MaterialTheme.typography.headlineSmall)
+                                if (profile.identityVerified) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Identidad verificada",
+                                            tint = Color(0xFF2E7D32),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            "Identidad Verificada",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFF2E7D32)
+                                        )
+                                    }
+                                }
                                 // Rating
                                 if(profile.ratingCount > 0) {
                                     val avg = profile.ratingSum / profile.ratingCount

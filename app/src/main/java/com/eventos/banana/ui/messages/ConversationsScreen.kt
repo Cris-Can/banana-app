@@ -19,13 +19,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.eventos.banana.domain.model.Conversation
-import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationsScreen(
     conversations: List<Conversation>,
     currentUserId: String,
+    userProfiles: Map<String, Pair<String, String?>>,
     onConversationClick: (String) -> Unit,
     onDeleteConversation: (String) -> Unit,
     onBack: () -> Unit
@@ -63,10 +63,16 @@ fun ConversationsScreen(
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                items(conversations) { conversation ->
+                items(conversations, key = { it.id }) { conversation ->
+                    val otherUserId = conversation.participants.firstOrNull { it != currentUserId } ?: ""
+                    val profile = userProfiles[otherUserId]
+                    val displayNickname = profile?.first ?: conversation.participantNicknames[otherUserId] ?: stringResource(com.eventos.banana.R.string.common_user)
+                    val displayPhotoUrl = profile?.second
                     ConversationItem(
                         conversation = conversation,
                         currentUserId = currentUserId,
+                        displayNickname = displayNickname,
+                        displayPhotoUrl = displayPhotoUrl,
                         onClick = { onConversationClick(conversation.id) },
                         onDelete = { onDeleteConversation(conversation.id) }
                     )
@@ -92,34 +98,11 @@ fun ConversationsScreen(
 private fun ConversationItem(
     conversation: Conversation,
     currentUserId: String,
+    displayNickname: String,
+    displayPhotoUrl: String?,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val otherUserId = conversation.participants.firstOrNull { it != currentUserId } ?: ""
-    
-    // Fallback info
-    val storedNickname = conversation.participantNicknames[otherUserId] ?: stringResource(com.eventos.banana.R.string.common_user)
-    
-    // Real-time fetch state
-    var displayNickname by remember { mutableStateOf(storedNickname) }
-    var displayPhotoUrl by remember { mutableStateOf<String?>(null) }
-    
-    // Fetch fresh profile data
-    val context = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(otherUserId) {
-         try {
-             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-             val doc = db.collection("users").document(otherUserId).get().await()
-             val nick = doc.getString("nickname")
-             val photo = doc.getString("profilePictureUrl")
-             
-             if (!nick.isNullOrBlank()) displayNickname = nick
-             if (!photo.isNullOrBlank()) displayPhotoUrl = photo
-         } catch (e: Exception) {
-             // ignore
-         }
-    }
-
     val unreadCount = conversation.unreadCount[currentUserId] ?: 0
     val isUnread = unreadCount > 0
     

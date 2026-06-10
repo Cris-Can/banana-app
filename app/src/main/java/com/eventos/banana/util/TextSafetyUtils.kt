@@ -15,7 +15,8 @@ object TextSafetyUtils {
         }
     }
 
-    fun validateEventContent(title: String, description: String): String? {
+    fun validateEventContent(title: String, description: String, isAdultContent: Boolean = false): String? {
+        if (isAdultContent) return null // +18 events bypass toxic filter
         if (containsToxicContent(title)) return "El título contiene palabras no permitidas."
         if (containsToxicContent(description)) return "La descripción contiene contenido inapropiado."
         return null // OK

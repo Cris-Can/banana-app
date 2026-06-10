@@ -63,7 +63,7 @@ fun NotificationsScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(notifications) { notification ->
+                items(notifications, key = { it.id }) { notification ->
                     val containerColor = if (!notification.read) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface
                     
                     Card(

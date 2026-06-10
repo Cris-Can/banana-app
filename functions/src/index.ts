@@ -14,7 +14,12 @@ export {
 } from "./event-triggers";
 export { onUserCreated, redeemFounderCode, validateAndGrantPurchase } from "./user-lifecycle";
 export { cleanupUsersDatabase, createPromoCode, createCampaign, toggleCampaignActive } from "./admin-functions";
-export { checkRateLimitGuard, validatePasswordStrength, scheduledRateLimitCleanup, recordProfileView } from "./security-functions";
+export { checkRateLimitGuard, scheduledRateLimitCleanup, recordProfileView } from "./security-functions";
+export { geocodeExternalLocation } from "./external-event-geocoder";
+export { setupExternalEventBot, addExternalSource, removeExternalSource, listExternalSources } from "./external-event-sources";
+export { scheduledCheckExternalSources, runSchedulerNow } from "./external-event-scheduler";
+export { publishExternalEvent, listPendingExternalEvents, approveExternalEvent, rejectExternalEvent, processInstagramUrl } from "./external-event-admin-workflow";
+export { listCreatedExternalEvents, deleteExternalEvent } from "./external-event-admin-workflow";
 
 
 /**

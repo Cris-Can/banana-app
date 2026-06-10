@@ -18,12 +18,24 @@ object AdMobHelper {
 
     private var rewardedAd: RewardedAd? = null
     private var isAdLoading = false
+    private var pendingActivity: Activity? = null
+    private var pendingOnReward: (() -> Unit)? = null
+    private var pendingOnDismiss: (() -> Unit)? = null
 
     fun initialize(context: Context) {
         MobileAds.initialize(context) { initializationStatus ->
             Log.d(TAG, "AdMob initialized: $initializationStatus")
+            if (pendingActivity != null) {
+                val act = pendingActivity!!
+                val reward = pendingOnReward!!
+                val dismiss = pendingOnDismiss!!
+                pendingActivity = null
+                pendingOnReward = null
+                pendingOnDismiss = null
+                showInternal(act, reward, dismiss)
+            }
+            loadRewardedAd(context)
         }
-        loadRewardedAd(context)
     }
 
     fun loadRewardedAd(context: Context) {
@@ -37,15 +49,31 @@ object AdMobHelper {
             adRequest,
             object : RewardedAdLoadCallback() {
                 override fun onAdFailedToLoad(adError: LoadAdError) {
-                    Log.d(TAG, adError.toString())
+                    Log.d(TAG, "onAdFailedToLoad: ${adError.message}")
                     rewardedAd = null
                     isAdLoading = false
+                    if (pendingActivity != null) {
+                        pendingOnDismiss?.invoke()
+                        pendingActivity = null
+                        pendingOnReward = null
+                        pendingOnDismiss = null
+                    }
                 }
 
                 override fun onAdLoaded(ad: RewardedAd) {
                     Log.d(TAG, "Ad was loaded.")
                     rewardedAd = ad
                     isAdLoading = false
+
+                    if (pendingActivity != null) {
+                        val act = pendingActivity!!
+                        val reward = pendingOnReward!!
+                        val dismiss = pendingOnDismiss!!
+                        pendingActivity = null
+                        pendingOnReward = null
+                        pendingOnDismiss = null
+                        showInternal(act, reward, dismiss)
+                    }
                 }
             }
         )
@@ -56,51 +84,55 @@ object AdMobHelper {
         onUserEarnedReward: () -> Unit,
         onAdDismissed: () -> Unit
     ) {
+        if (rewardedAd != null) {
+            pendingActivity = null
+            pendingOnReward = null
+            pendingOnDismiss = null
+            showInternal(activity, onUserEarnedReward, onAdDismissed)
+        } else {
+            pendingActivity = activity
+            pendingOnReward = onUserEarnedReward
+            pendingOnDismiss = onAdDismissed
+            loadRewardedAd(activity)
+        }
+    }
+
+    private fun showInternal(
+        activity: Activity,
+        onUserEarnedReward: () -> Unit,
+        onAdDismissed: () -> Unit
+    ) {
         rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdClicked() {
-                // Called when a click is recorded for an ad.
                 Log.d(TAG, "Ad was clicked.")
             }
 
             override fun onAdDismissedFullScreenContent() {
-                // Called when ad is dismissed.
-                // Set the ad reference to null so you don't show the ad a second time.
                 Log.d(TAG, "Ad dismissed fullscreen content.")
                 rewardedAd = null
                 onAdDismissed()
-                loadRewardedAd(activity) // Preload next one
+                loadRewardedAd(activity)
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                // Called when ad fails to show.
                 Log.e(TAG, "Ad failed to show fullscreen content.")
                 rewardedAd = null
-                onAdDismissed() // Treat as dismissed/failed
+                onAdDismissed()
             }
 
             override fun onAdImpression() {
-                // Called when an impression is recorded for an ad.
                 Log.d(TAG, "Ad recorded an impression.")
             }
 
             override fun onAdShowedFullScreenContent() {
-                // Called when ad is shown.
                 Log.d(TAG, "Ad showed fullscreen content.")
             }
         }
-
-        if (rewardedAd != null) {
-            rewardedAd?.show(activity) { rewardItem ->
-                // Handle the reward.
-                val rewardAmount = rewardItem.amount
-                val rewardType = rewardItem.type
-                Log.d(TAG, "User earned the reward: $rewardAmount $rewardType")
-                onUserEarnedReward()
-            }
-        } else {
-            Log.d(TAG, "The rewarded ad wasn't ready yet.")
-            onAdDismissed() // Fallback
-            loadRewardedAd(activity)
+        rewardedAd?.show(activity) { rewardItem ->
+            val rewardAmount = rewardItem.amount
+            val rewardType = rewardItem.type
+            Log.d(TAG, "User earned the reward: $rewardAmount $rewardType")
+            onUserEarnedReward()
         }
     }
 }

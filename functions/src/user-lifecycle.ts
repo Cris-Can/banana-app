@@ -265,8 +265,8 @@ export const validateAndGrantPurchase = onCall(async (request) => {
     const playApi = google.androidpublisher({ version: "v3", auth });
 
     // 4. Validate based on product type
-    const SUBSCRIPTION_IDS = ["banana_plus_monthly"];
-    const CONSUMABLE_IDS = ["event_boost_24h"];
+    const SUBSCRIPTION_IDS = ["banana_plus_subscription"];
+    const CONSUMABLE_IDS = ["event_boost_24h", "rating_credits_3pack"];
 
     if (SUBSCRIPTION_IDS.includes(productId)) {
       // ---- SUBSCRIPTION ----
@@ -365,8 +365,30 @@ export const validateAndGrantPurchase = onCall(async (request) => {
         // Still allow - might be a retry
       }
 
-      // 6. Apply Boost if eventId provided
-      if (eventId) {
+      // 6. Apply Consumable Logic
+      if (productId === "rating_credits_3pack") {
+        const creditsToAdd = 3;
+        const expiryDuration = 30 * 24 * 60 * 60 * 1000; // 30 días
+        const now = Date.now();
+        
+        await db.runTransaction(async (transaction) => {
+          const userRef = db.collection("users").doc(uid);
+          const userDoc = await transaction.get(userRef);
+          if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+          
+          const currentCredits = userDoc.data()?.ratingCredits || 0;
+          const currentExpiry = userDoc.data()?.ratingCreditsExpiry || 0;
+          
+          const baseTime = currentExpiry > now ? currentExpiry : now;
+          const newExpiry = baseTime + expiryDuration;
+          
+          transaction.update(userRef, {
+            ratingCredits: currentCredits + creditsToAdd,
+            ratingCreditsExpiry: newExpiry
+          });
+        });
+        console.log(`✅ Rating credits (3-pack) granted to ${uid}.`);
+      } else if (eventId) {
         const boostDuration = 24 * 60 * 60 * 1000; // 24h
         const boostExpiry = Date.now() + boostDuration;
         

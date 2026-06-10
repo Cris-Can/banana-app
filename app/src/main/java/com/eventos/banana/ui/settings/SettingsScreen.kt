@@ -23,6 +23,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
 import com.eventos.banana.ui.util.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.verticalScroll
@@ -51,9 +53,9 @@ fun SettingsScreen(
     deleteAccountStatus: String?, 
     onResetDeleteStatus: () -> Unit,
     onGuideReset: () -> Unit,
-    // New Params
     userProfile: com.eventos.banana.domain.model.UserProfile?,
     onUpdateTheme: (String) -> Unit,
+    onThemeChanged: (String) -> Unit,
     onSendPasswordReset: (String) -> Unit,
     onVerifyEmail: () -> Unit,
     isEmailVerified: Boolean,
@@ -137,7 +139,7 @@ fun SettingsScreen(
                 // 💎 BANANA GOLD SECTION
                 Card(
                     onClick = onNavigateToGold,
-                    colors = CardDefaults.cardColors(containerColor = com.eventos.banana.ui.theme.BananaGold),
+                    colors = CardDefaults.cardColors(containerColor = com.eventos.banana.ui.theme.PanoramasGold),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
@@ -182,22 +184,32 @@ fun SettingsScreen(
                             Text(stringResource(com.eventos.banana.R.string.settings_theme_title), style = MaterialTheme.typography.bodyLarge)
                         }
                         
+                        var localThemeChip by remember { mutableStateOf(userProfile?.appTheme) }
+                        LaunchedEffect(userProfile?.appTheme) {
+                            localThemeChip = userProfile?.appTheme
+                        }
+
                         Row(Modifier.fillMaxWidth().padding(start = 40.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                             val currentTheme = userProfile?.appTheme ?: "BANANA"
+                             val currentTheme = localThemeChip ?: userProfile?.appTheme ?: "BANANA"
                              val themes = listOf(
-                                Triple("BANANA", "Banana", androidx.compose.ui.graphics.Color(0xFFFFD700)),
-                                Triple("DARK", "Dark", androidx.compose.ui.graphics.Color(0xFF212121)),
-                                Triple("LIGHT", "Light", androidx.compose.ui.graphics.Color(0xFFEEEEEE))
+                                Triple("PANORAMAS", "+panoramas", Color(0xFFFFD700)),
+                                Triple("PANORAMAS", "Panoramas", Color(0xFFFF8A65)),
+                                Triple("DARK", "Dark", Color(0xFF212121)),
+                                Triple("LIGHT", "Light", Color(0xFFEEEEEE))
                              )
                              
                              themes.forEach { (code, label, color) ->
                                  FilterChip(
                                      selected = currentTheme == code,
-                                     onClick = { onUpdateTheme(code) },
+                                     onClick = { 
+                                         localThemeChip = code
+                                         onUpdateTheme(code)
+                                         onThemeChanged(code)
+                                     },
                                      label = { Text(label) },
                                      leadingIcon = {
-                                         androidx.compose.foundation.layout.Box(
-                                             modifier = Modifier.size(12.dp).background(color, androidx.compose.foundation.shape.CircleShape)
+                                         Box(
+                                             modifier = Modifier.size(12.dp).background(color, CircleShape)
                                          )
                                      }
                                  )
@@ -419,7 +431,7 @@ fun SettingsScreen(
                 }
 
                 // 🎟️ CANJEAR CÓDIGO DE INVITACIÓN (Visible para usuarios NO Founder)
-                if (userProfile?.subscriptionType != "FOUNDER") {
+                if (userProfile?.isFounder != true) {
                     SettingsSection(title = "Código de Invitación") {
                         var redeemCode by remember { mutableStateOf("") }
                         var isRedeeming by remember { mutableStateOf(false) }

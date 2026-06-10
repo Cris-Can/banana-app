@@ -25,6 +25,7 @@ class FeedRepository @Inject constructor(
             .document(eventId)
             .collection("feed")
             .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(50)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     android.util.Log.e("FeedRepository", "❌ Listener error: ${error.message}", error)
@@ -50,6 +51,11 @@ class FeedRepository @Inject constructor(
         }
     }
 
+    /**
+     * Creates a new post in the feed.
+     * Note: imageBytes should be compressed at the caller level (e.g. using ImageCompressor)
+     * to avoid uploading raw large files (e.g. 1024x1024, quality 80).
+     */
     suspend fun createPost(post: FeedPost, imageBytes: ByteArray?): Result<Unit> {
         return try {
             var imageUrl: String? = null
@@ -60,9 +66,13 @@ class FeedRepository @Inject constructor(
             if (imageBytes != null && imagePath != null) {
                 val uploadResult = storageDataSource.uploadFile(imagePath, imageBytes)
                 if (uploadResult.isSuccess) {
-                    imageUrl = uploadResult.getOrNull()
+                    imageUrl = uploadResult.getOrNull().also {
+                        if (it == null) android.util.Log.w("FeedRepository", "Upload succeeded but returned null URL")
+                    }
                 } else {
-                    return Result.failure(uploadResult.exceptionOrNull() ?: Exception("Upload failed"))
+                    val exception = uploadResult.exceptionOrNull() ?: Exception("Upload failed")
+                    android.util.Log.e("FeedRepository", "Upload failed", exception)
+                    return Result.failure(exception)
                 }
             }
 
@@ -80,6 +90,7 @@ class FeedRepository @Inject constructor(
                 "content" to post.content,
                 "imageUrl" to imageUrl,
                 "isUserVerified" to post.isUserVerified,
+                "isUserIdentityVerified" to post.isUserIdentityVerified,
                 "replyToId" to post.replyToId,
                 "replyToNickname" to post.replyToNickname,
                 "replyToContent" to post.replyToContent,

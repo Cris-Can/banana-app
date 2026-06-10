@@ -16,7 +16,6 @@ import com.eventos.banana.domain.model.CreateEventUiState
 import com.eventos.banana.domain.model.Event
 import com.eventos.banana.domain.model.EventStatus
 import com.eventos.banana.domain.model.JoinQuestion
-import com.eventos.banana.util.LocationHelper
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -31,6 +30,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
@@ -49,6 +49,7 @@ import androidx.compose.ui.zIndex
 @Composable
 fun CreateEventScreen(
     creatorId: String,
+    isIdentityVerified: Boolean = false,
     viewModel: com.eventos.banana.ui.event.CreateEventViewModel,
     onSuccess: () -> Unit,
     onSelectExactLocation: () -> Unit,
@@ -83,25 +84,7 @@ fun CreateEventScreen(
         onResult = { uri -> viewModel.updateSelectedImageUri(uri) }
     )
 
-    // Location Permission
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            scope.launch {
-                val result = LocationHelper(context).detectLocationFull()
-                if (result != null) {
-                    viewModel.updateLocationResult(
-                        region = result.region,
-                        commune = result.commune,
-                        country = result.country,
-                        lat = result.latitude,
-                        lng = result.longitude
-                    )
-                }
-            }
-        }
-    }
+
 
     LaunchedEffect(uiState.success) {
         if (uiState.success) {
@@ -206,64 +189,6 @@ fun CreateEventScreen(
 
             // ---------- UBICACIÓN ----------
             Text(stringResource(com.eventos.banana.R.string.create_event_location_title), style = MaterialTheme.typography.titleMedium)
-
-            OutlinedTextField(
-                value = formState.region,
-                onValueChange = { viewModel.updateRegion(it) },
-                label = { Text("Estado / Región *") },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Ej: Región Metropolitana, Madrid, Florida...") },
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = formState.commune,
-                onValueChange = { viewModel.updateCommune(it) },
-                label = { Text("Ciudad / Comuna *") },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Ej: Santiago, Barcelona, Miami...") },
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = formState.country,
-                onValueChange = { viewModel.updateCountry(it) },
-                label = { Text("País *") },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Ej: Chile, España, USA...") },
-                singleLine = true
-            )
-
-            Button(
-                onClick = {
-                    locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            ) {
-                Icon(Icons.Default.LocationOn, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("📍 Detectar mi ubicación")
-            }
-
-            if (formState.currentLatitude == null && formState.exactLocation == null) {
-                Text(
-                    "⚠️ Coordenadas no detectadas. Usa el botón de arriba o el mapa para definir la ubicación.",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            } else {
-                Text(
-                    if (formState.exactLocation != null) "✅ Ubicación definida en el mapa" else "✅ Ubicación de red detectada",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            }
             
             OutlinedTextField(
                 value = formState.address,
@@ -348,9 +273,7 @@ fun CreateEventScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val isGold = userLimitStats?.subscriptionType == "GOLD" || 
-                               userLimitStats?.subscriptionType == "FOUNDER" || 
-                               userLimitStats?.isFounder == true
+                    val isGold = userLimitStats?.isGold == true
                     
                     val rangeOptions = listOf(
                         Triple("COMMUNE", "Solo Comuna", "Notifica a usuarios de tu misma comuna"),
@@ -386,6 +309,67 @@ fun CreateEventScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // 🪪 AVISO: Verificación necesaria para +18
+            if (!isIdentityVerified) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Contenido +18",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Verifica tu identidad en tu perfil para crear eventos +18",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 🔞 +18 CONTENT TOGGLE (solo visible si identityVerified)
+            if (isIdentityVerified) {
+                Text("Contido +18", style = MaterialTheme.typography.titleMedium)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("🔞 Evento para mayores de 18", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "Solo visible para usuarios verificados",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = formState.isAdultContent,
+                            onCheckedChange = { viewModel.updateIsAdultContent(it) }
+                        )
                     }
                 }
             }
@@ -537,12 +521,14 @@ fun CreateEventScreen(
             Button(
                 enabled = !uiState.isLoading && formState.startAt != null && formState.endAt != null && 
                           formState.startAt!! < formState.endAt!! && formState.title.isNotBlank() && 
-                          formState.description.isNotBlank() && formState.region.isNotBlank() && 
+                          formState.description.isNotBlank() && 
                           formState.address.isNotBlank() && 
                           formState.maxParticipants.toIntOrNull()?.let { it > 0 } == true &&
-                          (formState.exactLocation != null || (formState.currentLatitude != null && formState.currentLongitude != null)),
+                          formState.exactLocation != null,
                 onClick = {
-                    val safetyError = com.eventos.banana.util.TextSafetyUtils.validateEventContent(formState.title, formState.description)
+                    val safetyError = com.eventos.banana.util.TextSafetyUtils.validateEventContent(
+                        formState.title, formState.description, formState.isAdultContent
+                    )
                     if (safetyError != null) {
                         viewModel.updateErrorMessage(safetyError)
                     } else {
@@ -572,7 +558,8 @@ fun CreateEventScreen(
                                     endAt = formState.endAt!!,
                                     eventTimestamp = formState.startAt!!,
                                     joinQuestions = formState.questions,
-                                    notificationRange = formState.notificationRange
+                                    notificationRange = formState.notificationRange,
+                                    isAdultContent = formState.isAdultContent
                                 ),
                                 imageBytes
                             )
@@ -606,7 +593,7 @@ fun CreateEventScreen(
     }
 
     if (showAdDialog) {
-        val isCapReached = (userLimitStats?.adsUnlocked ?: 0) >= 5
+        val isCapReached = (userLimitStats?.adsUnlocked ?: 0) >= 2
         AlertDialog(
             onDismissRequest = { 
                 if (adUnlockState !is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.LoadingAd) {
@@ -627,12 +614,12 @@ fun CreateEventScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (isCapReached) {
-                        Text("Has utilizado tu desbloqueo extra mensual (2 anuncios).")
-                        Text("Para crear más eventos, vuélvete Banana Gold 🍌✨.")
+                        Text("Has utilizado tus 2 desbloqueos extra mensuales (4 anuncios).")
+                        Text("Para crear más eventos, vuélvete +panoramas Gold 🍌✨.")
                     } else {
                         when (val state = adUnlockState) {
                             is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.Idle -> {
-                                Text("Has usado tu cupo gratuito. Puedes desbloquear 1 evento extra viendo 2 anuncios.")
+                                Text("Has usado tu cupo gratuito. Puedes desbloquear hasta 2 espacios extras (eventos o solicitudes) viendo 4 anuncios en total (2 ads = 1 unlock).")
                             }
                             is com.eventos.banana.ui.event.CreateEventViewModel.UnlockState.LoadingAd -> {
                                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -53,6 +53,8 @@ sealed class Screen(val route: String) {
         companion object { const val routePattern = "public_profile/{userId}" }
     }
 
+    object IdentityVerification : Screen("identity_verification")
+
     // Monetization
     object Gold : Screen("gold")
     object AppIcons : Screen("app_icons")

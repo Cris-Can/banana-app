@@ -2,6 +2,7 @@ package com.eventos.banana.di
 
 import com.eventos.banana.data.repository.AuthRepository
 import com.eventos.banana.data.repository.EventRepository
+import com.eventos.banana.data.repository.EventNotificationHelper
 import com.eventos.banana.data.repository.MessageRepository
 import com.eventos.banana.data.repository.NotificationRepository
 import com.eventos.banana.data.repository.UserRepository
@@ -92,8 +93,16 @@ object RepositoryModule {
     fun provideEventRepository(
         firestore: com.google.firebase.firestore.FirebaseFirestore,
         notificationRepository: NotificationRepository,
-        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource
-    ): EventRepository = EventRepository(firestore, notificationRepository, storageDataSource)
+        notificationHelper: EventNotificationHelper,
+        storageDataSource: com.eventos.banana.data.remote.storage.FirebaseStorageDataSource,
+        rateLimitManager: com.eventos.banana.core.security.RateLimitManager
+    ): EventRepository = EventRepository(
+        firestore,
+        notificationRepository,
+        notificationHelper,
+        storageDataSource,
+        rateLimitManager
+    )
 
     @Provides
     @Singleton

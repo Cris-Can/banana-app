@@ -8,6 +8,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -33,6 +35,7 @@ fun BananaEventCard(
     creatorName: String,
     creatorRating: Double,
     creatorRatingCount: Int,
+    isCreatorIdentityVerified: Boolean = false,
     onClick: () -> Unit,
     userLocation: com.eventos.banana.domain.model.ExactLocation? = null,
     modifier: Modifier = Modifier,
@@ -115,6 +118,26 @@ fun BananaEventCard(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+
+                // 🔞 +18 Badge
+                if (event.isAdultContent) {
+                    Surface(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(top = 32.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ) {
+                        Text(
+                            text = "🔞 +18",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
 
                 // 🔴 Status Badge (if Closed/Finished)
@@ -218,10 +241,19 @@ fun BananaEventCard(
                     Spacer(Modifier.width(4.dp))
                     Text(
                         text = creatorName,
-                        style = MaterialTheme.typography.labelSmall, // Smaller but crisp
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    if (isCreatorIdentityVerified) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Identidad verificada",
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
                     
                     if (creatorRatingCount > 0) {
                         Spacer(Modifier.weight(1f)) // Push rating to end

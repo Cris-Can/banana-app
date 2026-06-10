@@ -4,6 +4,7 @@ import com.eventos.banana.domain.model.UserProfile
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
+import timber.log.Timber
 
 import javax.inject.Inject
 
@@ -23,7 +24,8 @@ class SubscriptionRepository @Inject constructor(
         val eventsCreated: Int,
         val adsUnlocked: Int,
         val limit: Int,
-        val isFounder: Boolean = false
+        val isFounder: Boolean = false,
+        val isGold: Boolean = false
     )
 
     /**
@@ -36,7 +38,7 @@ class SubscriptionRepository @Inject constructor(
             val user = getUser(userId) ?: return Result.failure(Exception("User not found"))
             val updatedUser = checkAndResetCycle(user)
 
-            if (updatedUser.subscriptionType == "GOLD" || updatedUser.subscriptionType == "FOUNDER" || updatedUser.isFounder) {
+            if (updatedUser.isGold) {
                 Result.success(true)
             } else {
                 val effectiveLimit = FREE_LIMIT_CREATE_EVENT + updatedUser.adEventsUnlocked
@@ -69,7 +71,7 @@ class SubscriptionRepository @Inject constructor(
             val user = getUser(userId) ?: return Result.failure(Exception("User not found"))
             val updatedUser = checkAndResetCycle(user)
 
-            if (updatedUser.subscriptionType == "GOLD" || updatedUser.subscriptionType == "FOUNDER" || updatedUser.isFounder) {
+            if (updatedUser.isGold) {
                 Result.success(true)
             } else {
                 val effectiveLimit = FREE_LIMIT_JOIN_REQUEST + updatedUser.adEventsUnlocked
@@ -86,7 +88,7 @@ class SubscriptionRepository @Inject constructor(
                 "eventsCreatedInCycle", com.google.firebase.firestore.FieldValue.increment(1)
             ).await()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Subscription error")
         }
     }
 
@@ -96,7 +98,7 @@ class SubscriptionRepository @Inject constructor(
                 "joinRequestsInCycle", com.google.firebase.firestore.FieldValue.increment(1)
             ).await()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Subscription error")
         }
     }
 
@@ -140,7 +142,8 @@ class SubscriptionRepository @Inject constructor(
                 eventsCreated = refreshed.eventsCreatedInCycle,
                 adsUnlocked = refreshed.adEventsUnlocked,
                 limit = FREE_LIMIT_CREATE_EVENT, // The base limit, UI calculates effective
-                isFounder = refreshed.isFounder || refreshed.subscriptionType == "FOUNDER"
+                isFounder = refreshed.isFounder,
+                isGold = refreshed.isGold
             )
         } catch (e: Exception) {
             null
@@ -172,7 +175,7 @@ class SubscriptionRepository @Inject constructor(
             }
             usersCollection.document(userId).update("subscriptionType", type).await()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Subscription error")
         }
     }
 
@@ -193,8 +196,8 @@ class SubscriptionRepository @Inject constructor(
                 val currentUnlocked = snapshot.getLong("adEventsUnlocked")?.toInt() ?: 0
                 
                 // 🛑 MAX CAP: Removed or increased to 5 for flexibility
-                if (currentUnlocked >= 5) {
-                    return@runTransaction Pair(currentUnlocked, currentProgress) // Max 5 extra events/joins
+                if (currentUnlocked >= 2) {
+                    return@runTransaction Pair(currentUnlocked, currentProgress) // Max 2 extra events/joins
                 }
 
                 var newProgress = currentProgress + 1

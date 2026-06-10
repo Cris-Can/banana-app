@@ -26,6 +26,14 @@ class CreateEventUseCase @Inject constructor(
                 return Result.failure(Exception("LIMIT_REACHED"))
             }
 
+            // 1.6 Validar +18 (identityVerified)
+            if (event.isAdultContent) {
+                val creatorProfile = userRepository.getUserProfile(event.creatorId)
+                if (creatorProfile == null || !creatorProfile.identityVerified) {
+                    return Result.failure(Exception("Debes verificar tu identidad para crear eventos +18"))
+                }
+            }
+
             // 1.5 Validar Ubicación
             val exactLat = event.exactLatitude ?: event.latitude
             val exactLng = event.exactLongitude ?: event.longitude
@@ -36,8 +44,8 @@ class CreateEventUseCase @Inject constructor(
 
             // 2. Ofuscación de Ubicación (Seguridad Física)
             
-            // Generate Fuzzed coordinates (approx 800m - 1.2km offset)
-            // 1 degree lat/lng ~= 111km. 0.01 ~= 1.1km
+            // Generate Fuzzed coordinates (approx 2.5km - 3.5km offset)
+            // 1 degree lat/lng ~= 111km. 0.03 ~= 3.3km
             val eventWithFuzzedLocation = if (exactLat != null && exactLng != null) {
                 // Si el evento es PÚBLICO, no ofuscamos en los campos principales (o usamos los mismos exactos)
                 // Pero por diseño, los campos 'latitude'/'longitude' son los que se ven en el mapa feed
@@ -54,8 +62,8 @@ class CreateEventUseCase @Inject constructor(
                     )
                 } else {
                     // Private event -> APPLY FUZZING to public fields
-                    val latOffset = (Random.nextDouble(-0.01, 0.01))
-                    val lngOffset = (Random.nextDouble(-0.01, 0.01))
+                    val latOffset = (Random.nextDouble(-0.03, 0.03))
+                    val lngOffset = (Random.nextDouble(-0.03, 0.03))
                     
                     val fuzzedLat = exactLat + latOffset
                     val fuzzedLng = exactLng + lngOffset
@@ -66,7 +74,7 @@ class CreateEventUseCase @Inject constructor(
                         latitude = fuzzedLat,  // PUBLIC COORD (Fuzzed)
                         longitude = fuzzedLng,  // PUBLIC COORD (Fuzzed)
                         exactAddress = event.address,
-                        address = event.commune // PUBLIC ADDRESS (Hidden/City only)
+                        address = if (event.commune.isNotBlank()) event.commune else "Ubicación aproximada" // PUBLIC ADDRESS (Hidden/City only)
                     )
                 }
             } else {
@@ -75,8 +83,9 @@ class CreateEventUseCase @Inject constructor(
 
             // 3. Generar Geohash (Precisión 9 para almacenamiento)
             val eventWithGeohash = if (eventWithFuzzedLocation.latitude != null && eventWithFuzzedLocation.longitude != null) {
-                val hash = GeohashUtils.encode(eventWithFuzzedLocation.latitude, eventWithFuzzedLocation.longitude, GeohashUtils.getPrecisionForRadius(searchRadiusKm))
-                android.util.Log.d("BANANA_DEBUG", "Creando evento: lat=${eventWithFuzzedLocation.latitude}, lng=${eventWithFuzzedLocation.longitude}, geohash=$hash")
+                val precision = GeohashUtils.getPrecisionForRadius(searchRadiusKm)
+                val hash = GeohashUtils.encode(eventWithFuzzedLocation.latitude, eventWithFuzzedLocation.longitude, precision)
+                android.util.Log.d("BANANA_DEBUG", "Creando evento: lat=${eventWithFuzzedLocation.latitude}, lng=${eventWithFuzzedLocation.longitude}, precision=$precision, geohash=$hash")
                 eventWithFuzzedLocation.copy(geohash = hash)
             } else {
                 android.util.Log.e("BANANA_DEBUG", "Creando evento SIN coordenadas")

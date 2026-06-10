@@ -19,9 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.eventos.banana.ui.theme.BananaGold
+import com.eventos.banana.ui.theme.PanoramasGold
 import com.eventos.banana.ui.monetization.BillingViewModel
 import androidx.compose.ui.res.stringResource
+import com.eventos.banana.data.repository.BillingRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +32,7 @@ fun BananaGoldScreen(
     onNavigateToIcons: () -> Unit
 ) {
     val productDetails by billingViewModel.productDetails.collectAsState()
-    val goldProduct = productDetails["banana_plus_monthly"]
+    val goldProduct = productDetails[BillingRepository.SUB_BANANA_GOLD]
     
     // Fallback price if loading or offline
     val priceText = goldProduct?.subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice ?: stringResource(com.eventos.banana.R.string.banana_gold_fallback_price)
@@ -66,7 +67,7 @@ fun BananaGoldScreen(
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            colors = listOf(BananaGold, Color(0xFFC5A000))
+                            colors = listOf(PanoramasGold, Color(0xFFC5A000))
                         )
                     ),
                 contentAlignment = Alignment.Center
@@ -81,7 +82,7 @@ fun BananaGoldScreen(
                 stringResource(com.eventos.banana.R.string.banana_gold_title),
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    color = BananaGold
+                    color = PanoramasGold
                 )
             )
             
@@ -134,14 +135,14 @@ fun BananaGoldScreen(
                     if (activity != null) {
                         billingViewModel.buyGold(activity)
                     } else {
-                        android.util.Log.e("BananaGold", "Activity context not found")
+                        android.util.Log.e("PanoramasGold", "Activity context not found")
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BananaGold,
+                    containerColor = PanoramasGold,
                     contentColor = Color.Black
                 ),
                 enabled = goldProduct != null 

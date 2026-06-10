@@ -91,13 +91,16 @@ fun EventFeedSection(
                         key = { index -> uiState.posts[index].id }
                     ) { index ->
                         val post = uiState.posts[index]
+                        val onReply = remember(post) { { viewModel.setReplyingTo(post) } }
+                        val onBlock = remember(post) { { viewModel.blockUser(currentUserId, post.userId) } }
+                        val onReport = remember(post) { { reason: String -> viewModel.reportPost(currentUserId, post, reason) } }
                         PostItem(
                             post = post,
                             currentUserId = currentUserId,
                             onUserClick = { onUserClick(post.userId) },
-                            onReply = { viewModel.setReplyingTo(post) },
-                            onBlock = { viewModel.blockUser(currentUserId, post.userId) },
-                            onReport = { reason -> viewModel.reportPost(currentUserId, post, reason) }
+                            onReply = onReply,
+                            onBlock = onBlock,
+                            onReport = onReport
                         )
                     }
                 }
@@ -169,8 +172,16 @@ fun EventFeedSection(
             FilledIconButton(
                 onClick = {
                     scope.launch {
-                        val bytes = selectedImageUri?.let {
-                            context.contentResolver.openInputStream(it)?.readBytes()
+                        val bytes = selectedImageUri?.let { uri ->
+                            com.eventos.banana.util.ImageCompressor.compressFromUri(
+                                context,
+                                uri,
+                                maxWidth = 1024,
+                                maxHeight = 1024,
+                                quality = 80
+                            ) ?: context.contentResolver.openInputStream(uri)?.use { stream ->
+                                stream.readBytes()
+                            }
                         }
                         viewModel.createPost(currentUserId, postContent, bytes)
                         postContent = ""
@@ -254,6 +265,16 @@ fun PostItem(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = stringResource(com.eventos.banana.R.string.feed_verified),
                         tint = Color(0xFF2196F3),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .padding(start = 4.dp)
+                    )
+                }
+                if (post.isUserIdentityVerified) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Identidad verificada",
+                        tint = Color(0xFF2E7D32),
                         modifier = Modifier
                             .size(16.dp)
                             .padding(start = 4.dp)

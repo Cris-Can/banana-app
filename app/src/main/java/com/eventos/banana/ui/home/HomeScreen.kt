@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import com.google.maps.android.compose.clustering.*
 import com.google.maps.android.compose.Circle
 import com.google.maps.android.clustering.ClusterItem
@@ -136,15 +137,15 @@ fun HomeScreen(
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission) {
             try {
-                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                    if (location != null) {
-                        eventListViewModel.updateLocation(location.latitude, location.longitude)
-                        sessionViewModel.updateProfileLocation(location.latitude, location.longitude)
-                        android.util.Log.d("HomeScreen", "📍 Location updated: ${location.latitude}, ${location.longitude}")
-                    }
+                val location = fusedLocationClient.lastLocation.await()
+                if (location != null) {
+                    eventListViewModel.updateLocation(location.latitude, location.longitude)
+                    sessionViewModel.updateProfileLocation(location.latitude, location.longitude)
                 }
             } catch (e: SecurityException) {
                 // Ignore
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e // re-lanzar para respetar cancelación
             }
         }
     }
@@ -167,6 +168,10 @@ fun HomeScreen(
     }
     val profileUiState by sessionViewModel.profileUiState.collectAsStateWithLifecycle()
     val nickname = profileUiState.profile?.nickname
+    val isIdentityVerified = profileUiState.profile?.identityVerified ?: false
+    LaunchedEffect(isIdentityVerified) {
+        eventListViewModel.setIdentityVerified(isIdentityVerified)
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -365,7 +370,7 @@ fun HomeScreen(
                         )
                     }
                     
-                    items(com.eventos.banana.domain.model.EventType.values().toList()) { type ->
+                    items(com.eventos.banana.domain.model.EventType.values().toList(), key = { it.name }) { type ->
                         val isSelected = selectedCategory == type
                         FilterChip(
                             selected = isSelected,
@@ -427,7 +432,7 @@ fun HomeScreen(
                         )
                     }
 
-                    items(com.eventos.banana.domain.model.DateFilter.values().toList()) { filter ->
+                    items(com.eventos.banana.domain.model.DateFilter.values().toList(), key = { it.name }) { filter ->
                         FilterChip(
                             selected = selectedDateFilter == filter,
                             onClick = { eventListViewModel.selectDateFilter(filter) },
@@ -1080,6 +1085,7 @@ fun HomeScreen(
                                         creatorName = creatorName,
                                         creatorRating = creatorRating,
                                         creatorRatingCount = creatorRatingCount,
+                                        isCreatorIdentityVerified = creatorProfile?.identityVerified ?: false,
                                         onClick = { onEventClick(event.id) },
                                         userLocation = state.currentUserLocation,
                                         modifier = Modifier.animateItem(),

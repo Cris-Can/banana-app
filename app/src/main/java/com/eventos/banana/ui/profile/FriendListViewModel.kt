@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.UserProfile
+import com.eventos.banana.util.GeohashUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -281,18 +282,21 @@ class FriendListViewModel @Inject constructor(
         suggestionsJob = viewModelScope.launch {
             userRepository.observeUserProfile(currentUserId)
                 .distinctUntilChanged { old, new ->
-                    old.geohash?.take(4) == new.geohash?.take(4) &&
+                    val oldPrecision = GeohashUtils.getPrecisionForRadius(old.searchRadiusKm)
+                    val newPrecision = GeohashUtils.getPrecisionForRadius(new.searchRadiusKm)
+                    old.geohash?.take(newPrecision) == new.geohash?.take(newPrecision) &&
                     old.blockedUsers == new.blockedUsers
                 }
                 .collect { profile ->
-                    val geohashPrefix = profile.geohash?.take(4)
+                    val radiusPrecision = GeohashUtils.getPrecisionForRadius(profile.searchRadiusKm)
+                    val geohashPrefix = profile.geohash?.take(radiusPrecision)
                     if (geohashPrefix == lastGeohashPrefix && allSuggestions.isNotEmpty()) return@collect
                     lastGeohashPrefix = geohashPrefix
 
                     try {
                         val geohash = profile.geohash ?: ""
                         val rawSuggestions = if (geohash.isNotBlank()) {
-                            userRepository.getUsersByProximity(geohash, currentUserId)
+                            userRepository.getUsersByProximity(geohash, currentUserId, precision = radiusPrecision)
                         } else {
                             val commune = profile.commune ?: ""
                             val region = profile.region ?: ""

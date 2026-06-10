@@ -31,6 +31,7 @@ fun WorldMapScreen(
     onBack: () -> Unit,
     onEventClick: (String) -> Unit,
     currentUserId: String, // ➕ Pass ID explicitly
+    isIdentityVerified: Boolean = false,
     viewModel: EventListViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -104,6 +105,8 @@ fun WorldMapScreen(
                 // 📍 Event Markers
                 events.forEach { event ->
                     if (event.latitude != null && event.longitude != null) {
+                        // 🔞 Ocultar +18 si el usuario no está verificado
+                        if (event.isAdultContent && !isIdentityVerified) return@forEach
                         // 🔒 PRIVACY LOGIC:
                         // Show exact location if:
                         // 1. User is Creator
@@ -137,7 +140,7 @@ fun WorldMapScreen(
                                 // Optional: Use a generic circle or different color for approximate?
                                 // For now keep default marker but maybe semi-transparent or different hue if possible
                                 com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(
-                                    com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_AZURE
+                                    com.google.android.gms.maps.model.BitmapDescriptorFactory.HUE_VIOLET
                                 )
                             } else {
                                 com.google.android.gms.maps.model.BitmapDescriptorFactory.defaultMarker(

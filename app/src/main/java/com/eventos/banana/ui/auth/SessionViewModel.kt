@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.catch
 import com.google.firebase.firestore.ListenerRegistration
@@ -104,6 +105,7 @@ class SessionViewModel @Inject constructor(
                         android.util.Log.d("SessionViewModel", "Session check: isVerified sync success")
                     }
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     android.util.Log.e("SessionViewModel", "Session check: reload/sync FAILED: ${e.message}")
                     isEmailVerified = authRepository.isEmailVerified()
                 } finally {
@@ -155,6 +157,7 @@ class SessionViewModel @Inject constructor(
         profileJob = viewModelScope.launch {
             userRepository.observeUserProfile(uid)
                 .catch { e ->
+                    if (e is CancellationException) throw e
                     android.util.Log.e("SessionViewModel", "Error observing profile", e)
                 }
                 .collect { profile ->
@@ -388,6 +391,7 @@ class SessionViewModel @Inject constructor(
         notificationsJob = viewModelScope.launch {
             notificationRepository.observeNotifications(uid)
                 .catch { e ->
+                    if (e is CancellationException) throw e
                     android.util.Log.e("SessionViewModel", "Error observando notificaciones: ${e.message}")
                 }
                 .collect { notifications ->
@@ -422,6 +426,7 @@ class SessionViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 android.util.Log.e("SessionViewModel", "Error auto-updating location", e)
             }
         }

@@ -28,6 +28,9 @@ data class UserProfileDto(
     @get:PropertyName("isVerified") @set:PropertyName("isVerified") 
     var isVerified: Boolean = false,
     
+    @get:PropertyName("identityVerified") @set:PropertyName("identityVerified")
+    var identityVerified: Boolean = false,
+    
     val score: Int = 0,
     val ratingSum: Double = 0.0,
     val ratingCount: Int = 0,
@@ -35,9 +38,6 @@ data class UserProfileDto(
     
     @get:PropertyName("isGold") @set:PropertyName("isGold") 
     var isGoldStored: Boolean = false,
-    
-    @get:PropertyName("premium") @set:PropertyName("premium") 
-    var isPremiumStored: Boolean = false,
     
     @get:PropertyName("isFounder") @set:PropertyName("isFounder") 
     var isFounder: Boolean = false,
@@ -101,12 +101,12 @@ data class UserProfileDto(
             fcmToken = fcmToken,
             appTheme = appTheme,
             isVerified = isVerified,
+            identityVerified = identityVerified,
             score = score,
             ratingSum = ratingSum,
             ratingCount = ratingCount,
             averageScore = averageScore,
             isGoldStored = isGoldStored,
-            isPremiumStored = isPremiumStored,
             isFounder = isFounder,
             aboutMe = aboutMe,
             interests = interests,
@@ -162,12 +162,12 @@ data class UserProfileDto(
                 fcmToken = domain.fcmToken,
                 appTheme = domain.appTheme,
                 isVerified = domain.isVerified,
+                identityVerified = domain.identityVerified,
                 score = domain.score,
                 ratingSum = domain.ratingSum,
                 ratingCount = domain.ratingCount,
                 averageScore = domain.averageScore,
                 isGoldStored = domain.isGoldStored,
-                isPremiumStored = domain.isPremiumStored,
                 isFounder = domain.isFounder,
                 aboutMe = domain.aboutMe,
                 interests = domain.interests,

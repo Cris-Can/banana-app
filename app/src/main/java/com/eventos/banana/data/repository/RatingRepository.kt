@@ -17,7 +17,6 @@ class RatingRepository @Inject constructor(
         private const val COLLECTION_USERS = "users"
         private const val COLLECTION_SKIPS = "rating_skips" // Nueva colección de saltos
         private const val EDIT_WINDOW_MS = 10 * 60 * 1000L // 10 minutos
-        private const val RATING_DEADLINE_DAYS = 5L
     }
 
     /**
@@ -42,6 +41,7 @@ class RatingRepository @Inject constructor(
                 .whereEqualTo("eventId", eventId)
                 .whereEqualTo("fromUserId", fromUserId)
                 .whereEqualTo("toUserId", toUserId)
+                .limit(1)
                 .get()
                 .await()
 
@@ -79,11 +79,120 @@ class RatingRepository @Inject constructor(
         }
     }
 
+    /**
+     * Obtiene cantidad de créditos válidos (no expirados).
+     */
+    suspend fun getCredits(userId: String): Result<Int> {
+        return try {
+            val doc = db.collection(COLLECTION_USERS).document(userId).get().await()
+            val ratingCredits = doc.getLong("ratingCredits")?.toInt() ?: 0
+            val expiry = doc.getLong("ratingCreditsExpiry") ?: 0L
+            if (expiry > System.currentTimeMillis() && ratingCredits > 0) {
+                Result.success(ratingCredits)
+            } else {
+                Result.success(0)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting credits", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Consulta y descuenta 1 crédito atómicamente.
+     */
+    suspend fun spendCredit(userId: String): Result<Unit> {
+        return try {
+            val userRef = db.collection(COLLECTION_USERS).document(userId)
+            var success = false
+            db.runTransaction { transaction ->
+                val doc = transaction.get(userRef)
+                val credits = doc.getLong("ratingCredits")?.toInt() ?: 0
+                val expiry = doc.getLong("ratingCreditsExpiry") ?: 0L
+                if (expiry > System.currentTimeMillis() && credits > 0) {
+                    transaction.update(userRef, "ratingCredits", credits - 1)
+                    success = true
+                } else {
+                    throw Exception("No hay créditos suficientes o están expirados")
+                }
+            }.await()
+            if (success) Result.success(Unit) else Result.failure(Exception("Fallo al descontar crédito"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error spending credit", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Gasta 1 crédito: setea isAnonymous=true en el rating.
+     * Solo el dueño del rating (fromUserId) puede hacer esto.
+     */
+    suspend fun anonymizeRating(ratingId: String, currentUserId: String): Result<Unit> {
+        return try {
+            val ratingRef = db.collection(COLLECTION_RATINGS).document(ratingId)
+            val userRef = db.collection(COLLECTION_USERS).document(currentUserId)
+            
+            db.runTransaction { transaction ->
+                val ratingDoc = transaction.get(ratingRef)
+                if (!ratingDoc.exists()) throw Exception("Rating no encontrado")
+                if (ratingDoc.getString("fromUserId") != currentUserId) throw Exception("No eres el dueño de este rating")
+                if (ratingDoc.getBoolean("isAnonymous") == true) throw Exception("El rating ya es anónimo")
+                
+                val userDoc = transaction.get(userRef)
+                val credits = userDoc.getLong("ratingCredits")?.toInt() ?: 0
+                val expiry = userDoc.getLong("ratingCreditsExpiry") ?: 0L
+                if (expiry <= System.currentTimeMillis() || credits <= 0) {
+                    throw Exception("No hay créditos suficientes")
+                }
+                
+                transaction.update(userRef, "ratingCredits", credits - 1)
+                transaction.update(ratingRef, "isAnonymous", true)
+            }.await()
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error anonymizing rating", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Gasta 1 crédito: agrega ratingId a UserProfile.revealedRatingIds.
+     */
+    suspend fun revealRating(ratingId: String, currentUserId: String): Result<Unit> {
+        return try {
+            val userRef = db.collection(COLLECTION_USERS).document(currentUserId)
+            
+            db.runTransaction { transaction ->
+                val userDoc = transaction.get(userRef)
+                val credits = userDoc.getLong("ratingCredits")?.toInt() ?: 0
+                val expiry = userDoc.getLong("ratingCreditsExpiry") ?: 0L
+                if (expiry <= System.currentTimeMillis() || credits <= 0) {
+                    throw Exception("No hay créditos suficientes")
+                }
+                
+                val revealedIds = (userDoc.get("revealedRatingIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                if (revealedIds.contains(ratingId)) {
+                    throw Exception("Ya revelaste este rating")
+                }
+                
+                transaction.update(userRef, "ratingCredits", credits - 1)
+                transaction.update(userRef, "revealedRatingIds", com.google.firebase.firestore.FieldValue.arrayUnion(ratingId))
+            }.await()
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error revealing rating", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun getAlreadyRatedUsers(eventId: String, fromUserId: String): Result<Set<String>> {
         return try {
             val existingRatings = db.collection(COLLECTION_RATINGS)
                 .whereEqualTo("eventId", eventId)
                 .whereEqualTo("fromUserId", fromUserId)
+                .limit(500)
                 .get()
                 .await()
 
@@ -148,6 +257,7 @@ class RatingRepository @Inject constructor(
     suspend fun getUserRatings(
         userId: String,
         isPremium: Boolean,
+        revealedIds: List<String> = emptyList(),
         limit: Int = 20,
         startAfter: com.google.firebase.firestore.DocumentSnapshot? = null
     ): Result<Pair<List<UserRating>, com.google.firebase.firestore.DocumentSnapshot?>> {
@@ -169,9 +279,8 @@ class RatingRepository @Inject constructor(
 
             val ratings = snapshot.documents.mapNotNull { doc ->
                 UserRating.fromMap(doc.data ?: emptyMap()).let { rating ->
-                    // Si no es premium, ocultar quién calificó (fromUserId)
-                    // Los comentarios ahora son visibles para todos según requerimiento
-                    if (!isPremium) {
+                    val canSee = !rating.isAnonymous && (isPremium || revealedIds.contains(rating.ratingId))
+                    if (!canSee) {
                         rating.copy(fromUserId = "anonymous")
                     } else {
                         rating
@@ -194,6 +303,7 @@ class RatingRepository @Inject constructor(
         return try {
             val snapshot = db.collection(COLLECTION_RATINGS)
                 .whereEqualTo("eventId", eventId)
+                .limit(500)
                 .get()
                 .await()
 
@@ -228,6 +338,7 @@ class RatingRepository @Inject constructor(
                 .whereEqualTo("eventId", eventId)
                 .whereEqualTo("fromUserId", userId)
                 .whereEqualTo("toUserId", targetUserId)
+                .limit(1)
                 .get()
                 .await()
 
@@ -255,33 +366,10 @@ class RatingRepository @Inject constructor(
         }
     }
 
-    // ✅ Client-side aggregation REMOVED - Now handled entirely by Cloud Function onRatingCreated
+    // ✅ Score aggregation now handled by Cloud Function onRatingCreated
     // The server-side function uses incremental aggregation with transaction logic to prevent race conditions
 
-    /**
-     * Marcar un evento como puntuable y calcular deadline
-     */
-    suspend fun markEventAsRatable(eventId: String, eventDate: Long): Result<Unit> {
-        return try {
-            val ratingDeadline = eventDate + (RATING_DEADLINE_DAYS * 24 * 60 * 60 * 1000)
 
-            db.collection("events")
-                .document(eventId)
-                .update(
-                    mapOf(
-                        "canBeRated" to true,
-                        "ratingDeadline" to ratingDeadline
-                    )
-                )
-                .await()
-
-            Log.d(TAG, "Event $eventId marked as ratable until $ratingDeadline")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error marking event as ratable", e)
-            Result.failure(e)
-        }
-    }
 
     /**
      * Obtener usuarios a puntuar en un evento (excluyendo al propio usuario)
@@ -301,6 +389,7 @@ class RatingRepository @Inject constructor(
             val existingRatings = db.collection(COLLECTION_RATINGS)
                 .whereEqualTo("eventId", eventId)
                 .whereEqualTo("fromUserId", currentUserId)
+                .limit(500)
                 .get()
                 .await()
 

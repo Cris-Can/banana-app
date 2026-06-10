@@ -8,8 +8,9 @@ import com.eventos.banana.util.AppConstants
 import com.eventos.banana.util.GeohashUtils
 
 import com.eventos.banana.domain.usecase.profile.CreateUserProfileUseCase
+import javax.inject.Inject
 
-class RegisterUseCase(
+class RegisterUseCase @Inject constructor(
     private val authRepository: AuthRepository,
     private val createUserProfileUseCase: CreateUserProfileUseCase
 ) {

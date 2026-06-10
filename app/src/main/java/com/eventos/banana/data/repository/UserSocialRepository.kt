@@ -78,34 +78,12 @@ class UserSocialRepository @Inject constructor(
         }
 
         return try {
-            val viewsRef = users.document(targetUid).collection("profile_views")
-            val visitorViewRef = viewsRef.document(visitorUid)
-            
-            val existingSnapshot = visitorViewRef.get().await()
-            val lastVisit = existingSnapshot.getTimestamp("timestamp")?.toDate()?.time ?: 0L
-            val now = System.currentTimeMillis()
-            val shouldNotify = (now - lastVisit) > 60000 
-            
-            val viewData = mapOf("visitorUid" to visitorUid, "timestamp" to FieldValue.serverTimestamp())
-            visitorViewRef.set(viewData, SetOptions.merge()).await()
-            
-            if (shouldNotify) {
-                 users.document(targetUid).update(
-                     "profileViews", FieldValue.increment(1),
-                     "recentViewers", FieldValue.arrayUnion(visitorUid)
-                 ).await()
-                 
-                 notificationRepository.sendNotification(
-                    AppNotification(
-                        userId = targetUid,
-                        title = "Tienes una nueva visita \uD83D\uDC41\uFE0F",
-                        message = "Alguien ha visto tu perfil recientemente.",
-                        type = NotificationType.PROFILE_VIEW,
-                        read = false
-                    )
-                 )
+            val result = rateLimitManager.recordProfileView(targetUid)
+            if (result.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(result.message ?: "Failed to record profile view"))
             }
-            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

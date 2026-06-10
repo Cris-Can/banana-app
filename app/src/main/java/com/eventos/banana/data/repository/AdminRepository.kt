@@ -22,7 +22,8 @@ class AdminRepository(private val context: Context) {
 
                 // 1. MIGRATE USERS
                 onProgress("🔍 Buscando usuarios sin GPS...")
-                val usersSnapshot = firestore.collection("users").get().await() // Get ALL to check fields
+                // TODO: Implement actual pagination for large migration scripts
+                val usersSnapshot = firestore.collection("users").limit(500).get().await() // Get ALL to check fields
                 
                 // Filter locally because "missing field" query is hard
                 val usersToMigrate = usersSnapshot.documents.filter { doc ->
@@ -89,7 +90,7 @@ class AdminRepository(private val context: Context) {
 
                 // 2. MIGRATE EVENTS
                 onProgress("🔍 Buscando eventos sin GPS...")
-                val eventsSnapshot = firestore.collection("events").get().await()
+                val eventsSnapshot = firestore.collection("events").limit(500).get().await()
                 
                 val eventsToMigrate = eventsSnapshot.documents.filter { doc ->
                     val lat = doc.getDouble("latitude")

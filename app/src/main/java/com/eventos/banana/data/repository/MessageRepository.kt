@@ -1,6 +1,7 @@
 package com.eventos.banana.data.repository
 
 import com.eventos.banana.domain.model.Conversation
+import com.eventos.banana.domain.model.ConversationTheme
 import com.eventos.banana.domain.model.Message
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -31,6 +32,7 @@ class MessageRepository @Inject constructor(
             // Buscar conversación existente
             val existing = conversationsCollection
                 .whereArrayContains("participants", currentUserId)
+                .limit(1)
                 .get()
                 .await()
                 .documents
@@ -218,64 +220,16 @@ class MessageRepository @Inject constructor(
     // Marks ALL unread messages in conversation as read by current user using pagination
     suspend fun markConversationAsRead(conversationId: String, userId: String): Result<Unit> {
         return try {
-            // 1. Reset unread count (immediate visual feedback)
+            markConversationAsReadOptimized(conversationId, userId)
+            
+            // También reseteamos el contador visual de no leídos
             conversationsCollection.document(conversationId).update(
                 "unreadCount.$userId", 0
             ).await()
-
-            // 2. Paginate through ALL messages to mark as read
-            // 🚀 PERFORMANCE: Use pagination to handle conversations with many messages
-            val pageSize = 100 // Firestore batch limit is 500, but we use 100 for safety
-            var lastDocument: com.google.firebase.firestore.DocumentSnapshot? = null
-            var totalUpdated = 0
-            
-            do {
-                // Query messages in ascending order (oldest first) for pagination
-                var query = conversationsCollection.document(conversationId)
-                    .collection("messages")
-                    .orderBy("timestamp", Query.Direction.ASCENDING)
-                    .limit(pageSize.toLong())
-                
-                // Apply pagination cursor
-                if (lastDocument != null) {
-                    query = query.startAfter(lastDocument!!)
-                }
-                
-                val messagesSnapshot = query.get().await()
-                
-                if (messagesSnapshot.isEmpty) {
-                    break // No more messages
-                }
-                
-                val batch = firestore.batch()
-                var batchCount = 0
-                
-                for (doc in messagesSnapshot.documents) {
-                    val readers = doc.get("readers") as? List<*> ?: emptyList<Any>()
-                    
-                    // Only update if user is not already in readers
-                    if (!readers.contains(userId)) {
-                        batch.update(doc.reference, "readers", com.google.firebase.firestore.FieldValue.arrayUnion(userId))
-                        batchCount++
-                        totalUpdated++
-                    }
-                }
-                
-                // Commit batch if there are updates
-                if (batchCount > 0) {
-                    batch.commit().await()
-                }
-                
-                // Update pagination cursor
-                lastDocument = messagesSnapshot.documents.lastOrNull()
-                
-            } while (lastDocument != null && messagesSnapshot.documents.size == pageSize)
-            
-            android.util.Log.d("MessageRepository", "Marked $totalUpdated messages as read for user $userId in conversation $conversationId")
             
             Result.success(Unit)
         } catch (e: Exception) {
-            android.util.Log.e("MessageRepository", "Error marking conversation as read: ${e.message}", e)
+            android.util.Log.e("MessageRepository", "Error in mark as read optimized: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -283,40 +237,8 @@ class MessageRepository @Inject constructor(
     // 👁️ MARK AS READ (Optimized version - only updates last N messages for performance)
     // Use this for quick visual feedback when user opens a chat
     suspend fun markConversationAsReadQuick(conversationId: String, userId: String, limit: Int = 50): Result<Unit> {
-        return try {
-            // 1. Reset unread count (immediate visual feedback)
-            conversationsCollection.document(conversationId).update(
-                "unreadCount.$userId", 0
-            ).await()
-
-            // 2. Update only the most recent messages (performance optimization)
-            val messagesSnapshot = conversationsCollection.document(conversationId)
-                .collection("messages")
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(limit.toLong())
-                .get()
-                .await()
-
-            val batch = firestore.batch()
-            var updatesCount = 0
-
-            for (doc in messagesSnapshot.documents) {
-                val readers = doc.get("readers") as? List<*> ?: emptyList<Any>()
-                if (!readers.contains(userId)) {
-                    batch.update(doc.reference, "readers", com.google.firebase.firestore.FieldValue.arrayUnion(userId))
-                    updatesCount++
-                }
-            }
-            
-            if (updatesCount > 0) {
-                batch.commit().await()
-            }
-
-            Result.success(Unit)
-        } catch (e: Exception) {
-            android.util.Log.e("MessageRepository", "Error in quick mark as read: ${e.message}", e)
-            Result.failure(e)
-        }
+        // En la versión optimizada, no hay diferencia porque es O(1)
+        return markConversationAsRead(conversationId, userId)
     }
 
     // 🎭 TOGGLE REACTION (Round v1.1.4)
@@ -442,6 +364,7 @@ class MessageRepository @Inject constructor(
             // 1. Eliminar todos los mensajes de la subcolección
             val messagesSnapshot = conversationsCollection.document(conversationId)
                 .collection("messages")
+                .limit(500)
                 .get()
                 .await()
 
@@ -467,6 +390,12 @@ class MessageRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun markConversationAsReadOptimized(conversationId: String, userId: String, timestamp: Long = System.currentTimeMillis()) {
+        conversationsCollection.document(conversationId)
+            .update("lastReadTimestamps.$userId", timestamp)
+            .await()
     }
 
     // Observar mensajes de una conversación
@@ -497,13 +426,28 @@ class MessageRepository @Inject constructor(
         awaitClose { listener.remove() }
     }
     // 🎨 CHAT THEMES (Round 48)
-    suspend fun updateConversationTheme(conversationId: String, themeColor: String): Result<Unit> {
+    suspend fun updateConversationTheme(conversationId: String, theme: ConversationTheme): Result<Unit> {
         return try {
-            conversationsCollection.document(conversationId).update("themeColor", themeColor).await()
+            val themeMap = mapOf(
+                "primaryColor" to theme.primaryColor,
+                "secondaryColor" to theme.secondaryColor,
+                "backgroundColor" to theme.backgroundColor,
+                "headerStyle" to theme.headerStyle,
+                "inputBarStyle" to theme.inputBarStyle,
+                "separatorStyle" to theme.separatorStyle,
+                "bubbleAnimation" to theme.bubbleAnimation,
+                "bubbleShadow" to theme.bubbleShadow,
+                "typingStyle" to theme.typingStyle
+            )
+            conversationsCollection.document(conversationId).update("theme", themeMap).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun updateConversationTheme(conversationId: String, themeColor: String): Result<Unit> {
+        return updateConversationTheme(conversationId, ConversationTheme(primaryColor = themeColor))
     }
 
     // Observar detalles de una conversación (Theme, Nicknames, etc.)
@@ -515,7 +459,12 @@ class MessageRepository @Inject constructor(
                     trySend(null)
                     return@addSnapshotListener
                 }
-                val conversation = snapshot?.toObject(Conversation::class.java)
+                val conversation = try {
+                    snapshot?.toObject(Conversation::class.java)
+                } catch (e: Exception) {
+                    android.util.Log.e("MessageRepository", "Error deserializing conversation", e)
+                    null
+                }
                 trySend(conversation)
             }
         awaitClose { listener.remove() }

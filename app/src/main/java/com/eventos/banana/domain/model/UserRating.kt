@@ -16,7 +16,8 @@ data class UserRating(
     // Metadata
     val timestamp: Long = 0L,
     val canEditUntil: Long = 0L,    // timestamp + 10 minutos
-    val isEdited: Boolean = false
+    val isEdited: Boolean = false,
+    val isAnonymous: Boolean = false
 ) {
     // Helper para verificar si aún se puede editar
     fun canEdit(): Boolean {
@@ -35,7 +36,8 @@ data class UserRating(
             "comment" to comment,
             "timestamp" to timestamp,
             "canEditUntil" to canEditUntil,
-            "isEdited" to isEdited
+            "isEdited" to isEdited,
+            "isAnonymous" to isAnonymous
         )
     }
     
@@ -56,7 +58,8 @@ data class UserRating(
                 comment = map["comment"] as? String,
                 timestamp = (map["timestamp"] as? Number)?.toLong() ?: 0L,
                 canEditUntil = (map["canEditUntil"] as? Number)?.toLong() ?: 0L,
-                isEdited = map["isEdited"] as? Boolean ?: false
+                isEdited = map["isEdited"] as? Boolean ?: false,
+                isAnonymous = map["isAnonymous"] as? Boolean ?: false
             )
         }
     }

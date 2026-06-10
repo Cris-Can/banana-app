@@ -73,7 +73,7 @@ fun ProfileViewsScreen(
                             )
                         }
                         
-                        items(views) { view ->
+                        items(views, key = { it.user.uid }) { view ->
                             ProfileViewItemRow(view, onUserClick)
                         }
                     }

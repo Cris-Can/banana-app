@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import com.google.firebase.firestore.DocumentSnapshot
+import timber.log.Timber
 
 data class UserRatingsUiState(
     val isLoading: Boolean = false,
@@ -21,7 +22,11 @@ data class UserRatingsUiState(
     val ratings: List<RatingWithUser> = emptyList(),
     val targetProfile: UserProfile? = null,
     val errorMessage: String? = null,
-    val hasMore: Boolean = true
+    val hasMore: Boolean = true,
+    val credits: Int = 0,
+    val creditsExpiry: Long = 0L,
+    val revealedRatingIds: List<String> = emptyList(),
+    val viewerProfile: UserProfile? = null
 )
 
 data class RatingWithUser(
@@ -34,7 +39,8 @@ class UserRatingsViewModel @AssistedInject constructor(
     @Assisted("targetUserId") private val targetUserId: String,
     @Assisted("isViewerPremium") private val isViewerPremium: Boolean,
     private val ratingRepository: RatingRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val authRepository: com.eventos.banana.data.repository.AuthRepository
 ) : ViewModel() {
 
     @AssistedFactory
@@ -72,17 +78,29 @@ class UserRatingsViewModel @AssistedInject constructor(
                 } else {
                     _uiState.value.targetProfile
                 }
+
+                val currentUserId = authRepository.currentUid()
+                val viewerProfile = if (isInitial && currentUserId != null) {
+                    userRepository.getUserProfile(currentUserId)
+                } else {
+                    _uiState.value.viewerProfile
+                }
                 
                 // 2. Get ratings using privacy logic and pagination
                 val result = ratingRepository.getUserRatings(
                     userId = targetUserId,
                     isPremium = isViewerPremium,
+                    revealedIds = viewerProfile?.revealedRatingIds ?: emptyList(),
                     limit = 20,
                     startAfter = lastDocument
                 )
                 
                 if (result.isSuccess) {
-                    val (rawRatings, newLastDoc) = result.getOrNull() ?: Pair(emptyList(), null)
+                    val (rawRatings, newLastDoc) = result.getOrNull().also {
+                        if (it == null) {
+                            Timber.w("getUserRatings returned success with null value")
+                        }
+                    } ?: Pair(emptyList(), null)
                     lastDocument = newLastDoc
                     
                     // 3. Enrich with nicknames if Premium
@@ -104,6 +122,10 @@ class UserRatingsViewModel @AssistedInject constructor(
                         isPaginatedLoading = false,
                         ratings = currentRatings + enrichedRatings,
                         targetProfile = profile,
+                        viewerProfile = viewerProfile,
+                        credits = viewerProfile?.ratingCredits ?: 0,
+                        creditsExpiry = viewerProfile?.ratingCreditsExpiry ?: 0L,
+                        revealedRatingIds = viewerProfile?.revealedRatingIds ?: emptyList(),
                         hasMore = rawRatings.size >= 20
                     )
                 } else {
@@ -118,6 +140,35 @@ class UserRatingsViewModel @AssistedInject constructor(
                     isLoading = false,
                     isPaginatedLoading = false,
                     errorMessage = "Error inesperado: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun revealRater(ratingId: String) {
+        viewModelScope.launch {
+            val currentUserId = authRepository.currentUid() ?: return@launch
+            val result = ratingRepository.revealRating(ratingId, currentUserId)
+            if (result.isSuccess) {
+                // Recargar ratings para reflejar el nombre revelado y actualizar créditos
+                loadRatings(isInitial = true)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Error al revelar: ${result.exceptionOrNull()?.message}"
+                )
+            }
+        }
+    }
+
+    fun anonymizeMyRating(ratingId: String) {
+        viewModelScope.launch {
+            val currentUserId = authRepository.currentUid() ?: return@launch
+            val result = ratingRepository.anonymizeRating(ratingId, currentUserId)
+            if (result.isSuccess) {
+                loadRatings(isInitial = true)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Error al ocultar: ${result.exceptionOrNull()?.message}"
                 )
             }
         }

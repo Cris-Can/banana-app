@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Banana App - Eventos sociales cerca de ti</title>
-    <meta name="description" content="Descubre y crea eventos sociales cerca de ti. Descarga Banana App gratis.">
+    <title>+panoramas - Eventos sociales cerca de ti</title>
+    <meta name="description" content="Descubre y crea eventos sociales cerca de ti. Descarga +panoramas gratis.">
     
     <!-- Open Graph (para WhatsApp, Instagram, etc.) -->
-    <meta property="og:title" content="Banana App 🍌">
+    <meta property="og:title" content="+panoramas 🍌">
     <meta property="og:description" content="Descubre y crea eventos sociales cerca de ti">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://bananaapp-aa46e.web.app">
     
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Banana App 🍌">
+    <meta name="twitter:title" content="+panoramas 🍌">
     <meta name="twitter:description" content="Descubre y crea eventos sociales cerca de ti">
 
     <style>
@@ -49,6 +49,17 @@
         }
         .btn:hover { transform: scale(1.05); }
         .social { margin-top: 24px; color: #adb5bd; font-size: 14px; }
+        .link-privacy {
+            display: inline-block;
+            margin-top: 16px;
+            color: #adb5bd;
+            font-size: 13px;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 2px;
+            transition: color .2s, border-color .2s;
+        }
+        .link-privacy:hover { color: #FFD700; border-color: #FFD700; }
     </style>
 
     <script>
@@ -72,12 +83,23 @@
 <body>
     <div class="container">
         <div class="logo">🍌</div>
-        <h1>Banana App</h1>
+        <h1>+panoramas</h1>
         <p class="subtitle">Descubre y crea eventos sociales cerca de ti</p>
         <a href="https://play.google.com/store/apps/details?id=com.eventos.banana" class="btn">
             📲 Descargar en Play Store
         </a>
         <p class="social">📸 @getbananaapp</p>
+        <a href="/privacy.html" class="link-privacy">🔒 Políticas de Privacidad y Términos de Servicio</a>
+        <p style="margin-top: 32px;">
+            <a href="/privacy.html#eliminacion-cuenta" style="color: #adb5bd; font-size: 13px; text-decoration: underline;">
+                Solicitar eliminación de cuenta
+            </a>
+        </p>
     </div>
+    <p style="text-align: center; color: #6c757d; font-size: 12px; padding: 0 32px 32px;">
+        <a href="/privacy.html#account-deletion" style="color: #6c757d;">Request account deletion</a>
+        &nbsp;·&nbsp;
+        <a href="/privacy.html" style="color: #6c757d;">Privacy Policy</a>
+    </p>
 </body>
 </html>

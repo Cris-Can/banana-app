@@ -1,8 +1,9 @@
 package com.eventos.banana.domain.usecase.profile
 
 import com.eventos.banana.data.repository.UserRepository
+import javax.inject.Inject
 
-class UploadProfilePhotoUseCase(
+class UploadProfilePhotoUseCase @Inject constructor(
     private val userRepository: UserRepository
 ) {
     suspend operator fun invoke(

@@ -194,7 +194,7 @@ fun EventsSearchTab(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(filteredEvents) { event ->
+            items(filteredEvents, key = { it.id }) { event ->
                 EventSearchCard(event, onEventClick)
             }
         }
@@ -254,7 +254,7 @@ fun UsersSearchTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(users) { user ->
+        items(users, key = { it.uid }) { user ->
             UserSearchCard(user) { onUserClick(user.uid) }
         }
     }

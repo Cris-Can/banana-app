@@ -11,7 +11,7 @@ service cloud.firestore {
     }
     // Campos que NADIE puede editar desde el cliente (solo Cloud Functions con admin SDK)
     function protectedFields() {
-      return ['admin', 'isFounder', 'isGold', 'subscriptionType', 'eventsRequestedCount', 'ratingSum', 'ratingCount', 'isVerified', 'isBoosted', 'boostExpiry', 'boostUntil', 'boostedAt', 'boostedBy'];
+      return ['admin', 'isFounder', 'isGold', 'subscriptionType', 'eventsRequestedCount', 'ratingSum', 'ratingCount', 'isVerified', 'isBoosted', 'boostExpiry', 'boostUntil', 'boostedAt', 'boostedBy', 'identityVerified'];
     }
     
     // --- EVENTOS ---
@@ -51,7 +51,9 @@ service cloud.firestore {
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(protectedFields());
       
-      allow update: if false;
+      // Admin: puede editar cualquier usuario, incluidos campos protegidos
+      allow update: if isSignedIn()
+                    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true;
       
       match /profile_views/{visitorId} {
         allow read: if isSignedIn() && request.auth.uid == userId;

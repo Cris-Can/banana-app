@@ -35,8 +35,11 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
@@ -56,6 +59,7 @@ fun ProfileScreen(
     onLeaderboardClick: () -> Unit = {}, // 🏆 Gamification
     onSettingsClick: () -> Unit, // ⚙️ Updated
     onRatingsClick: (String) -> Unit = {}, // ⭐ New Feature
+    onNavigateToIdentityVerification: () -> Unit = {}, // 🪪 Identity Verification
     profileViewModel: ProfileViewModel = hiltViewModel()
 ) {
     val profileUiState by sessionViewModel.profileUiState.collectAsState()
@@ -559,6 +563,49 @@ fun ProfileScreen(
                             style = MaterialTheme.typography.bodySmall, 
                             color = MaterialTheme.colorScheme.secondary
                         )
+                    }
+
+                    if (profile.identityVerified) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Identidad verificada",
+                                tint = Color(0xFF2E7D32),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "Identidad Verificada",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF2E7D32)
+                            )
+                        }
+                    }
+
+                    // 🪪 VERIFICACIÓN DE IDENTIDAD (+18)
+                    if (!profile.identityVerified) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(androidx.compose.material.icons.Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.error)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Verifica tu identidad", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text("Necesario para crear y ver eventos +18", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Button(onClick = onNavigateToIdentityVerification) {
+                                    Text("Verificar")
+                                }
+                            }
+                        }
                     }
 
                      // EDIT NAME DIALOG

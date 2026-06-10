@@ -42,6 +42,10 @@ class BillingViewModel @Inject constructor(
         return repository.launchBillingFlow(activity, BillingRepository.INAPP_EVENT_BOOST, eventId)
     }
     
+    fun buyCredits(activity: Activity): Boolean {
+        return repository.launchBillingFlow(activity, BillingRepository.INAPP_CREDITS_3PACK)
+    }
+    
     fun refreshSubscriptions() {
         repository.checkActiveSubscriptions()
     }

@@ -53,7 +53,7 @@ data class Event(
     
     // ⭐ SISTEMA DE PUNTUACIÓN (Round 11)
     val minimumScore: Double? = null,    // null = sin restricción, ej: 3.5
-    val ratingDeadline: Long? = null,    // eventTimestamp + 5 días
+    val ratingDeadline: Long? = null,    // endAt + 5 días
     val canBeRated: Boolean = false,      // true si ya finalizó y se puede puntuar
     
     // 💎 MONETIZACIÓN (Round 42)
@@ -64,7 +64,10 @@ data class Event(
     val geohash: String? = null,           // Indexed field for radius queries
     
     // 🔔 NOTIFICATIONS (Round 53)
-    val notificationRange: String = "COMMUNE" // "COMMUNE", "REGION", "NATIONAL"
+    val notificationRange: String = "COMMUNE", // "COMMUNE", "REGION", "NATIONAL"
+    
+    // 🔞 ADULT CONTENT (Round 76)
+    val isAdultContent: Boolean = false
 ) {
     // Helper para verificar si un usuario puede unirse según su score
     fun canUserJoin(userAverageRating: Double, userRatingCount: Int): Boolean {

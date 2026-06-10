@@ -4,11 +4,14 @@ import androidx.lifecycle.ViewModel
 import com.eventos.banana.domain.model.UserProfile
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 import com.eventos.banana.data.repository.UserRepository
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 
 @HiltViewModel
 class UserViewModel @Inject constructor(
@@ -74,11 +77,84 @@ class UserViewModel @Inject constructor(
 
             results.filter { it.uid != currentUserId }.toList()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Search error")
             emptyList()
         }
     }
 
     suspend fun cleanupUsersDatabase(): Result<String> = 
         userRepository.cleanupUsersDatabase()
+
+    suspend fun getPendingIdentityVerifications(): List<UserProfile> {
+        return try {
+            val snapshot = usersCollection
+                .whereEqualTo("identityVerificationStatus", "pending")
+                .get()
+                .await()
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(com.eventos.banana.data.remote.model.UserProfileDto::class.java)?.toDomain()?.copy(uid = doc.id)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Search error")
+            emptyList()
+        }
+    }
+
+    suspend fun approveIdentityVerification(uid: String): Result<Unit> {
+        return try {
+            usersCollection.document(uid).update(
+                mapOf(
+                    "identityVerified" to true,
+                    "identityVerificationStatus" to "approved",
+                    "identityVerifiedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+
+            // Notificar al usuario que su verificación fue aprobada
+            val adminUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+            val notificationData = mapOf(
+                "userId" to uid,
+                "fromUserId" to adminUid,
+                "title" to "Identidad Aprobada",
+                "message" to "Tu verificación de identidad ha sido aprobada. Ya puedes crear y ver eventos +18.",
+                "type" to com.eventos.banana.domain.model.NotificationType.GENERIC.name,
+                "read" to false,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            db.collection("notifications").add(notificationData).await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            android.util.Log.e("UserViewModel", "Error approving verification for $uid", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun rejectIdentityVerification(uid: String): Result<Unit> {
+        return try {
+            usersCollection.document(uid).update(
+                mapOf(
+                    "identityVerificationStatus" to "rejected"
+                )
+            ).await()
+
+            // Notificar al usuario que su verificación fue rechazada
+            val adminUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+            val notificationData = mapOf(
+                "userId" to uid,
+                "fromUserId" to adminUid,
+                "title" to "Identidad Rechazada",
+                "message" to "Tu verificación de identidad ha sido rechazada. Si crees que es un error, contacta al soporte.",
+                "type" to com.eventos.banana.domain.model.NotificationType.GENERIC.name,
+                "read" to false,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            db.collection("notifications").add(notificationData).await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            android.util.Log.e("UserViewModel", "Error rejecting verification for $uid", e)
+            Result.failure(e)
+        }
+    }
 }

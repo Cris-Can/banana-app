@@ -4,20 +4,21 @@ import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
+import timber.log.Timber
 import com.eventos.banana.data.repository.RatingRepository
 import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.EventType
 import com.eventos.banana.domain.model.UserProfile
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import com.eventos.banana.data.repository.EncounterRepository
-import com.eventos.banana.domain.usecase.rating.SubmitRatingUseCase
 import com.eventos.banana.domain.usecase.rating.GetPendingRatingsUseCase
 
 data class RatingUiState(
@@ -26,7 +27,8 @@ data class RatingUiState(
     val alreadyRated: Set<String> = emptySet(),
     val errorMessage: String? = null,
     val successMessage: String? = null,
-    val isSkipped: Boolean = false
+    val isSkipped: Boolean = false,
+    val submittingUserId: String? = null
 )
 
 
@@ -40,7 +42,6 @@ class RatingViewModel @AssistedInject constructor(
     private val userRepository: UserRepository,
     private val ratingRepository: RatingRepository,
     private val encounterRepo: EncounterRepository,
-    private val submitRatingUseCase: SubmitRatingUseCase,
     private val getPendingRatingsUseCase: GetPendingRatingsUseCase
 ) : ViewModel() {
 
@@ -58,26 +59,32 @@ class RatingViewModel @AssistedInject constructor(
     private val _uiState = MutableStateFlow(RatingUiState(isLoading = true))
     val uiState: StateFlow<RatingUiState> = _uiState
 
+    // Active jobs — cancelled and restarted to prevent duplicate coroutines
+    private var loadJob: Job? = null
+    private var submitJob: Job? = null
+    private var skipJob: Job? = null
+
     init {
         loadUsersToRate()
     }
 
     private fun loadUsersToRate() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
             try {
-                // Get user profiles
-                val profiles = participantIds
-                    .filter { it != currentUserId } // Exclude self
-                    .mapNotNull { userId ->
-                        userRepository.getUserProfile(userId)
-                    }
-                    .distinctBy { it.uid } // 🛡️ Evitar crashes por IDs duplicados en LazyColumn
+                val profiles = userRepository.getUsers(
+                    participantIds.filter { it != currentUserId }
+                ).distinctBy { it.uid }
                 
-                // NUEVO (Round 12): Filtrar por encuentros confirmados
-                val metUsers = encounterRepo.getEncountersForUser(eventId, currentUserId)
-                    .getOrNull() ?: emptyList()
+                // Filtrar por encuentros confirmados
+                val encountersResult = encounterRepo.getEncountersForUser(eventId, currentUserId)
+                val metUsers = encountersResult.getOrNull().also {
+                    if (it == null) {
+                        Timber.w(encountersResult.exceptionOrNull(), "Failed to load encounters for user $currentUserId in event $eventId")
+                    }
+                } ?: emptyList()
                 
                 // Solo filtrar si hay encuentros registrados para este evento
                 val shouldFilter = encounterRepo.shouldEnforceEncounters(eventId)
@@ -89,7 +96,7 @@ class RatingViewModel @AssistedInject constructor(
                     profiles // Fallback: mostrar todos si no hay encuentros
                 }
 
-                // NUEVO: Verificar si ha saltado la calificación para este evento
+                // Verificar si ha saltado la calificación para este evento
                 val hasSkipped = ratingRepository.hasSkippedRating(currentUserId, eventId).getOrDefault(false)
                 if (hasSkipped) {
                     _uiState.value = _uiState.value.copy(
@@ -101,9 +108,13 @@ class RatingViewModel @AssistedInject constructor(
                     return@launch
                 }
                 
-                // NUEVO: Obtener EXPRESAMENTE los usuarios que ya calificamos en la DB
+                // Obtener EXPRESAMENTE los usuarios que ya calificamos en la DB
                 val alreadyRatedResult = ratingRepository.getAlreadyRatedUsers(eventId, currentUserId)
-                val alreadyRatedIds = alreadyRatedResult.getOrNull() ?: emptySet()
+                val alreadyRatedIds = alreadyRatedResult.getOrNull().also {
+                    if (it == null) {
+                        Timber.e(alreadyRatedResult.exceptionOrNull(), "Failed to load already rated users for user $currentUserId in event $eventId")
+                    }
+                } ?: emptySet()
                 
                 Log.d("RatingViewModel", "Already rated IDs for event $eventId: $alreadyRatedIds")
                 
@@ -118,6 +129,7 @@ class RatingViewModel @AssistedInject constructor(
                     alreadyRated = alreadyRatedIds
                 )
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMessage = "Error al cargar participantes: ${e.message}"
@@ -131,10 +143,11 @@ class RatingViewModel @AssistedInject constructor(
         score: Int,
         comment: String?
     ) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+        submitJob?.cancel()
+        submitJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, submittingUserId = toUserId)
             
-            val result = submitRatingUseCase(
+            val result = ratingRepository.submitRating(
                 eventId = eventId,
                 eventType = eventType,
                 fromUserId = currentUserId,
@@ -158,20 +171,23 @@ class RatingViewModel @AssistedInject constructor(
                         isLoading = false,
                         usersToRate = newUsersToRate,
                         alreadyRated = currentState.alreadyRated + targetId,
-                        successMessage = "Puntuación enviada"
+                        successMessage = "Puntuación enviada",
+                        submittingUserId = null
                     )
                 }
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "Error al enviar puntuación"
+                    errorMessage = result.exceptionOrNull()?.message ?: "Error al enviar puntuación",
+                    submittingUserId = null
                 )
             }
         }
     }
 
     fun skipRating() {
-        viewModelScope.launch {
+        skipJob?.cancel()
+        skipJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = ratingRepository.skipRating(currentUserId, eventId)
             if (result.isSuccess) {
@@ -194,5 +210,12 @@ class RatingViewModel @AssistedInject constructor(
             errorMessage = null,
             successMessage = null
         )
+    }
+
+    override fun onCleared() {
+        loadJob?.cancel()
+        submitJob?.cancel()
+        skipJob?.cancel()
+        super.onCleared()
     }
 }

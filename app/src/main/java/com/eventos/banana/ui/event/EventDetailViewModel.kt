@@ -8,6 +8,7 @@ import com.eventos.banana.domain.model.JoinRequest
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.eventos.banana.data.repository.UserRepository
+import com.eventos.banana.data.repository.RatingRepository
 
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -23,6 +24,7 @@ class EventDetailViewModel @AssistedInject constructor(
     private val userRepository: UserRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val encounterRepository: EncounterRepository,
+    private val ratingRepository: RatingRepository,
     private val processCheckInUseCase: com.eventos.banana.domain.usecase.event.ProcessCheckInUseCase
 ) : ViewModel() {
 
@@ -362,6 +364,20 @@ class EventDetailViewModel @AssistedInject constructor(
     
     fun resetCheckInState() {
         _checkInState.value = CheckInState.Idle
+    }
+
+    fun boostWithCredit(currentUserId: String) {
+        viewModelScope.launch {
+            _actionState.value = ActionState.Loading
+            val result = ratingRepository.spendCredit(currentUserId)
+            if (result.isSuccess) {
+                repository.boostEvent(eventId, 24 * 60 * 60 * 1000L)
+                loadEvent()
+                _actionState.value = ActionState.Success("✅ Evento destacado con 1 crédito")
+            } else {
+                _actionState.value = ActionState.Error("❌ No tienes créditos suficientes")
+            }
+        }
     }
 }
 

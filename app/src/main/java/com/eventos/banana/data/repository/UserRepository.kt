@@ -45,7 +45,7 @@ class UserRepository @Inject constructor(
     suspend fun searchUsers(query: String) = userCoreRepository.searchUsers(query)
     suspend fun getUsersByRegion(region: String, excludeUid: String) = userCoreRepository.getUsersByRegion(region, excludeUid)
     suspend fun getUsersByCommune(commune: String, excludeUid: String) = userCoreRepository.getUsersByCommune(commune, excludeUid)
-    suspend fun getUsersByProximity(geohash: String, excludeUid: String, limit: Int = 30) = userCoreRepository.getUsersByProximity(geohash, excludeUid, limit)
+    suspend fun getUsersByProximity(geohash: String, excludeUid: String, limit: Int = 30, precision: Int = 4) = userCoreRepository.getUsersByProximity(geohash, excludeUid, limit, precision)
     
     fun observeActualFriendships(uid: String) = userCoreRepository.observeActualFriendships(uid)
     fun observeActualFriendRequestsReceived(uid: String) = userCoreRepository.observeActualFriendRequestsReceived(uid)
@@ -91,7 +91,7 @@ class UserRepository @Inject constructor(
     suspend fun getBlockedUsersProfiles(uid: String): List<UserProfile> {
         val blockedIds = getBlockedUsers(uid)
         if (blockedIds.isEmpty()) return emptyList()
-        return blockedIds.mapNotNull { getUserProfile(it) }
+        return getUsers(blockedIds)
     }
 
     // =====================================================
@@ -100,6 +100,7 @@ class UserRepository @Inject constructor(
     suspend fun incrementEventsRequested(uid: String) = userGamificationRepository.incrementEventsRequested(uid)
     suspend fun incrementEventsAttended(uid: String) = userGamificationRepository.incrementEventsAttended(uid)
     suspend fun incrementEventsCreatedLifetime(uid: String) = userGamificationRepository.incrementEventsCreatedLifetime(uid)
+    @Deprecated("Aggregation is handled server-side by Cloud Function onRatingCreated. Use only for admin/debug manual recalculation.")
     suspend fun recalculateUserStats(uid: String): Result<String> {
         val result = userGamificationRepository.recalculateUserStats(uid)
         getUserProfile(uid, forceRefresh = true)

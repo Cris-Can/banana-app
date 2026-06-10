@@ -28,8 +28,8 @@ android {
         applicationId = "com.eventos.banana"
         minSdk = 26
         targetSdk = 36
-        versionCode = 23
-        versionName = "1.5.1"
+        versionCode = 26
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -59,13 +59,13 @@ android {
         create("dev") {
             dimension = "env"
             versionNameSuffix = "-dev"
-            manifestPlaceholders["appName"] = "Banana Dev"
+            manifestPlaceholders["appName"] = "+panoramas Dev"
             // Google's official test Rewarded Ad ID
             buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
         }
         create("prod") {
             dimension = "env"
-            manifestPlaceholders["appName"] = "Banana"
+            manifestPlaceholders["appName"] = "+panoramas"
             // Real production Rewarded Ad ID
             buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-1126172271665952/7012929273\"")
         }

@@ -208,6 +208,7 @@ class NotificationRepository @Inject constructor(
         val snapshot = notificationsCollection
             .whereEqualTo("userId", userId)
             .whereEqualTo("read", false)
+            .limit(400)
             .get()
             .await()
 

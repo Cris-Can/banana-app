@@ -453,8 +453,8 @@ fun LoginScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = com.eventos.banana.ui.theme.BananaGold,
-                            focusedLabelColor = com.eventos.banana.ui.theme.BananaGold
+                            focusedBorderColor = com.eventos.banana.ui.theme.PanoramasGold,
+                            focusedLabelColor = com.eventos.banana.ui.theme.PanoramasGold
                         )
                     )
                 }

@@ -233,7 +233,6 @@ export const acceptFriendRequestV2 = onCall(async (request) => {
             if (!currentUserSnap.exists || !requesterUserSnap.exists) throw new HttpsError("not-found", "Usuario no encontrado.");
 
             const currentUserData = currentUserSnap.data() || {};
-            const requesterUserData = requesterUserSnap.data() || {};
 
             const currentUserReceived = currentUserData.friendRequestsReceived || [];
             const currentUserFriends = currentUserData.friends || [];
@@ -327,7 +326,6 @@ export const rejectFriendRequestV2 = onCall(async (request) => {
             }
 
             const currentUserData = currentUserSnap.data() || {};
-            const requesterUserData = requesterUserSnap.data() || {};
 
             const currentUserReceived = currentUserData.friendRequestsReceived || [];
 
@@ -392,7 +390,6 @@ export const removeFriendV2 = onCall(async (request) => {
             }
 
             const currentUserData = currentUserSnap.data() || {};
-            const friendUserData = friendUserSnap.data() || {};
 
             const currentUserFriends = currentUserData.friends || [];
 
@@ -543,6 +540,7 @@ export const getDiscoverySuggestionsV2 = onCall(async (request) => {
         };
 
     } catch (error) {
+        console.error("[SOCIAL_V2] Error in getDiscoverySuggestionsV2:", error);
         console.error("[SOCIAL_V2] Error in getDiscoverySuggestionsV2:", error);
         throw new HttpsError("internal", "Error obteniendo sugerencias.");
     }

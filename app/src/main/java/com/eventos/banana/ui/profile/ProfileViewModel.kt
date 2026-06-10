@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import timber.log.Timber
 
 sealed class ProfileUiState {
     object Idle : ProfileUiState()
@@ -28,7 +29,6 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: com.eventos.banana.data.repository.AuthRepository,
     private val eventRepository: com.eventos.banana.data.repository.EventRepository,
     private val uploadProfilePhotoUseCase: com.eventos.banana.domain.usecase.profile.UploadProfilePhotoUseCase,
-    private val manageFriendsUseCase: com.eventos.banana.domain.usecase.profile.ManageFriendsUseCase,
     private val updateProfileSettingsUseCase: com.eventos.banana.domain.usecase.profile.UpdateProfileSettingsUseCase,
     private val createUserProfileUseCase: com.eventos.banana.domain.usecase.profile.CreateUserProfileUseCase
 ) : ViewModel() {
@@ -222,7 +222,7 @@ class ProfileViewModel @Inject constructor(
     // =====================================================
     fun sendFriendRequest(targetUid: String) {
         viewModelScope.launch {
-            val result = manageFriendsUseCase.sendFriendRequest(targetUid)
+            val result = userRepository.sendFriendRequest(targetUid)
             if (result.isSuccess) {
                 _uiState.value = ProfileUiState.Success
             } else {
@@ -233,7 +233,7 @@ class ProfileViewModel @Inject constructor(
 
     fun acceptFriendRequest(requesterUid: String) {
         viewModelScope.launch {
-            val result = manageFriendsUseCase.acceptFriendRequest(requesterUid)
+            val result = userRepository.acceptFriendRequest(requesterUid)
             if (result.isSuccess) {
                 _uiState.value = ProfileUiState.Success
             } else {
@@ -441,7 +441,11 @@ class ProfileViewModel @Inject constructor(
             try {
                 val result = userRepository.getTopUsers(50)
                 if (result.isSuccess) {
-                     val pair = result.getOrNull()
+                     val pair = result.getOrNull().also {
+                         if (it == null) {
+                             Timber.w("getTopUsers returned success with null value")
+                         }
+                     }
                      _leaderboardUsers.value = pair?.first ?: emptyList()
                      _uiState.value = ProfileUiState.Success
                 } else {

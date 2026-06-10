@@ -152,6 +152,7 @@ fun RateParticipantsScreen(
                     ParticipantRatingCard(
                         user = user,
                         alreadyRated = false,
+                        isSubmitting = uiState.submittingUserId == user.uid,
                         onUserClick = { onUserClick(user.uid) },
                         onSubmitRating = { score, comment ->
                             viewModel.submitRating(user.uid, score, comment)
@@ -168,6 +169,7 @@ fun RateParticipantsScreen(
 private fun ParticipantRatingCard(
     user: UserProfile,
     alreadyRated: Boolean,
+    isSubmitting: Boolean = false,
     onUserClick: () -> Unit,
     onSubmitRating: (Int, String?) -> Unit
 ) {
@@ -262,7 +264,7 @@ private fun ParticipantRatingCard(
                             Text(stringResource(com.eventos.banana.R.string.common_cancel))
                         }
                     } else {
-                        Button(onClick = { expanded = true }) {
+                        Button(onClick = { expanded = true }, enabled = !isSubmitting) {
                             Text(stringResource(com.eventos.banana.R.string.rate_participants_rate))
                         }
                     }
@@ -378,9 +380,13 @@ private fun ParticipantRatingCard(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = selectedScore > 0
+                    enabled = selectedScore > 0 && !isSubmitting
                 ) {
-                    Text(stringResource(com.eventos.banana.R.string.rate_participants_submit))
+                    if (isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text(stringResource(com.eventos.banana.R.string.rate_participants_submit))
+                    }
                 }
             }
         }

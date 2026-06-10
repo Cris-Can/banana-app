@@ -38,6 +38,7 @@ class CreateEventViewModel @Inject constructor(
         val questions: List<JoinQuestion> = emptyList(),
         val isPublic: Boolean = false, // 🌍 NEW
         val notificationRange: String = "COMMUNE", // 🔔 NEW: "COMMUNE", "REGION", "NATIONAL"
+        val isAdultContent: Boolean = false,
         val country: String = "Chile" // Default for legacy, but will be updated
     )
 
@@ -57,12 +58,17 @@ class CreateEventViewModel @Inject constructor(
     fun updateEndAt(value: Long?) { _formState.value = _formState.value.copy(endAt = value) }
     fun updateIsPublic(value: Boolean) { _formState.value = _formState.value.copy(isPublic = value) } // 🌍 NEW
     fun updateNotificationRange(value: String) { _formState.value = _formState.value.copy(notificationRange = value) } // 🔔 NEW
+    fun updateIsAdultContent(value: Boolean) { _formState.value = _formState.value.copy(isAdultContent = value) }
 
     fun updateExactLocation(value: com.eventos.banana.domain.model.ExactLocation?) { 
         _formState.value = _formState.value.copy(exactLocation = value) 
-        // Auto-fill address if available
         if (value?.address?.isNotBlank() == true) {
             updateAddress(value.address)
+        }
+        value?.let {
+            if (it.commune.isNotBlank()) updateCommune(it.commune)
+            if (it.region.isNotBlank()) updateRegion(it.region)
+            if (it.country.isNotBlank()) updateCountry(it.country)
         }
     }
     fun updateSelectedImageUri(value: android.net.Uri?) { _formState.value = _formState.value.copy(selectedImageUri = value) }
@@ -99,6 +105,10 @@ class CreateEventViewModel @Inject constructor(
     val userLimitStats: StateFlow<com.eventos.banana.data.repository.SubscriptionRepository.UserLimitStats?> = _userLimitStats
 
     fun createEvent(event: Event, imageBytes: ByteArray? = null) {
+        if (event.title.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "El título no puede estar vacío")
+            return
+        }
         if (event.endAt <= event.startAt) {
             _uiState.value = _uiState.value.copy(errorMessage = "La fecha de término debe ser posterior al inicio")
             return

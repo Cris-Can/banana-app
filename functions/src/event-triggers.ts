@@ -3,14 +3,24 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 
 const db = admin.firestore();
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 /**
  * =====================================================
- * 🆕 NOTIFICACIÓN INTELIGENTE (ZONA + INTERESES)
+ * 🆕 NOTIFICACIÓN INTELIGENTE (INTERESES + DISTANCIA)
  * - Prioridad 1: Intereses (subscribedCategories) - respects notifyByInterest
- * - Prioridad 2: Ubicación (notificationRange) - respects notifyEventsByCommune
+ * - Prioridad 2: Distancia (Haversine × notificationRange multiplier) - respects notifyEventsByCommune
  * - Evita duplicados por usuario
  * =====================================================
  */
+
 export const onEventCreatedNotifyZone = onDocumentCreated(
   "events/{eventId}",
   async (event) => {
@@ -21,8 +31,6 @@ export const onEventCreatedNotifyZone = onDocumentCreated(
     const eventId = event.params.eventId;
     const title = eventData.title;
     const category = eventData.category;
-    const commune = eventData.commune;
-    const region = eventData.region;
     const range = eventData.notificationRange || "COMMUNE";
     const creatorId = eventData.creatorId;
     const isBoosted = eventData.isBoosted === true;
@@ -35,67 +43,94 @@ export const onEventCreatedNotifyZone = onDocumentCreated(
     try {
       // 🎯 STEP 1: FIND BY INTERESTS (HIGHEST PRIORITY)
       // Only query users who have notifyByInterest enabled (default true)
-      if (category) {
-        // Query 1: Subscribed Categories + notifyByInterest enabled
-        const [subSnap, intSnap] = await Promise.all([
-          db.collection("users")
-            .where("subscribedCategories", "array-contains", category)
-            .get(),
-          db.collection("users")
-            .where("interests", "array-contains", category)
-            .get()
-        ]);
+      const processQueryInBatches = async (
+        query: admin.firestore.Query,
+        processFn: (doc: admin.firestore.QueryDocumentSnapshot) => void
+      ) => {
+        let lastDoc: admin.firestore.DocumentSnapshot | undefined = undefined;
+        let hasMore = true;
+        while (hasMore) {
+          let currentQuery = query.limit(500);
+          if (lastDoc) {
+            currentQuery = currentQuery.startAfter(lastDoc);
+          }
+          const snap = await currentQuery.get();
+          if (snap.empty) {
+            hasMore = false;
+            break;
+          }
+          snap.forEach(processFn);
+          lastDoc = snap.docs[snap.docs.length - 1];
+          if (snap.docs.length < 500) {
+            hasMore = false;
+          }
+        }
+      };
 
-        const processSnap = (snap: admin.firestore.QuerySnapshot) => {
-          snap.forEach(doc => {
-            if (doc.id !== creatorId) {
-              const userData = doc.data();
-              // 📧 RESPECT PREFERENCE: notifyByInterest (default true)
-              const notifyByInterest = userData?.notifyByInterest !== false;
-              if (notifyByInterest) {
-                recipientsMap.set(doc.id, {
-                  title: isBoosted ? `¡Evento Destacado! 🔥 ${category}` : `Nuevo evento de ${category} para ti 🍌`,
-                  message: `¡Mira lo que está pasando!: ${title}`,
-                  reason: 'interest'
-                });
-              } else {
-                console.log(`[INTELLIGENT_NOTIF] User ${doc.id} has notifyByInterest disabled, skipping interest notification.`);
-              }
+      if (category) {
+        const processInterestDoc = (doc: admin.firestore.QueryDocumentSnapshot) => {
+          if (doc.id !== creatorId) {
+            const userData = doc.data();
+            const notifyByInterest = userData?.notifyByInterest !== false;
+            if (notifyByInterest) {
+              recipientsMap.set(doc.id, {
+                title: isBoosted ? `¡Evento Destacado! 🔥 ${category}` : `Nuevo evento de ${category} para ti 🍌`,
+                message: `¡Mira lo que está pasando!: ${title}`,
+                reason: 'interest'
+              });
+            } else {
+              console.log(`[INTELLIGENT_NOTIF] User ${doc.id} has notifyByInterest disabled, skipping interest notification.`);
             }
-          });
+          }
         };
 
-        processSnap(subSnap);
-        processSnap(intSnap);
+        const subQuery = db.collection("users").where("subscribedCategories", "array-contains", category);
+        const intQuery = db.collection("users").where("interests", "array-contains", category);
+
+        await Promise.all([
+          processQueryInBatches(subQuery, processInterestDoc),
+          processQueryInBatches(intQuery, processInterestDoc)
+        ]);
       }
 
-      // 🎯 STEP 2: FIND BY LOCATION (ONLY IF NOT NOTIFIED YET)
-      // Only query users who have notifyEventsByCommune enabled
-      let locationQuery = db.collection("users").where("notifyEventsByCommune", "==", true);
+      // 🎯 STEP 2: FIND BY LOCATION (PURE DISTANCE + notificationRange multiplier)
+      const RANGE_FACTOR: Record<string, number> = {
+        "COMMUNE": 1.0,
+        "REGION": 3.0,
+        "NATIONAL": 10.0
+      };
+      const rangeFactor = RANGE_FACTOR[range] ?? 1.0;
 
-      if (range === "COMMUNE" && commune) {
-        locationQuery = locationQuery.where("commune", "==", commune);
-      } else if (range === "REGION" && region) {
-        locationQuery = locationQuery.where("region", "==", region);
-      } else if (range === "NATIONAL") {
-        // No extra filter (Chile by default)
-      } else {
-        if (commune) locationQuery = locationQuery.where("commune", "==", commune);
+      let locationQuery = db.collection("users")
+        .where("notifyEventsByCommune", "==", true);
+      
+      if (eventData.region) {
+        locationQuery = locationQuery.where("region", "==", eventData.region);
       }
 
-      const locationUsers = await locationQuery.get();
+      const eventLat = eventData.latitude;
+      const eventLng = eventData.longitude;
 
-      locationUsers.forEach(doc => {
-        // ONLY ADD if not already added by interests
-        if (doc.id !== creatorId && !recipientsMap.has(doc.id)) {
-          // 📧 RESPECT PREFERENCE: Already filtered by notifyEventsByCommune == true in query
-          recipientsMap.set(doc.id, {
-            title: isBoosted ? "¡Evento Destacado cerca de ti! 🔥" : "Nuevo evento cerca de ti 📍",
-            message: `Se creó un evento en tu zona: ${title}`,
-            reason: 'location'
-          });
+      const processLocationDoc = (doc: admin.firestore.QueryDocumentSnapshot) => {
+        if (doc.id === creatorId || recipientsMap.has(doc.id)) return;
+        const userData = doc.data();
+        const userLat = userData.latitude;
+        const userLng = userData.longitude;
+        const userRadius = userData.searchRadiusKm ?? 20;
+
+        if (userLat != null && userLng != null && eventLat != null && eventLng != null) {
+          const distance = haversineKm(eventLat, eventLng, userLat, userLng);
+          if (distance > userRadius * rangeFactor) return;
         }
-      });
+
+        recipientsMap.set(doc.id, {
+          title: isBoosted ? "¡Evento Destacado cerca de ti! 🔥" : "Nuevo evento cerca de ti 📍",
+          message: `Se creó un evento en tu zona: ${title}`,
+          reason: 'location'
+        });
+      };
+
+      await processQueryInBatches(locationQuery, processLocationDoc);
 
       // 🎯 STEP 3: PERSIST IN BATCH
       if (recipientsMap.size === 0) {
@@ -353,6 +388,11 @@ export const onParticipantApproved = onDocumentUpdated(
     const oldApproved: string[] = before.approvedParticipants || [];
     const newApproved: string[] = after.approvedParticipants || [];
 
+    if (JSON.stringify(oldApproved) === JSON.stringify(newApproved)) {
+      console.log("No participant change, skipping");
+      return;
+    }
+
     // Detect newly approved users (in new list but not in old)
     const newlyApproved = newApproved.filter(
       (uid) => !oldApproved.includes(uid)
@@ -360,16 +400,20 @@ export const onParticipantApproved = onDocumentUpdated(
 
     if (newlyApproved.length === 0) return;
 
+    const batch = db.batch();
     for (const uid of newlyApproved) {
-      try {
-        await db.collection("users").doc(uid).update({
-          eventsRequestedCount: admin.firestore.FieldValue.increment(1),
-          joinRequestsInCycle: admin.firestore.FieldValue.increment(1),
-        });
-        console.log(`Stats incremented for approved user ${uid}`);
-      } catch (error) {
-        console.error(`Failed to increment stats for ${uid}:`, error);
-      }
+      const userRef = db.collection("users").doc(uid);
+      batch.update(userRef, {
+        eventsRequestedCount: admin.firestore.FieldValue.increment(1),
+        joinRequestsInCycle: admin.firestore.FieldValue.increment(1),
+      });
+    }
+
+    try {
+      await batch.commit();
+      console.log(`Stats incremented for ${newlyApproved.length} approved users`);
+    } catch (error) {
+      console.error(`Failed to batch increment stats:`, error);
     }
   }
 );
@@ -479,7 +523,7 @@ export const onEventCreatedValidation = onDocumentCreated(
           await db.collection("notifications").doc().set({
             userId: creatorId,
             title: "Límite alcanzado",
-            message: "Has alcanzado tu límite mensual de eventos. Suscríbete a Banana Gold para crear más.",
+            message: "Has alcanzado tu límite mensual de eventos. Suscríbete a +panoramas Gold para crear más.",
             eventId: "",
             type: "GENERIC",
             read: false,

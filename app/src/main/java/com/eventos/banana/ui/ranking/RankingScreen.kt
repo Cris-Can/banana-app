@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -130,7 +131,7 @@ fun RankingScreen(
                         contentPadding = PaddingValues(top = 24.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        itemsIndexed(usersToShow) { index, user ->
+                        itemsIndexed(usersToShow, key = { _, user -> user.uid ?: user.hashCode().toString() }) { index, user ->
                             RankingUserItem(
                                 user = user,
                                 position = index + 1,
@@ -239,9 +240,18 @@ fun RankingUserItem(
                     if (user.isFounder) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("🚀", style = MaterialTheme.typography.bodySmall)
-                    } else if (user.isGoldStored) {
+                    } else if (user.isGold) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("✨", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (user.identityVerified) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Identidad verificada",
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(14.dp)
+                        )
                     }
                 }
                 

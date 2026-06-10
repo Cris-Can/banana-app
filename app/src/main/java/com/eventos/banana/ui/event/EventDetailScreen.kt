@@ -56,6 +56,8 @@ fun EventDetailScreen(
     onUserClick: (String) -> Unit,
     onRateParticipants: (Event) -> Unit,
     onBoostClick: () -> Unit,
+    onBoostWithCredit: () -> Unit = {},
+    credits: Int = 0,
     initialTab: Int = 0,
     eventState: com.eventos.banana.domain.model.EventDetailUiState, // Pass full state to access nicknames
     isSaved: Boolean = false,
@@ -185,6 +187,8 @@ fun EventDetailScreen(
                         isCreator = isCreator,
                         onUserClick = onUserClick,
                         onBoostClick = onBoostClick,
+                        onBoostWithCredit = onBoostWithCredit,
+                        credits = credits,
                         modifier = Modifier.fillMaxWidth()
                     )
 

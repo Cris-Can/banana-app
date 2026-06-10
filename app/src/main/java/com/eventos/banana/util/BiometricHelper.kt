@@ -25,7 +25,7 @@ class BiometricHelper(
 
     fun authenticate(
         title: String = "Desbloqueo Biométrico",
-        subtitle: String = "Usa tu huella, rostro o PIN para entrar a Banana",
+        subtitle: String = "Usa tu huella, rostro o PIN para entrar a +panoramas",
         allowDeviceCredential: Boolean = true
     ) {
         val promptInfo = BiometricPrompt.PromptInfo.Builder()

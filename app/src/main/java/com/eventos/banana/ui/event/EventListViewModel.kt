@@ -2,7 +2,9 @@ package com.eventos.banana.ui.event
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.eventos.banana.data.repository.AuthRepository
 import com.eventos.banana.data.repository.EventRepository
+import com.eventos.banana.data.repository.EventModerationRepository
 import com.eventos.banana.data.repository.MainFeedRepository
 import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.domain.model.DateFilter
@@ -54,9 +56,17 @@ private data class PaginationState(
 @HiltViewModel
 class EventListViewModel @Inject constructor(
     private val repository: EventRepository,
+    private val eventModerationRepository: EventModerationRepository,
     private val mainFeedRepository: MainFeedRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
+
+    private var _identityVerified = false
+
+    fun setIdentityVerified(verified: Boolean) {
+        _identityVerified = verified
+    }
 
     companion object {
         private const val PAGE_SIZE = 20L
@@ -87,7 +97,7 @@ class EventListViewModel @Inject constructor(
                                        dayOfWeek == java.util.Calendar.SATURDAY || 
                                        dayOfWeek == java.util.Calendar.SUNDAY
                     val diff = eventStart - now
-                    val maxDiff = 5 * 24 * 60 * 60 * 1000L
+                    val maxDiff = AppConstants.WEEKEND_FILTER_WINDOW_MS
                     isWeekendDay && diff >= 0 && diff < maxDiff
                 }
             }
@@ -126,10 +136,13 @@ class EventListViewModel @Inject constructor(
                 try {
                     val result = mainFeedRepository.fetchEventsBatch(
                         geohashPrefix = params.geohash,
+                        centerLat = _userLocation.value?.latitude,
+                        centerLng = _userLocation.value?.longitude,
                         commune = null,
                         region = null,
                         limit = PAGE_SIZE,
-                        lastSnapshot = null
+                        lastSnapshot = null,
+                        radiusKm = params.radiusKm
                     )
                     result.onSuccess { (events, _) ->
                         emit(DataState.Success(events))
@@ -170,9 +183,7 @@ class EventListViewModel @Inject constructor(
                 existingCache
             } else {
                 withContext(Dispatchers.IO) {
-                    val newProfiles = newIds.mapNotNull { uid ->
-                        userRepository.getUserProfile(uid)?.let { uid to it }
-                    }.toMap()
+                    val newProfiles = userRepository.getUsers(newIds).associateBy { it.uid }
                     val updatedCache = existingCache + newProfiles
                     _creatorProfilesCache.value = updatedCache
                     updatedCache
@@ -306,12 +317,25 @@ class EventListViewModel @Inject constructor(
     fun updateRadius(radius: Int) {
         if (_searchRadiusKm.value != radius) {
             _searchRadiusKm.value = radius
-            _userLocation.value?.let { loc ->
+            val loc = _userLocation.value
+            if (loc == null) {
+                android.util.Log.d("EventListViewModel", "updateRadius=$radius → location es null, sin geohash")
+            }
+            loc?.let {
                 val precision = GeohashUtils.getPrecisionForRadius(radius)
-                val geohash = GeohashUtils.encode(loc.latitude, loc.longitude, precision)
-                _queryParams.update { it.copy(geohash = geohash, radiusKm = radius) }
+                val geohash = GeohashUtils.encode(it.latitude, it.longitude, precision)
+                android.util.Log.d("EventListViewModel", "updateRadius=$radius precision=$precision geohash=$geohash lat=${it.latitude} lng=${it.longitude}")
+                _queryParams.update { p -> p.copy(geohash = geohash, radiusKm = radius) }
             }
             resetPagination()
+            val uid = authRepository.currentUid() ?: return
+            viewModelScope.launch {
+                try {
+                    userRepository.updateSearchRadius(uid, radius)
+                } catch (e: Exception) {
+                    android.util.Log.e("EventListViewModel", "Error persisting radius", e)
+                }
+            }
         }
     }
 
@@ -363,12 +387,17 @@ class EventListViewModel @Inject constructor(
         
         viewModelScope.launch {
             try {
+                val seenIds = finalEventsFlow.value.map { it.id }.toSet()
                 val result = mainFeedRepository.fetchEventsBatch(
                     geohashPrefix = currentParams.geohash,
+                    centerLat = _userLocation.value?.latitude,
+                    centerLng = _userLocation.value?.longitude,
                     commune = null,
                     region = null,
                     limit = PAGE_SIZE,
-                    lastSnapshot = state.lastVisibleDoc
+                    lastSnapshot = state.lastVisibleDoc,
+                    radiusKm = currentParams.radiusKm,
+                    seenEventIds = seenIds
                 )
                 
                 if (_queryParams.value != currentParams) {
@@ -415,12 +444,38 @@ class EventListViewModel @Inject constructor(
 
     init {
         markFinishedEvents()
+        loadUserSearchRadius()
+    }
+
+    private fun loadUserSearchRadius() {
+        val uid = authRepository.currentUid() ?: run {
+            android.util.Log.d("EventListViewModel", "loadUserSearchRadius: uid es null, no hay sesión activa")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val profile = userRepository.getUserProfile(uid)
+                val savedRadius = profile?.searchRadiusKm ?: AppConstants.DEFAULT_SEARCH_RADIUS_KM
+                android.util.Log.d("EventListViewModel", "loadUserSearchRadius: perfil.searchRadiusKm=${profile?.searchRadiusKm} → savedRadius=$savedRadius location=${_userLocation.value}")
+                if (savedRadius != _searchRadiusKm.value) {
+                    _searchRadiusKm.value = savedRadius
+                    _userLocation.value?.let { loc ->
+                        val precision = GeohashUtils.getPrecisionForRadius(savedRadius)
+                        val geohash = GeohashUtils.encode(loc.latitude, loc.longitude, precision)
+                        android.util.Log.d("EventListViewModel", "loadUserSearchRadius: recalculating geohash=$geohash precision=$precision")
+                        _queryParams.update { it.copy(geohash = geohash, radiusKm = savedRadius) }
+                    } ?: _queryParams.update { it.copy(radiusKm = savedRadius) }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("EventListViewModel", "Error loading saved radius", e)
+            }
+        }
     }
 
     private fun markFinishedEvents() {
         viewModelScope.launch {
             try {
-                repository.markFinishedEventsAsRatable()
+                eventModerationRepository.markFinishedEventsAsRatable()
             } catch (e: Exception) {
                 android.util.Log.e("EventListViewModel", "Failed to mark events", e)
             }
@@ -457,8 +512,9 @@ class EventListViewModel @Inject constructor(
             val matchesDate = checkDate(event.startAt, params.dateFilter, now)
             val isNotClosed = event.status == EventStatus.OPEN
             val isNotExpired = event.endAt > now
+            val isNotAdultBlocked = !event.isAdultContent || _identityVerified
 
-            isNear && matchesCategory && matchesDate && isNotClosed && isNotExpired
+            isNear && matchesCategory && matchesDate && isNotClosed && isNotExpired && isNotAdultBlocked
         }.toList()
     }
 }

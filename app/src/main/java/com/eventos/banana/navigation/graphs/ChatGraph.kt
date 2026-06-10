@@ -20,17 +20,21 @@ import com.eventos.banana.ui.messages.ConversationsScreen
 import com.eventos.banana.ui.profile.UserViewModel
 import com.eventos.banana.navigation.Screen
 import kotlinx.coroutines.launch
+import com.eventos.banana.domain.model.ConversationTheme
+import com.eventos.banana.domain.model.resolveTheme
+import com.eventos.banana.ui.messages.ThemeConfigDialog
 
 fun NavGraphBuilder.chatGraph(
     navController: NavController,
-    sessionViewModel: SessionViewModel
+    sessionViewModel: SessionViewModel,
+    conversationsViewModel: ConversationsViewModel
 ) {
     // ---------- CONVERSATIONS ----------
     composable(Screen.Conversations.route) {
-        val conversationsViewModel: ConversationsViewModel = hiltViewModel()
         val currentUserId = sessionViewModel.currentUserId() ?: ""
         val conversationsFlow = remember(currentUserId) { conversationsViewModel.observeConversations(currentUserId) }
         val conversations by conversationsFlow.collectAsState(initial = emptyList())
+        val userProfiles by conversationsViewModel.profiles.collectAsState()
         val profileUiState by sessionViewModel.profileUiState.collectAsState()
         val blockedUsers = profileUiState.profile?.blockedUsers ?: emptyList()
         val filteredConversations = remember(conversations, blockedUsers) {
@@ -47,6 +51,7 @@ fun NavGraphBuilder.chatGraph(
         ConversationsScreen(
             conversations = filteredConversations,
             currentUserId = currentUserId,
+            userProfiles = userProfiles,
             onConversationClick = { conversationId -> navController.navigate("chat/$conversationId") },
             onDeleteConversation = { conversationId ->
                 scope.launch { conversationsViewModel.deleteConversation(conversationId) }
@@ -69,35 +74,80 @@ fun NavGraphBuilder.chatGraph(
         val userViewModel: UserViewModel = hiltViewModel()
         val userRepository = userViewModel.userRepository
         val context = androidx.compose.ui.platform.LocalContext.current
+
+        val activeConversationId by chatViewModel.activeConversationId.collectAsState()
+        LaunchedEffect(activeConversationId) {
+            if (activeConversationId != null && activeConversationId != conversationId) {
+                navController.navigate("chat/$activeConversationId") {
+                    popUpTo("chat/$conversationId") { inclusive = true }
+                }
+            }
+        }
+
         LaunchedEffect(conversationId) {
-            messageRepository.markConversationAsRead(conversationId, currentUserId)
+            if (!conversationId.startsWith("usr_")) {
+                messageRepository.markConversationAsRead(conversationId, currentUserId)
+            }
         }
         var messageLimit by remember { mutableIntStateOf(30) }
         val messages by messageRepository.observeMessages(conversationId, messageLimit)
             .collectAsState(initial = emptyList())
         val conversationDetails by messageRepository.observeConversation(conversationId).collectAsState(initial = null)
         val themeColor = conversationDetails?.themeColor
+        val chatTheme = remember(conversationDetails) { conversationDetails?.resolveTheme() ?: ConversationTheme() }
+        var showThemeDialog by remember { mutableStateOf(false) }
         val profileUiState by sessionViewModel.profileUiState.collectAsState()
-        val isGold = profileUiState.profile?.isGold == true
-        val otherNickname = (conversationDetails?.participantNicknames?.get(
-            conversationDetails?.participants?.firstOrNull { it != currentUserId }
-        )) ?: "Chat"
-        val otherUserId = conversationDetails?.participants?.firstOrNull { it != currentUserId }
+        val isPremium = profileUiState.profile?.isGold == true || profileUiState.profile?.isFounder == true
+
+        var otherNickname by remember { mutableStateOf("Chat") }
+        val otherUserId = remember(conversationId, conversationDetails) {
+            if (conversationId.startsWith("usr_")) {
+                conversationId.substringAfter("usr_")
+            } else {
+                conversationDetails?.participants?.firstOrNull { it != currentUserId }
+            }
+        }
+
+        LaunchedEffect(conversationId, conversationDetails) {
+            if (conversationId.startsWith("usr_")) {
+                val targetUid = conversationId.substringAfter("usr_")
+                val profile = userRepository.getUserProfile(targetUid)
+                if (profile != null) {
+                    otherNickname = profile.nickname ?: "Usuario"
+                }
+            } else {
+                val details = conversationDetails
+                if (details != null) {
+                    val otherUid = details.participants.firstOrNull { it != currentUserId }
+                    otherNickname = details.participantNicknames[otherUid] ?: "Chat"
+                }
+            }
+        }
+
         val scope = rememberCoroutineScope()
+        val onUpdateTheme = { theme: ConversationTheme ->
+            scope.launch { messageRepository.updateConversationTheme(conversationId, theme) }
+        }
+        val onOpenThemeConfig = {
+            if (isPremium) {
+                showThemeDialog = true
+            } else {
+                android.widget.Toast.makeText(context, "🔒 Solo Gold/Founder — Hazte Gold o sé Founder para personalizar el chat", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+
         ChatScreen(
             viewModel = chatViewModel,
             otherUserNickname = otherNickname,
             messages = messages,
             currentUserId = currentUserId,
-            themeColor = themeColor,
-            isGold = isGold,
+            chatTheme = chatTheme,
+            isGold = isPremium,
             otherUserIsTyping = conversationDetails?.typingUsers?.any { it != currentUserId } == true,
             onSendMessage = { content, rId -> chatViewModel.sendMessage(content, rId) },
             onSendAudio = { audioBytes, durationMs, replyId -> chatViewModel.sendAudio(audioBytes, durationMs, replyId) },
             onTyping = { isTyping -> chatViewModel.setTypingStatus(isTyping) },
-            onUpdateTheme = { color ->
-                scope.launch { messageRepository.updateConversationTheme(conversationId, color) }
-            },
+            onOpenThemeConfig = onOpenThemeConfig,
             onBack = { navController.popBackStack() },
             onReportUser = { reason ->
                 if (otherUserId != null) {
@@ -145,6 +195,17 @@ fun NavGraphBuilder.chatGraph(
                 }
             }
         )
+
+        if (showThemeDialog) {
+            ThemeConfigDialog(
+                currentTheme = chatTheme,
+                onSave = { newTheme ->
+                    scope.launch { messageRepository.updateConversationTheme(conversationId, newTheme) }
+                    showThemeDialog = false
+                },
+                onDismiss = { showThemeDialog = false }
+            )
+        }
     }
 
     // ---------- START CHAT (from profile) ----------
@@ -153,27 +214,10 @@ fun NavGraphBuilder.chatGraph(
         arguments = listOf(navArgument("targetUserId") { type = NavType.StringType })
     ) { backStackEntry ->
         val targetUserId = backStackEntry.arguments?.getString("targetUserId") ?: return@composable
-        val convViewModel: ConversationsViewModel = hiltViewModel()
-        val userViewModel: UserViewModel = hiltViewModel()
-        val messageRepository = convViewModel.messageRepository
-        val currentUserId = sessionViewModel.currentUserId()
-        val profileUiState by sessionViewModel.profileUiState.collectAsState()
-        val currentNickname = profileUiState.profile?.nickname ?: "Usuario"
 
-        LaunchedEffect(Unit) {
-            val userRepository = userViewModel.userRepository
-            val targetProfile = userRepository.getUserProfile(targetUserId)
-            val otherNickname = targetProfile?.nickname ?: "Usuario"
-            val result = messageRepository.getOrCreateConversation(
-                currentUserId = currentUserId,
-                otherUserId = targetUserId,
-                currentUserNickname = currentNickname,
-                otherUserNickname = otherNickname
-            )
-            result.onSuccess { conversationId ->
-                navController.navigate("chat/$conversationId") {
-                    popUpTo("start_chat/$targetUserId") { inclusive = true }
-                }
+        LaunchedEffect(targetUserId) {
+            navController.navigate("chat/usr_$targetUserId") {
+                popUpTo("start_chat/$targetUserId") { inclusive = true }
             }
         }
         Box(

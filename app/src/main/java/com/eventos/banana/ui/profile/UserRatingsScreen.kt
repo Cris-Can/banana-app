@@ -29,9 +29,13 @@ import java.util.*
 @Composable
 fun UserRatingsScreen(
     viewModel: UserRatingsViewModel,
-    onBack: () -> Unit
+    billingViewModel: com.eventos.banana.ui.monetization.BillingViewModel,
+    onBack: () -> Unit,
+    onNavigateToGold: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = context as? android.app.Activity
 
     Scaffold(
         topBar = {
@@ -112,10 +116,82 @@ fun UserRatingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
+                        
+                        if (uiState.viewerProfile?.isGold != true) {
+                            // Banner de Saldo
+                            val expiryDate = if (uiState.creditsExpiry > 0) {
+                                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(uiState.creditsExpiry))
+                            } else {
+                                "-"
+                            }
+                            
+                            BananaCard(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Te quedan ${uiState.credits} créditos",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        if (uiState.credits > 0) {
+                                            Text(
+                                                text = "Expiran el $expiryDate",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    }
+                                    if (uiState.credits == 0) {
+                                        Button(onClick = { activity?.let { billingViewModel.buyCredits(it) } }) {
+                                            Text("Comprar")
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Banner Gold
+                            BananaCard(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Solo Gold ve quién calificó sin gastar créditos.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                                    )
+                                    Button(onClick = onNavigateToGold) {
+                                        Text("Hazte Gold")
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     items(uiState.ratings) { item ->
-                        RatingItemCard(item)
+                        RatingItemCard(
+                            item = item,
+                            credits = uiState.credits,
+                            isViewerPremium = uiState.viewerProfile?.isGold == true,
+                            currentUserId = uiState.viewerProfile?.uid ?: "",
+                            onReveal = { viewModel.revealRater(item.rating.ratingId) },
+                            onAnonymize = { viewModel.anonymizeMyRating(item.rating.ratingId) },
+                            onBuyCredits = { activity?.let { billingViewModel.buyCredits(it) } },
+                            onGoGold = onNavigateToGold
+                        )
                     }
 
                     if (uiState.isPaginatedLoading) {
@@ -137,7 +213,16 @@ fun UserRatingsScreen(
 }
 
 @Composable
-fun RatingItemCard(item: RatingWithUser) {
+fun RatingItemCard(
+    item: RatingWithUser,
+    credits: Int,
+    isViewerPremium: Boolean,
+    currentUserId: String,
+    onReveal: () -> Unit,
+    onAnonymize: () -> Unit,
+    onBuyCredits: () -> Unit,
+    onGoGold: () -> Unit
+) {
     val rating = item.rating
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val dateStr = dateFormat.format(Date(rating.timestamp))
@@ -149,17 +234,43 @@ fun RatingItemCard(item: RatingWithUser) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val displayName = if (!isViewerPremium && item.fromUserNickname == null) {
+                    "🔒 Anónimo"
+                } else if (isViewerPremium && rating.isAnonymous) {
+                    "🔒 Usuario prefirió ocultar su nombre"
+                } else {
+                    item.fromUserNickname ?: "Usuario Anónimo"
+                }
+                
                 Text(
-                    text = item.fromUserNickname ?: "Usuario Anónimo",
+                    text = displayName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (item.fromUserNickname != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (displayName.startsWith("🔒")) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = dateStr,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            
+            if (!isViewerPremium && item.fromUserNickname == null) {
+                if (credits > 0) {
+                    TextButton(onClick = onReveal, modifier = Modifier.padding(top = 4.dp)) {
+                        Text("Revelar (1 crédito)")
+                    }
+                } else {
+                    TextButton(onClick = onBuyCredits, modifier = Modifier.padding(top = 4.dp)) {
+                        Text("Comprar créditos $1.990")
+                    }
+                }
+            }
+            
+            if (rating.fromUserId == currentUserId && !rating.isAnonymous) {
+                TextButton(onClick = onAnonymize, modifier = Modifier.padding(top = 4.dp)) {
+                    Text("Ocultar nombre (gasta 1 crédito)")
+                }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {

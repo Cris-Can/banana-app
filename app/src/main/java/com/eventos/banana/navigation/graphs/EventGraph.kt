@@ -38,8 +38,10 @@ fun NavGraphBuilder.eventGraph(
             }
         }
         val formState by vm.formState.collectAsState()
+        val profileUiState by sessionViewModel.profileUiState.collectAsState()
         CreateEventScreen(
             creatorId = sessionViewModel.currentUserId(),
+            isIdentityVerified = profileUiState.profile?.identityVerified ?: false,
             viewModel = vm,
             onSelectExactLocation = {
                 val route = if (formState.currentLatitude != null && formState.currentLongitude != null) {
@@ -76,10 +78,10 @@ fun NavGraphBuilder.eventGraph(
         MapLocationPickerScreen(
             initialLatitude = initialLat,
             initialLongitude = initialLng,
-            onLocationSelected = { lat: Double, lng: Double, addr: String ->
+            onLocationSelected = { lat: Double, lng: Double, addr: String, commune: String, region: String, country: String ->
                 navController.previousBackStackEntry?.savedStateHandle?.set(
                     "location_result",
-                    ExactLocation(lat, lng, addr)
+                    ExactLocation(lat, lng, addr, commune, region, country)
                 )
                 navController.popBackStack()
             },
@@ -108,6 +110,8 @@ fun NavGraphBuilder.eventGraph(
             creationCallback = { factory -> factory.create(eventId) }
         )
         val billingViewModel: BillingViewModel = hiltViewModel()
+        val profileUiState by sessionViewModel.profileUiState.collectAsState()
+        val credits = profileUiState.profile?.ratingCredits ?: 0
         val uiState by vm.uiState.collectAsState()
         val isSaved by vm.isSaved.collectAsState()
         val hasAttended by vm.hasAttended.collectAsState()
@@ -175,6 +179,8 @@ fun NavGraphBuilder.eventGraph(
                     }
                 }
             },
+            onBoostWithCredit = { vm.boostWithCredit(sessionViewModel.currentUserId()) },
+            credits = credits,
             isSaved = isSaved,
             onToggleSave = { vm.toggleSaveEvent(sessionViewModel.currentUserId()) },
             hasAttended = hasAttended,

@@ -114,7 +114,7 @@ fun FriendListScreen(
                     // 1. Found within Friends
                     if (uiState.friends.isNotEmpty()) {
                         item { Text(stringResource(com.eventos.banana.R.string.friends_your_friends), color = MaterialTheme.colorScheme.primary) }
-                        items(uiState.friends) { friend ->
+                        items(uiState.friends, key = { it.uid }) { friend ->
                             FriendItem(user = friend, onClick = { onUserClick(friend.uid) }, action = null)
                         }
                     }
@@ -123,7 +123,7 @@ fun FriendListScreen(
                     if (uiState.searchResults.isNotEmpty()) {
                         item { Spacer(Modifier.height(16.dp)) }
                         item { Text(stringResource(com.eventos.banana.R.string.friends_community), color = MaterialTheme.colorScheme.primary) }
-                        items(uiState.searchResults) { user ->
+                        items(uiState.searchResults, key = { it.uid }) { user ->
                             FriendItem(
                                 user = user,
                                 onClick = { onUserClick(user.uid) },
@@ -217,7 +217,7 @@ fun FriendListScreen(
                         when (selectedTab) {
                             0 -> { // Friends
                                 val visibleFriends = uiState.friends.take(displayLimit)
-                                items(visibleFriends) { friend ->
+                                items(visibleFriends, key = { it.uid }) { friend ->
                                     var showRemoveDialog by remember { mutableStateOf(false) }
 
                                     FriendItem(

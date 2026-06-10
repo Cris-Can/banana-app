@@ -187,7 +187,7 @@ fun EventDetailCheckInCard(
         val now = System.currentTimeMillis()
         val eventEnded = event.endAt < now || event.status == EventStatus.CLOSED
         val canRate = (isCreator || isApproved) && eventEnded
-        val ratingDeadline = event.ratingDeadline ?: (event.endAt + 432000000L) // 5 días después
+        val ratingDeadline = event.ratingDeadline ?: (event.endAt + com.eventos.banana.util.AppConstants.RATING_DEADLINE_MS) // 5 días después
         val withinRatingWindow = now <= ratingDeadline
 
         if (canRate && withinRatingWindow) {

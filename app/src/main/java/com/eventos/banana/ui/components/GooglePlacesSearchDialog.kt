@@ -137,7 +137,7 @@ fun GooglePlacesSearchDialog(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(predictions) { prediction ->
+                    items(predictions, key = { it.placeId }) { prediction ->
                         ListItem(
                             headlineContent = { Text(prediction.primaryText) },
                             supportingContent = { Text(prediction.secondaryText) },

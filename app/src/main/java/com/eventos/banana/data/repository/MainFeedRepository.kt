@@ -24,6 +24,7 @@ class MainFeedRepository @Inject constructor(
     companion object {
         private const val SMALL_RADIUS_KM = 5
         private const val REGION_PRECISION = 3  // ~150km precision for larger radius
+        private const val OVERFETCH_MULTIPLIER = 3L // Compensates Haversine in-memory filtering
     }
 
     /**
@@ -38,27 +39,35 @@ class MainFeedRepository @Inject constructor(
      */
     suspend fun fetchEventsBatch(
         geohashPrefix: String? = null,
+        centerLat: Double? = null,
+        centerLng: Double? = null,
         commune: String? = null,
         region: String? = null,
         limit: Long = 20,
         lastSnapshot: com.google.firebase.firestore.DocumentSnapshot? = null,
-        radiusKm: Int = AppConstants.DEFAULT_SEARCH_RADIUS_KM
+        radiusKm: Int = AppConstants.DEFAULT_SEARCH_RADIUS_KM,
+        seenEventIds: Set<String> = emptySet()
     ): Result<Pair<List<Event>, com.google.firebase.firestore.DocumentSnapshot?>> {
         return try {
             val now = System.currentTimeMillis()
-            
+
             // Estrategia 1: Sin geohash → feed global
             if (geohashPrefix.isNullOrEmpty()) {
                 return fetchGlobalEvents(now, limit, lastSnapshot)
             }
-            
+
             // Estrategia 2: Radio pequeño (<=5km) → multi-query geohash
             if (radiusKm <= SMALL_RADIUS_KM) {
-                return fetchEventsMultiGeohash(geohashPrefix, now, limit, lastSnapshot)
+                return fetchEventsMultiGeohash(geohashPrefix, now, limit, lastSnapshot, seenEventIds)
             }
-            
-            // Estrategia 3: Radio grande (>5km) → fallback a precisión menor
-            return fetchEventsByRegion(geohashPrefix, now, limit, lastSnapshot)
+
+            // Estrategia 3: Radio grande (>5km) → Bounding Box + Haversine
+            if (centerLat != null && centerLng != null) {
+                return fetchEventsByRegion(centerLat, centerLng, radiusKm, now, limit, lastSnapshot)
+            }
+
+            // Fallback si no hay coordenadas: feed global
+            return fetchGlobalEvents(now, limit, lastSnapshot)
         } catch (e: Exception) {
             android.util.Log.e("MainFeedRepository", "Error fetching events batch: ${e.message}", e)
             Result.failure(e)
@@ -98,7 +107,8 @@ class MainFeedRepository @Inject constructor(
         centerGeohash: String,
         now: Long,
         limit: Long,
-        lastSnapshot: com.google.firebase.firestore.DocumentSnapshot?
+        lastSnapshot: com.google.firebase.firestore.DocumentSnapshot?,
+        seenEventIds: Set<String> = emptySet()
     ): Result<Pair<List<Event>, com.google.firebase.firestore.DocumentSnapshot?>> {
         android.util.Log.d("MainFeedRepository", "Multi-query geohash para radio pequeño: $centerGeohash")
         
@@ -122,23 +132,21 @@ class MainFeedRepository @Inject constructor(
         
         val mainResult = mainQuery.limit(limit).get().await()
         val mainEvents = processEvents(mainResult, now)
-        allEvents.addAll(mainEvents)
+        allEvents.addAll(mainEvents.filter { it.id !in seenEventIds })
         
         // Si no alcanzamos el límite, consultar vecinos
-        if (mainEvents.size < limit) {
-            val remaining = limit - mainEvents.size
+        if (allEvents.size < limit) {
+            val remaining = limit - allEvents.size
             val neighborQuery = baseQuery
-                .orderBy("geohash")
-                .orderBy("createdAt", Query.Direction.DESCENDING)
                 .whereIn("geohash", neighborGeohashes)
-                .limit(remaining * 2) // Over-fetch para compensar dedup
+                .limit(remaining * 3) // Over-fetch mayor (3x) para compensar dedup
             
             val neighborResult = neighborQuery.get().await()
             val neighborEvents = processEvents(neighborResult, now)
             
-            // Filtrar eventos ya existentes (deduplicación)
-            val existingIds = mainEvents.map { it.id }.toSet()
-            val uniqueNeighborEvents = neighborEvents.filter { it.id !in existingIds }
+            // Filtrar eventos ya existentes (deduplicación cruzada y paginación)
+            val existingIds = allEvents.map { it.id }.toSet()
+            val uniqueNeighborEvents = neighborEvents.filter { it.id !in existingIds && it.id !in seenEventIds }
             allEvents.addAll(uniqueNeighborEvents)
         }
         
@@ -157,43 +165,16 @@ class MainFeedRepository @Inject constructor(
         return Result.success(Pair(sortedEvents, lastDoc))
     }
 
-    /**
-     * Query por región para radio grande (>5km)
-     * Usa precisión de geohash menor para cubrir área más amplia
-     */
     private suspend fun fetchEventsByRegion(
-        geohashPrefix: String,
+        centerLat: Double,
+        centerLng: Double,
+        radiusKm: Int,
         now: Long,
         limit: Long,
         lastSnapshot: com.google.firebase.firestore.DocumentSnapshot?
     ): Result<Pair<List<Event>, com.google.firebase.firestore.DocumentSnapshot?>> {
-        android.util.Log.d("MainFeedRepository", "Query por región (radio grande): ${geohashPrefix.take(REGION_PRECISION)}")
-        
-        // Usar precisión menor (3 chars ~150km) para cubrir área más amplia
-        val regionGeohash = if (geohashPrefix.length >= REGION_PRECISION) {
-            geohashPrefix.substring(0, REGION_PRECISION)
-        } else {
-            geohashPrefix
-        }
-        
-        var query: Query = eventsCollection
-            .whereEqualTo("status", EventStatus.OPEN.name)
-            .orderBy("geohash")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .startAt(regionGeohash)
-            .endAt(regionGeohash + "~")
-        
-        if (lastSnapshot != null) {
-            query = query.startAfter(lastSnapshot)
-        }
-        
-        // Over-fetch porque el filtro por distancia se aplica en cliente
-        val fetchLimit = limit * 3
-        val snapshot = query.limit(fetchLimit).get().await()
-        val events = processEvents(snapshot, now)
-        val lastDoc = snapshot.documents.lastOrNull()
-        
-        return Result.success(Pair(events.take(limit.toInt()), lastDoc))
+        android.util.Log.d("MainFeedRepository", "Query BoundingBox+Haversine: lat=$centerLat lng=$centerLng radiusKm=$radiusKm")
+        return getEventsInRadius(centerLat, centerLng, radiusKm.toDouble(), limit, startAfter = lastSnapshot)
     }
 
     /**
@@ -335,8 +316,9 @@ class MainFeedRepository @Inject constructor(
         centerLat: Double,
         centerLng: Double,
         radiusKm: Double,
-        limit: Long = 50 // 🚀 PERFORMANCE: Reduced from 100 to 50 for better performance
-    ): Result<List<Event>> {
+        limit: Long = 50,
+        startAfter: com.google.firebase.firestore.DocumentSnapshot? = null
+    ): Result<Pair<List<Event>, com.google.firebase.firestore.DocumentSnapshot?>> {
         return try {
             // 1. Calcular Bounding Box
             // 1 grado de latitud ~= 111 km.
@@ -356,10 +338,15 @@ class MainFeedRepository @Inject constructor(
             // IMPORTANTE: Firestore solo permite inecuaciones (<, >) en UN SOLO campo a la vez.
             // Por ende, filtramos la latitud en BD y la longitud en Memoria, o viceversa.
             // Optamos por filtrar latitud en BD por ser más directa.
-            val snapshot = eventsCollection
+            val query = eventsCollection
                 .whereGreaterThanOrEqualTo("latitude", minLat)
                 .whereLessThanOrEqualTo("latitude", maxLat)
-                .limit(limit)
+                .whereEqualTo("status", EventStatus.OPEN.name)       // BUG1 FIX: filter in Firestore
+                .orderBy("latitude", Query.Direction.ASCENDING)
+                .orderBy("createdAt", Query.Direction.DESCENDING)    // BUG3 FIX: deterministic order
+            val baseQuery = if (startAfter != null) query.startAfter(startAfter) else query
+            val snapshot = baseQuery
+                .limit(limit * OVERFETCH_MULTIPLIER)                 // BUG2 FIX: over-fetch for Haversine
                 .get()
                 .await()
 
@@ -368,17 +355,14 @@ class MainFeedRepository @Inject constructor(
 
             // 🚀 PERFORMANCE: Pre-filter with fast checks before Haversine
             val nowMs = now
-            val statusOpen = EventStatus.OPEN.name
-            
-            // 3. Filtrado Fino (Haversine) y Estado - Optimized with lazy sequencing
+
+            // 3. Filtrado Fino (Haversine) y Longitud - Optimized with lazy sequencing
             val filteredEvents = eventsDto
                 .asSequence() // 🚀 Use lazy sequence to avoid intermediate collections
                 .map { it.toDomain() }
                 .filter { event ->
-                    // Fast checks first (cheap operations)
-                    if (event.status.name != statusOpen) return@filter false
                     if (event.endAt <= nowMs) return@filter false
-                    
+
                     // Extraer coordenadas (usar la pública)
                     val eLat = event.latitude ?: return@filter false
                     val eLng = event.longitude ?: return@filter false
@@ -390,13 +374,15 @@ class MainFeedRepository @Inject constructor(
                     val distance = calculateHaversineDistance(centerLat, centerLng, eLat, eLng)
                     distance <= radiusKm
                 }
-                .toList() // Convert sequence to list
+                .take(limit.toInt()) // Respect caller limit after Haversine
+                .toList()
                 .sortedWith(
                     compareByDescending<Event> { it.isBoosted && it.boostExpiry > nowMs }
                         .thenByDescending { it.createdAt }
                 )
 
-            Result.success(filteredEvents)
+            val lastDoc = snapshot.documents.lastOrNull()
+            Result.success(Pair(filteredEvents, lastDoc))
         } catch (e: Exception) {
             android.util.Log.e("MainFeedRepository", "Error fetching events by radius: ${e.message}", e)
             Result.failure(e)
@@ -467,11 +453,15 @@ class MainFeedRepository @Inject constructor(
 
         if (!geohashPrefix.isNullOrEmpty()) {
             query = query
+                .whereEqualTo("status", EventStatus.OPEN.name)
                 .orderBy("geohash")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
                 .startAt(geohashPrefix)
                 .endAt(geohashPrefix + "~")
         } else {
-            query = query.orderBy("createdAt", Query.Direction.DESCENDING)
+            query = query
+                .whereEqualTo("status", EventStatus.OPEN.name)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
         }
 
         val listener = query.limit(limit).addSnapshotListener { snapshot, error ->
@@ -485,7 +475,7 @@ class MainFeedRepository @Inject constructor(
             val events = snapshot
                 ?.toObjects(EventDto::class.java)
                 ?.map { it.toDomain() }
-                ?.filter { it.status == EventStatus.OPEN && it.endAt > now }
+                ?.filter { it.endAt > now }
                 ?.sortedWith(
                     compareByDescending<Event> { it.isBoosted && it.boostExpiry > now }
                         .thenByDescending { it.createdAt }

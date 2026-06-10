@@ -3,7 +3,9 @@ package com.eventos.banana.domain.usecase.auth
 import com.eventos.banana.data.repository.AuthRepository
 import com.eventos.banana.data.repository.UserRepository
 
-class LoginUseCase(
+import javax.inject.Inject
+
+class LoginUseCase @Inject constructor(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository
 ) {

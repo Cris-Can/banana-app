@@ -164,6 +164,7 @@ class EncounterRepository @Inject constructor(
             val asUser1 = encountersCollection
                 .whereEqualTo("eventId", eventId)
                 .whereEqualTo("userId1", userId)
+                .limit(500)
                 .get()
                 .await()
 
@@ -171,6 +172,7 @@ class EncounterRepository @Inject constructor(
             val asUser2 = encountersCollection
                 .whereEqualTo("eventId", eventId)
                 .whereEqualTo("userId2", userId)
+                .limit(500)
                 .get()
                 .await()
             
@@ -188,6 +190,7 @@ class EncounterRepository @Inject constructor(
             if (hasCheckIn(eventId, userId)) {
                 val allCheckins = checkinsCollection
                     .whereEqualTo("eventId", eventId)
+                    .limit(500)
                     .get()
                     .await()
                 

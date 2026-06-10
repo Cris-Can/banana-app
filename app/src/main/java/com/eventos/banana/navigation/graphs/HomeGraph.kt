@@ -24,11 +24,11 @@ import com.eventos.banana.navigation.Screen
 fun NavGraphBuilder.homeGraph(
     navController: NavController,
     sessionViewModel: SessionViewModel,
+    notificationViewModel: NotificationViewModel,
+    conversationsViewModel: ConversationsViewModel,
     sharedTransitionScope: SharedTransitionScope
 ) {
     composable(Screen.Home.route) {
-        val notificationViewModel: NotificationViewModel = hiltViewModel()
-        val conversationsViewModel: ConversationsViewModel = hiltViewModel()
         val currentId = sessionViewModel.currentUserId() ?: ""
 
 
@@ -62,8 +62,10 @@ fun NavGraphBuilder.homeGraph(
     }
 
     composable(Screen.WorldMap.route) {
+        val profileUiState by sessionViewModel.profileUiState.collectAsState()
         WorldMapScreen(
             currentUserId = sessionViewModel.currentUserId() ?: "",
+            isIdentityVerified = profileUiState.profile?.identityVerified ?: false,
             onBack = { navController.popBackStack() },
             onEventClick = { eventId -> navController.navigate("event_detail/$eventId") }
         )

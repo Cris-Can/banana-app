@@ -30,6 +30,8 @@ fun EventDetailRoute(
     onUserClick: (String) -> Unit,
     onRateParticipants: (com.eventos.banana.domain.model.Event) -> Unit,
     onBoostClick: () -> Unit,
+    onBoostWithCredit: () -> Unit = {},
+    credits: Int = 0,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
     hasAttended: Boolean,
@@ -117,6 +119,8 @@ fun EventDetailRoute(
                 onUserClick = onUserClick,
                 onRateParticipants = onRateParticipants,
                 onBoostClick = onBoostClick,
+                onBoostWithCredit = onBoostWithCredit,
+                credits = credits,
                 initialTab = initialTab,
                 eventState = uiState, // Pass full state
                 isSaved = isSaved,

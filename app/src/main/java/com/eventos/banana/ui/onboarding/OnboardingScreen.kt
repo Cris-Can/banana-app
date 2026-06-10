@@ -47,7 +47,7 @@ fun OnboardingScreen(
     }
 
     val locationDescription = if (detectedCommune != null) {
-        "Banana usa tu ubicación para mostrarte eventos cerca de $detectedCommune. ¡Ve los panoramas más cercanos primero!"
+        "+panoramas usa tu ubicación para mostrarte eventos cerca de $detectedCommune. ¡Ve los panoramas más cercanos primero!"
     } else {
         stringResource(com.eventos.banana.R.string.onboarding_desc_4)
     }

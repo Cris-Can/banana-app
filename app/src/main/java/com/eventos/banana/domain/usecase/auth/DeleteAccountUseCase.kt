@@ -1,8 +1,9 @@
 package com.eventos.banana.domain.usecase.auth
 
 import com.eventos.banana.data.repository.AuthRepository
+import javax.inject.Inject
 
-class DeleteAccountUseCase(
+class DeleteAccountUseCase @Inject constructor(
     private val authRepository: AuthRepository
 ) {
     suspend operator fun invoke(): Result<Unit> {

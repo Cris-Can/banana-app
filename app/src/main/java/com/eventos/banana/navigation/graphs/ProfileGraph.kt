@@ -13,11 +13,17 @@ import com.eventos.banana.ui.screens.*
 import com.eventos.banana.ui.ranking.RankingScreen
 import com.eventos.banana.ui.ranking.RankingViewModel
 import com.eventos.banana.navigation.Screen
+import com.eventos.banana.ui.monetization.BillingViewModel
+import com.eventos.banana.domain.model.ExactLocation
+import com.eventos.banana.ui.admin.AdminDashboardViewModel
+import com.eventos.banana.ui.admin.ExternalEventsViewModel
+import com.eventos.banana.ui.admin.AdminToolsViewModel
 
 fun NavGraphBuilder.profileGraph(
     navController: NavController,
     sessionViewModel: SessionViewModel,
-    sharedPreferences: android.content.SharedPreferences
+    sharedPreferences: android.content.SharedPreferences,
+    onThemeChanged: (String) -> Unit
 ) {
     // ---------- LEADERBOARD (RANKING) ----------
     composable(Screen.Leaderboard.route) {
@@ -46,7 +52,8 @@ fun NavGraphBuilder.profileGraph(
                 navController.navigate(Screen.ProfileViews(sessionViewModel.currentUserId() ?: "").route)
             },
             onLeaderboardClick = { navController.navigate(Screen.Leaderboard.route) },
-            onRatingsClick = { userId -> navController.navigate(Screen.UserRatings(userId).route) }
+            onRatingsClick = { userId -> navController.navigate(Screen.UserRatings(userId).route) },
+            onNavigateToIdentityVerification = { navController.navigate(Screen.IdentityVerification.route) }
         )
     }
 
@@ -61,9 +68,12 @@ fun NavGraphBuilder.profileGraph(
         val vm: UserRatingsViewModel = hiltViewModel<UserRatingsViewModel, UserRatingsViewModel.Factory>(
             creationCallback = { factory -> factory.create(targetUserId, isGold) }
         )
+        val billingViewModel: BillingViewModel = hiltViewModel()
         UserRatingsScreen(
             viewModel = vm,
-            onBack = { navController.popBackStack() }
+            billingViewModel = billingViewModel,
+            onBack = { navController.popBackStack() },
+            onNavigateToGold = { navController.navigate("gold") }
         )
     }
 
@@ -115,6 +125,7 @@ fun NavGraphBuilder.profileGraph(
             onUpdateTheme = { theme -> 
                 profileUiState.profile?.uid?.let { uid -> profileViewModel.updateAppTheme(uid, theme) }
             },
+            onThemeChanged = onThemeChanged,
             onSendPasswordReset = { email -> profileViewModel.sendPasswordReset(email) },
             onVerifyEmail = { sessionViewModel.sendEmailVerification() },
             isEmailVerified = sessionViewModel.isEmailVerified,
@@ -157,11 +168,32 @@ fun NavGraphBuilder.profileGraph(
     }
 
     // ---------- ADMIN DASHBOARD ----------
-    composable(Screen.AdminDashboard.route) {
+    composable(Screen.AdminDashboard.route) { backStackEntry ->
+        val adminVm: AdminDashboardViewModel = hiltViewModel()
+        val externalVm: ExternalEventsViewModel = hiltViewModel()
+        val toolsVm: AdminToolsViewModel = hiltViewModel()
+        val exactLocation = backStackEntry.savedStateHandle.get<ExactLocation>("location_result")
+        LaunchedEffect(exactLocation) {
+            if (exactLocation != null) {
+                externalVm.onMapResult(exactLocation)
+                backStackEntry.savedStateHandle.remove<ExactLocation>("location_result")
+            }
+        }
         AdminDashboardScreen(
             currentUserId = sessionViewModel.currentUserId(),
             onBack = { navController.popBackStack() },
-            onNavigateToProfile = { userId -> navController.navigate(Screen.PublicProfile(userId).route) }
+            onNavigateToProfile = { userId -> navController.navigate(Screen.PublicProfile(userId).route) },
+            onNavigateToMap = { lat, lng ->
+                val route = if (lat != null && lng != null) {
+                    Screen.PickLocation(lat, lng).route
+                } else {
+                    Screen.PickLocation().route
+                }
+                navController.navigate(route)
+            },
+            adminVm = adminVm,
+            externalVm = externalVm,
+            toolsVm = toolsVm
         )
     }
 
@@ -190,6 +222,15 @@ fun NavGraphBuilder.profileGraph(
             onBack = { navController.popBackStack() },
             isCurrentUserVerified = sessionViewModel.isEmailVerified,
             onMessageClick = { targetUserId -> navController.navigate(Screen.StartChat(targetUserId).route) }
+        )
+    }
+
+    // ---------- IDENTITY VERIFICATION (+18) ----------
+    composable(Screen.IdentityVerification.route) {
+        val uid = sessionViewModel.currentUserId() ?: return@composable
+        IdentityVerificationScreen(
+            userId = uid,
+            onBack = { navController.popBackStack() }
         )
     }
 }

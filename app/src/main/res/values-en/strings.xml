@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Banana</string>
+    <string name="app_name">+panoramas</string>
 
     <!-- COMMON -->
     <string name="common_ok">OK</string>
@@ -101,7 +101,7 @@
     <string name="settings_delete_loading">Deleting...</string>
     <string name="settings_delete_loading_msg">Erasing your trace from the matrix...</string>
     <string name="settings_delete_permanently">Delete permanently</string>
-    <string name="settings_banana_gold">Banana Gold</string>
+    <string name="settings_banana_gold">+panoramas Gold</string>
     <string name="settings_manage_subscription">Manage your subscription</string>
     <string name="settings_app_icon">App Icon</string>
     <string name="settings_app_icon_desc">Customize the icon on your home screen.</string>
@@ -152,7 +152,7 @@
     <string name="friends_tab_suggestions">Suggestions</string>
 
     <!-- GUIDE OVERLAY (Tutorial) -->
-    <string name="guide_welcome_title">Welcome to Banana! 🍌</string>
+    <string name="guide_welcome_title">Welcome to +panoramas! 🍌</string>
     <string name="guide_welcome_desc">Here you\'ll find the best events near you. Explore, join, and have fun.</string>
     <string name="guide_filters_title">Find your thing 🔍</string>
     <string name="guide_filters_desc">Use the filters above to see only Sports, Social, Cultural events, and more.</string>
@@ -221,8 +221,8 @@
     <string name="profile_views_recent">Recent visits (%1$d)</string>
     <string name="profile_views_seen">Seen %1$s</string>
     <string name="profile_views_spy_title">👁️ Who\'s spying on you?</string>
-    <string name="profile_views_spy_body">Find out who visits your profile with Banana Gold. Don\'t miss out!</string>
-    <string name="profile_views_get_gold">Get Banana Gold -&gt;</string>
+    <string name="profile_views_spy_body">Find out who visits your profile with +panoramas Gold. Don\'t miss out!</string>
+    <string name="profile_views_get_gold">Get +panoramas Gold -&gt;</string>
 
     <!-- USER STATS DIALOG -->
     <string name="stats_requested">Requested</string>
@@ -235,14 +235,14 @@
     <string name="onboarding_title_2">Real Community</string>
     <string name="onboarding_desc_2">Only real profiles. Your safety is our priority so you can enjoy with peace of mind.</string>
     <string name="onboarding_title_3">Your Reputation Matters</string>
-    <string name="onboarding_desc_3">Be a great attendee, receive ratings and stand out as a \'Top Banana\' in your city.</string>
+    <string name="onboarding_desc_3">Be a great attendee, receive ratings and stand out as a \'Top Panorama\' in your city.</string>
     <string name="onboarding_title_4">Your City, Your Wall</string>
-    <string name="onboarding_desc_4">Banana uses your location to show you what\'s happening nearby. Enable it for the best experience!</string>
+    <string name="onboarding_desc_4">+panoramas uses your location to show you what\'s happening nearby. Enable it for the best experience!</string>
     <string name="onboarding_enable_start">Enable and Get Started</string>
 
     <!-- APP ICON -->
     <string name="app_icon_title">App Icon</string>
-    <string name="app_icon_customize">Customize your Banana</string>
+    <string name="app_icon_customize">Customize your +panoramas</string>
     <string name="app_icon_description">Choose how the app looks on your phone.</string>
     <string name="app_icon_active">Active</string>
     <string name="app_icon_classic">Classic</string>
@@ -265,7 +265,7 @@
 
     <!-- EMAIL VERIFICATION -->
     <string name="email_verify_title">Verify your email</string>
-    <string name="email_verify_body">We\'ve sent a confirmation link to your email. You must verify it to use Banana.</string>
+    <string name="email_verify_body">We\'ve sent a confirmation link to your email. You must verify it to use +panoramas.</string>
     <string name="email_verify_already">I already verified</string>
     <string name="email_verify_not_yet">Not verified yet. Try again.</string>
     <string name="email_verify_resend">Resend email</string>
@@ -329,7 +329,7 @@
     <string name="friends_accept">Accept</string>
     <string name="friends_empty_requests">You don\'t have any pending requests.</string>
     <string name="friends_empty_suggestions">No suggestions in your region for now.</string>
-    <string name="friends_invite">Invite more people to use Banana!</string>
+    <string name="friends_invite">Invite more people to use +panoramas!</string>
 
     <!-- HOME SCREEN (filters) -->
     <string name="home_filter_region">Region</string>
@@ -406,7 +406,7 @@
     <string name="event_detail_perfect">💎 Perfect</string>
 
     <!-- BANANA GOLD -->
-    <string name="banana_gold_title">Banana Gold</string>
+    <string name="banana_gold_title">+panoramas Gold</string>
     <string name="banana_gold_subtitle">The ultimate experience.</string>
     <string name="banana_gold_fast_pass_title">Fast Pass (Priority)</string>
     <string name="banana_gold_fast_pass_desc">Your requests appear first.</string>
@@ -516,7 +516,7 @@
     <!-- RATING BADGES -->
     <string name="badge_perfect_attendee">Perfect Attendee</string>
     <string name="badge_new_user">New User</string>
-    <string name="badge_top_banana">Top Banana</string>
+    <string name="badge_top_banana">Top Panorama</string>
     <string name="badge_reliable">Reliable</string>
     <string name="badge_good">Good</string>
     <string name="badge_developing">Developing</string>
@@ -552,7 +552,7 @@
     <string name="notif_channel_messages_desc">New message notifications</string>
 
     <!-- THEME NAMES -->
-    <string name="theme_banana">Banana 🍌</string>
+    <string name="theme_banana">+panoramas 🍌</string>
     <string name="theme_dark">Dark 🌑</string>
     <string name="theme_light">Light ☀️</string>
     <string name="theme_dynamic">Dynamic 🎨</string>

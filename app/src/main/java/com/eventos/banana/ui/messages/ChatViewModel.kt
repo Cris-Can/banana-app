@@ -3,6 +3,7 @@ package com.eventos.banana.ui.messages
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eventos.banana.data.repository.MessageRepository
+import com.eventos.banana.data.repository.UserRepository
 import com.eventos.banana.util.AudioPlayerHelper
 import com.eventos.banana.util.AudioRecorderHelper
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +22,8 @@ class ChatViewModel @AssistedInject constructor(
     @Assisted("chat_conversationId") private val conversationId: String,
     @Assisted("chat_currentUserId") private val currentUserId: String,
     private val audioRecorderHelper: AudioRecorderHelper,
-    private val audioPlayerHelper: AudioPlayerHelper
+    private val audioPlayerHelper: AudioPlayerHelper,
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     @AssistedFactory
@@ -32,6 +34,40 @@ class ChatViewModel @AssistedInject constructor(
         ): ChatViewModel
     }
 
+    private val _activeConversationId = MutableStateFlow(if (conversationId.startsWith("usr_")) null else conversationId)
+    val activeConversationId = _activeConversationId.asStateFlow()
+
+    private var resolvedConversationId: String? = null
+
+    private suspend fun getOrCreateActualConversationId(): String? {
+        if (!conversationId.startsWith("usr_")) {
+            return conversationId
+        }
+        resolvedConversationId?.let { return it }
+
+        return try {
+            val targetUserId = conversationId.substringAfter("usr_")
+            val currentUserProfile = userRepository.getUserProfile(currentUserId)
+            val currentNickname = currentUserProfile?.nickname ?: "Usuario"
+            
+            val otherUserProfile = userRepository.getUserProfile(targetUserId)
+            val otherNickname = otherUserProfile?.nickname ?: "Usuario"
+
+            val result = repository.getOrCreateConversation(
+                currentUserId = currentUserId,
+                otherUserId = targetUserId,
+                currentUserNickname = currentNickname,
+                otherUserNickname = otherNickname
+            )
+            result.getOrNull()?.also { newId ->
+                resolvedConversationId = newId
+                _activeConversationId.value = newId
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ChatViewModel", "Error getting or creating conversation", e)
+            null
+        }
+    }
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording = _isRecording.asStateFlow()
@@ -102,9 +138,10 @@ class ChatViewModel @AssistedInject constructor(
         _isSendingAudio.value = true
         _pendingAudioBytes.value = null
         viewModelScope.launch {
-            repository.uploadAudio(conversationId, currentUserId, bytes).onSuccess { url ->
+            val actualId = getOrCreateActualConversationId() ?: return@launch
+            repository.uploadAudio(actualId, currentUserId, bytes).onSuccess { url ->
                 repository.sendMessage(
-                    conversationId = conversationId,
+                    conversationId = actualId,
                     senderId = currentUserId,
                     content = "",
                     replyToId = replyToId,
@@ -157,8 +194,9 @@ class ChatViewModel @AssistedInject constructor(
 
     fun sendMessage(content: String, replyToId: String? = null) {
         viewModelScope.launch {
+            val actualId = getOrCreateActualConversationId() ?: return@launch
             repository.sendMessage(
-                conversationId = conversationId,
+                conversationId = actualId,
                 senderId = currentUserId,
                 content = content,
                 replyToId = replyToId
@@ -169,9 +207,10 @@ class ChatViewModel @AssistedInject constructor(
     fun sendAudio(audioBytes: ByteArray, durationMs: Int, replyToId: String? = null) {
         _isSendingAudio.value = true
         viewModelScope.launch {
-            repository.uploadAudio(conversationId, currentUserId, audioBytes).onSuccess { url ->
+            val actualId = getOrCreateActualConversationId() ?: return@launch
+            repository.uploadAudio(actualId, currentUserId, audioBytes).onSuccess { url ->
                 repository.sendMessage(
-                    conversationId = conversationId,
+                    conversationId = actualId,
                     senderId = currentUserId,
                     content = "",
                     replyToId = replyToId,
@@ -184,14 +223,18 @@ class ChatViewModel @AssistedInject constructor(
     }
 
     fun toggleReaction(messageId: String, emoji: String) {
+        if (conversationId.startsWith("usr_") && resolvedConversationId == null) return
+        val actualId = resolvedConversationId ?: conversationId
         viewModelScope.launch {
-            repository.toggleReaction(conversationId, messageId, currentUserId, emoji)
+            repository.toggleReaction(actualId, messageId, currentUserId, emoji)
         }
     }
 
     fun setTypingStatus(isTyping: Boolean) {
+        if (conversationId.startsWith("usr_") && resolvedConversationId == null) return
+        val actualId = resolvedConversationId ?: conversationId
         viewModelScope.launch {
-            repository.setTypingStatus(conversationId, currentUserId, isTyping)
+            repository.setTypingStatus(actualId, currentUserId, isTyping)
         }
     }
 

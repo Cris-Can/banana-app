@@ -29,13 +29,18 @@ import com.eventos.banana.ui.home.*
 import com.eventos.banana.ui.messages.*
 import com.eventos.banana.ui.monetization.*
 import com.eventos.banana.ui.notifications.*
+import com.eventos.banana.ui.notifications.NotificationViewModel
+import com.eventos.banana.ui.messages.ConversationsViewModel
 import com.eventos.banana.ui.onboarding.*
 import com.eventos.banana.ui.profile.*
 import com.eventos.banana.ui.rating.*
 import com.eventos.banana.navigation.graphs.*
 
 @Composable
-fun AppNavigation(startDestination: String = "splash") {
+fun AppNavigation(
+    startDestination: String = "splash",
+    onThemeChanged: (String) -> Unit = {}
+) {
 
     val navController = rememberNavController()
     
@@ -51,6 +56,8 @@ fun AppNavigation(startDestination: String = "splash") {
     
     // ---------- SESSION VIEW MODEL (HILT) ----------
     val sessionViewModel: SessionViewModel = hiltViewModel()
+    val notificationViewModel: NotificationViewModel = hiltViewModel()
+    val conversationsViewModel: ConversationsViewModel = hiltViewModel()
     val sessionState by sessionViewModel.sessionState.collectAsState()
 
     // 🔒 Cache onboarding state to avoid flash on each session state change
@@ -66,12 +73,33 @@ fun AppNavigation(startDestination: String = "splash") {
     // If Authenticated -> Check Onboarding -> Home/Onboarding
     // If Not Authenticated -> Login
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val showBottomBar = currentRoute in listOf(
+        Screen.Home.route,
+        Screen.Search.route,
+        Screen.Conversations.route,
+        Screen.Profile.route
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            if (showBottomBar) {
+                com.eventos.banana.ui.navigation.BottomNavBar(
+                    navController = navController,
+                    currentRoute = currentRoute,
+                    sessionViewModel = sessionViewModel
+                )
+            }
+        }
+    ) { innerPadding ->
         @OptIn(ExperimentalSharedTransitionApi::class)
         SharedTransitionLayout {
             NavHost(
                 navController = navController,
                 startDestination = Screen.Splash.route,
+                modifier = Modifier.padding(innerPadding).fillMaxSize(),
                 enterTransition = { fadeIn(animationSpec = tween(300)) },
                 exitTransition = { fadeOut(animationSpec = tween(300)) },
                 popEnterTransition = { fadeIn(animationSpec = tween(300)) },
@@ -96,6 +124,8 @@ fun AppNavigation(startDestination: String = "splash") {
                 homeGraph(
                     navController = navController,
                     sessionViewModel = sessionViewModel,
+                    notificationViewModel = notificationViewModel,
+                    conversationsViewModel = conversationsViewModel,
                     sharedTransitionScope = this@SharedTransitionLayout
                 )
 
@@ -110,20 +140,22 @@ fun AppNavigation(startDestination: String = "splash") {
                 profileGraph(
                     navController = navController,
                     sessionViewModel = sessionViewModel,
-                    sharedPreferences = sharedPreferences
+                    sharedPreferences = sharedPreferences,
+                    onThemeChanged = onThemeChanged
                 )
 
                 // ---------- CHAT GRAPH ----------
                 chatGraph(
                     navController = navController,
-                    sessionViewModel = sessionViewModel
+                    sessionViewModel = sessionViewModel,
+                    conversationsViewModel = conversationsViewModel
                 )
 
                 
         }
         
     } // End SharedTransitionLayout
-    } // End Box
+    } // End Scaffold
 
     // ---------- SESSION REDIRECTION ----------
     val navigator = remember(navController) { Navigator(navController) }

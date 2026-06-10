@@ -39,81 +39,7 @@ export const checkRateLimitGuard = onCall(async (request) => {
   }
 });
 
-/**
- * =====================================================
- * 🛡️ VALIDATE PASSWORD STRENGTH — Server-Side
- * Ensures password meets security requirements
- * =====================================================
- */
-export const validatePasswordStrength = onCall(async (request) => {
-  const { password } = request.data;
 
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be authenticated to validate a password.");
-  }
-
-  if (!password || typeof password !== "string") {
-    throw new HttpsError("invalid-argument", "Password is required.");
-  }
-
-  // Password requirements
-  const minLength = 8;
-  const maxLength = 128;
-  const hasUpperCase = /[A-Z]/.test(password);
-  const hasLowerCase = /[a-z]/.test(password);
-  const hasNumbers = /\d/.test(password);
-  const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
-
-  const errors: string[] = [];
-
-  if (password.length < minLength) {
-    errors.push(`Password must be at least ${minLength} characters long`);
-  }
-
-  if (password.length > maxLength) {
-    errors.push(`Password must not exceed ${maxLength} characters`);
-  }
-
-  if (!hasUpperCase) {
-    errors.push("Password must contain at least one uppercase letter");
-  }
-
-  if (!hasLowerCase) {
-    errors.push("Password must contain at least one lowercase letter");
-  }
-
-  if (!hasNumbers) {
-    errors.push("Password must contain at least one number");
-  }
-
-  if (!hasSpecialChar) {
-    errors.push("Password must contain at least one special character");
-  }
-
-  // Check for common patterns
-  const commonPatterns = [
-    /^(password|123456|12345678|qwerty|abc123)/i,
-    /(.)\1{2,}/, // Same character repeated 3+ times
-  ];
-
-  for (const pattern of commonPatterns) {
-    if (pattern.test(password)) {
-      errors.push("Password contains a common or weak pattern");
-      break;
-    }
-  }
-
-  const isValid = errors.length === 0;
-  const strength = isValid
-    ? Math.min(5, [hasUpperCase, hasLowerCase, hasNumbers, hasSpecialChar, password.length >= 12].filter(Boolean).length)
-    : 0;
-
-  return {
-    isValid,
-    strength, // 0-5 scale
-    errors: isValid ? [] : errors
-  };
-});
 
 /**
  * =====================================================
@@ -160,14 +86,54 @@ export const recordProfileView = onCall(async (request) => {
   }
 
   // 4. Record the profile view
-  const viewId = `${viewerUid}_${targetUid}_${Date.now()}`;
-
   try {
-    await db.collection("profile_views").doc(viewId).set({
-      viewerUid: viewerUid,
-      targetUid: targetUid,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    const userRef = db.collection("users").doc(targetUid);
+    const viewRef = userRef.collection("profile_views").doc(viewerUid);
+    
+    // Get existing to check time
+    const existingSnapshot = await viewRef.get();
+    let lastVisit = 0;
+    if (existingSnapshot.exists) {
+      const timestamp = existingSnapshot.get("timestamp");
+      if (timestamp) {
+        lastVisit = timestamp.toDate().getTime();
+      }
+    }
+    
+    const now = Date.now();
+    const shouldNotify = (now - lastVisit) > 60000;
+    
+    const batch = db.batch();
+    
+    // Set the view data
+    batch.set(viewRef, {
+      visitorUid: viewerUid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    // If we should notify, update user doc and create notification
+    if (shouldNotify) {
+      batch.update(userRef, {
+        profileViews: admin.firestore.FieldValue.increment(1),
+        recentViewers: admin.firestore.FieldValue.arrayUnion(viewerUid)
+      });
+      
+      const notifRef = db.collection("notifications").doc();
+      batch.set(notifRef, {
+        id: notifRef.id,
+        userId: targetUid,
+        fromUserId: viewerUid,
+        title: "Tienes una nueva visita 👀",
+        message: "Alguien ha visto tu perfil recientemente.",
+        eventId: null,
+        conversationId: null,
+        read: false,
+        type: "PROFILE_VIEW",
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    
+    await batch.commit();
 
     return { success: true, remaining: rateLimitResult.remaining };
   } catch (error: any) {

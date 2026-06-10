@@ -24,6 +24,7 @@ data class UserProfile(
     val fcmToken: String? = null,
     val appTheme: String = "BANANA", // 🎨 Options: BANANA, DARK, LIGHT
     var isVerified: Boolean = false, // 👈 A23 Account verification
+    var identityVerified: Boolean = false, // 🪪 Verificación de identidad con cédula (+18)
 
     val score: Int = 0,
     
@@ -31,10 +32,13 @@ data class UserProfile(
     val ratingSum: Double = 0.0,
     val ratingCount: Int = 0,
     val averageScore: Double = 0.0,
+    val ratingCredits: Int = 0,
+    val ratingCreditsExpiry: Long = 0L,
+    val revealedRatingIds: List<String> = emptyList(),
     
     // 💎 PREMIUM FLAG (Round 11)
+    @get:com.google.firebase.firestore.PropertyName("isGold")
     val isGoldStored: Boolean = false,
-    val isPremiumStored: Boolean = false,
     val isFounder: Boolean = false, // 🚀 Early Adopter Badge
     
     // 🎨 SOCIAL (A20)

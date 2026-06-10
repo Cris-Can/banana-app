@@ -30,6 +30,11 @@ class UserGamificationRepository @Inject constructor(
     }
 
     // 🔧 PARA DEBUG / ADMIN: Recalcular historiales
+    @Deprecated(
+        message = "Aggregation is handled server-side by Cloud Function onRatingCreated. " +
+            "Use only for admin/debug manual recalculation.",
+        level = DeprecationLevel.WARNING
+    )
     suspend fun recalculateUserStats(uid: String): Result<String> {
         return try {
             val batch = firestore.batch()
@@ -78,7 +83,7 @@ class UserGamificationRepository @Inject constructor(
             // 🆕 GAMIFICATION SCORE CALCULATION
             // Formula: (Events Attended * 10) + (Avg Rating * 20)
             val avgRating = if (scores.isNotEmpty()) scores.average() else 0.0
-            val score = (validCheckinsCount * 10) + (avgRating * 20).toInt()
+            val score = (avgRating * 100).toInt()
             
             updateData["score"] = score
             

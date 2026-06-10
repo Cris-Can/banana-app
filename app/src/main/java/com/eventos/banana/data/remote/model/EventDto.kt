@@ -50,7 +50,10 @@ data class EventDto(
     val isBoosted: Boolean = false,
     val boostExpiry: Long = 0L,
     val geohash: String? = null,
-    val notificationRange: String = "COMMUNE"
+    val notificationRange: String = "COMMUNE",
+    
+    @get:PropertyName("isAdultContent") @set:PropertyName("isAdultContent")
+    var isAdultContent: Boolean = false
 ) {
     fun toDomain(): Event {
         return Event(
@@ -93,7 +96,8 @@ data class EventDto(
             isBoosted = isBoosted,
             boostExpiry = boostExpiry,
             geohash = geohash,
-            notificationRange = notificationRange
+            notificationRange = notificationRange,
+            isAdultContent = isAdultContent
         )
     }
 
@@ -139,7 +143,8 @@ data class EventDto(
                 isBoosted = domain.isBoosted,
                 boostExpiry = domain.boostExpiry,
                 geohash = domain.geohash,
-                notificationRange = domain.notificationRange
+                notificationRange = domain.notificationRange,
+                isAdultContent = domain.isAdultContent
             )
         }
     }

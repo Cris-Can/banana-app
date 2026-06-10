@@ -52,7 +52,7 @@ fun RankingGuideOverlay(onDismiss: () -> Unit) {
                 Text(
                     "• Los usuarios aparecen ordenados por puntuación\n" +
                     "• Asiste a eventos y recibe calificaciones para subir\n" +
-                    "• Sé un Top Banana y destaca en tu comuna\n" +
+                    "• Sé un Top Panorama y destaca en tu comuna\n" +
                     "• Tu reputación abre más oportunidades",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.DarkGray,

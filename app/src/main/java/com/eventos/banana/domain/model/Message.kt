@@ -1,5 +1,17 @@
 package com.eventos.banana.domain.model
 
+data class ConversationTheme(
+    val primaryColor: String? = null,
+    val secondaryColor: String? = null,
+    val backgroundColor: String? = null,
+    val headerStyle: String = "default",
+    val inputBarStyle: String = "default",
+    val separatorStyle: String = "none",
+    val bubbleAnimation: String = "slide",
+    val bubbleShadow: String = "soft",
+    val typingStyle: String = "dots"
+)
+
 data class Conversation(
     val id: String = "",
     val participants: List<String> = emptyList(),  // UIDs de los 2 usuarios
@@ -10,8 +22,17 @@ data class Conversation(
     val unreadCount: Map<String, Int> = emptyMap(),  // uid -> cantidad no leídas
     val createdAt: Long = System.currentTimeMillis(),
     val themeColor: String? = null, // 🎨 Chat Theme (Hex or Key)
-    val typingUsers: List<String> = emptyList() // ⌨️ Users currently typing
+    val typingUsers: List<String> = emptyList(), // ⌨️ Users currently typing
+    val theme: ConversationTheme? = null
 )
+
+fun Conversation.resolveTheme(): ConversationTheme {
+    return theme ?: if (themeColor != null) {
+        ConversationTheme(primaryColor = themeColor)
+    } else {
+        ConversationTheme()
+    }
+}
 
 data class Message(
     val id: String = "",

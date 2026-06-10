@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 
 data class RankingUiState(
@@ -59,6 +60,7 @@ class RankingViewModel @Inject constructor(
                             _uiState.update { it.copy(isLoading = false, topUsersByScore = filtered) }
                         }
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     android.util.Log.e("RankingViewModel", "observeTopUsers error", e)
                     _uiState.update {
                         it.copy(isLoading = false, errorMessage = e.message ?: "No se pudo cargar el ranking de puntos.")
@@ -74,6 +76,7 @@ class RankingViewModel @Inject constructor(
                             _uiState.update { it.copy(isLoading = false, topUsersByRating = filtered) }
                         }
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     android.util.Log.e("RankingViewModel", "observeTopUsersByRating error", e)
                     _uiState.update { state ->
                         state.copy(

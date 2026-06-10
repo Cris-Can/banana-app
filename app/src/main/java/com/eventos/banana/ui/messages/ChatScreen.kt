@@ -34,6 +34,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import com.eventos.banana.domain.model.ConversationTheme
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.graphics.Brush
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -42,12 +49,12 @@ fun ChatScreen(
     messages: List<Message>,
     currentUserId: String,
     viewModel: ChatViewModel, // 🆕 Add ViewModel
-    themeColor: String? = null,
+    chatTheme: ConversationTheme = ConversationTheme(),
     isGold: Boolean = false,
     otherUserIsTyping: Boolean = false,
     onSendMessage: (String, String?) -> Unit,
     onTyping: (Boolean) -> Unit = {},
-    onUpdateTheme: (String) -> Unit = {},
+    onOpenThemeConfig: () -> Unit = {},
     onSendAudio: (ByteArray, Int, String?) -> Unit,
     onBack: () -> Unit,
     onReportUser: (String) -> Unit = {},
@@ -59,7 +66,6 @@ fun ChatScreen(
 ) {
     var messageText by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
-    var showColorPicker by remember { mutableStateOf(false) } // Add state tracking for list
     val listState = androidx.compose.foundation.lazy.rememberLazyListState() // Track scroll state
 
     // 📜 INFINITE SCROLL LOGIC
@@ -86,15 +92,19 @@ fun ChatScreen(
     }
     
     // 🎨 Resolve Theme Color
-    val activeColor = remember(themeColor) {
-        if (themeColor != null && themeColor.startsWith("#")) {
-            try {
-                androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(themeColor))
-            } catch (e: Exception) {
-                null // Fallback to primary
-            }
-        } else {
-            null
+    val activeColor = remember(chatTheme.primaryColor) {
+        chatTheme.primaryColor?.let {
+            try { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(it)) } catch(e: Exception) { null }
+        }
+    }
+    val secondaryColor = remember(chatTheme.secondaryColor) {
+        chatTheme.secondaryColor?.let {
+            try { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(it)) } catch(e: Exception) { null }
+        }
+    }
+    val bgColor = remember(chatTheme.backgroundColor) {
+        chatTheme.backgroundColor?.let {
+            try { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(it)) } catch(e: Exception) { null }
         }
     }
     
@@ -152,19 +162,32 @@ fun ChatScreen(
         }
     }
 
-    if (showColorPicker) {
-        ColorPickerDialog(
-            onDismiss = { showColorPicker = false },
-            onColorSelected = { colorHex ->
-                onUpdateTheme(colorHex)
-                showColorPicker = false
-            }
+    val topBarModifier = if (chatTheme.headerStyle == "gradient") {
+        Modifier.background(Brush.horizontalGradient(
+            colors = listOf(activeColor ?: MaterialTheme.colorScheme.primary, secondaryColor ?: activeColor ?: MaterialTheme.colorScheme.primary)
+        ))
+    } else Modifier
+
+    val topBarColors = if (chatTheme.headerStyle == "gradient") {
+        TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
         )
+    } else if (chatTheme.headerStyle == "minimal") {
+        TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent
+        )
+    } else {
+        TopAppBarDefaults.topAppBarColors()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = topBarModifier,
+                colors = topBarColors,
                 title = { 
                     Column(
                         modifier = Modifier.clickable { onProfileClick() }
@@ -172,11 +195,34 @@ fun ChatScreen(
                         Text(otherUserNickname)
                         // ⌨️ Typing Indicator (PREMIUM ONLY)
                         if (otherUserIsTyping && isGold) {
-                            Text(
-                                "Escribiendo... \uD83D\uDD8A\uFE0F",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = activeColor ?: MaterialTheme.colorScheme.primary
-                            )
+                            when (chatTheme.typingStyle) {
+                                "classic" -> {
+                                    Text(
+                                        "Escribiendo...",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (chatTheme.headerStyle == "gradient") MaterialTheme.colorScheme.onPrimary else (activeColor ?: MaterialTheme.colorScheme.primary)
+                                    )
+                                }
+                                "pulse" -> {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text("Escribiendo ", style = MaterialTheme.typography.labelSmall, color = if (chatTheme.headerStyle == "gradient") MaterialTheme.colorScheme.onPrimary else (activeColor ?: MaterialTheme.colorScheme.primary))
+                                        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                                        val alpha1 by infiniteTransition.animateFloat(initialValue = 0.2f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(300, delayMillis = 0), RepeatMode.Reverse), label = "d1")
+                                        val alpha2 by infiniteTransition.animateFloat(initialValue = 0.2f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(300, delayMillis = 150), RepeatMode.Reverse), label = "d2")
+                                        val alpha3 by infiniteTransition.animateFloat(initialValue = 0.2f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(300, delayMillis = 300), RepeatMode.Reverse), label = "d3")
+                                        Text(".", style = MaterialTheme.typography.labelSmall, color = (if (chatTheme.headerStyle == "gradient") MaterialTheme.colorScheme.onPrimary else (activeColor ?: MaterialTheme.colorScheme.primary)).copy(alpha = alpha1))
+                                        Text(".", style = MaterialTheme.typography.labelSmall, color = (if (chatTheme.headerStyle == "gradient") MaterialTheme.colorScheme.onPrimary else (activeColor ?: MaterialTheme.colorScheme.primary)).copy(alpha = alpha2))
+                                        Text(".", style = MaterialTheme.typography.labelSmall, color = (if (chatTheme.headerStyle == "gradient") MaterialTheme.colorScheme.onPrimary else (activeColor ?: MaterialTheme.colorScheme.primary)).copy(alpha = alpha3))
+                                    }
+                                }
+                                else -> {
+                                    Text(
+                                        "Escribiendo... \uD83D\uDD8A\uFE0F",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (chatTheme.headerStyle == "gradient") MaterialTheme.colorScheme.onPrimary else (activeColor ?: MaterialTheme.colorScheme.primary)
+                                    )
+                                }
+                            }
                         } else if (otherUserIsTyping && !isGold) {
                             // Free users don't see typing indicator (Ghost feature)
                         }
@@ -188,9 +234,9 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showColorPicker = true }) {
+                    IconButton(onClick = onOpenThemeConfig) {
                         Icon(androidx.compose.material.icons.Icons.Default.Edit, stringResource(com.eventos.banana.R.string.settings_theme),
-                            tint = activeColor ?: MaterialTheme.colorScheme.primary
+                            tint = if (chatTheme.headerStyle == "gradient") MaterialTheme.colorScheme.onPrimary else (activeColor ?: MaterialTheme.colorScheme.primary)
                         )
                     }
                     var showMenu by remember { mutableStateOf(false) }
@@ -300,8 +346,13 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(bgColor ?: MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
         ) {
+            val seenMessages = remember { mutableStateOf(setOf<String>()) }
+            val messagesById = remember(messages) {
+                messages.associateBy { it.id }
+            }
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -314,31 +365,60 @@ fun ChatScreen(
                     items = messages,
                     key = { it.id } // 🔑 Unique key for animations
                 ) { message ->
-                    val isCurrentUser = message.senderId == currentUserId
+                    val isNew = remember { !seenMessages.value.contains(message.id) }
+                    LaunchedEffect(message.id) {
+                        if (isNew) {
+                            seenMessages.value = seenMessages.value + message.id
+                        }
+                    }
                     
-                    // 🔄 Finder for quoted message
-                    val quoted = remember(message.replyToId, messages) {
-                        messages.find { it.id == message.replyToId }
+                    val enterAnim = when (chatTheme.bubbleAnimation) {
+                        "fade" -> fadeIn()
+                        "scale" -> scaleIn()
+                        else -> slideInVertically { it } + fadeIn()
                     }
 
-                    MessageBubble(
-                        message = message,
-                        isCurrentUser = isCurrentUser,
-                        activeColor = activeColor,
-                        isGold = isGold,
-                        onDelete = { onDeleteMessage(message.id) },
-                        onEdit = { editingMessage = message },
-                        onReply = { replyingTo = message },
-                        onPlayAudio = { url -> 
-                            viewModel.playAudio(message.id, url)
-                        },
-                        isPlaying = playingMessageId == message.id,
-                        quotedMessage = quoted,
-                        currentUserId = currentUserId, // 🆕 Pass currentUserId
-                        onToggleReaction = { emoji ->
-                            viewModel.toggleReaction(message.id, emoji)
+                    AnimatedVisibility(
+                        visibleState = remember { androidx.compose.animation.core.MutableTransitionState(if (isNew) false else true).apply { targetState = true } },
+                        enter = enterAnim
+                    ) {
+                        Column {
+                            val isCurrentUser = message.senderId == currentUserId
+                            // 🔄 Finder for quoted message
+                            val quoted = if (message.replyToId != null) {
+                                messagesById.get(message.replyToId)
+                            } else null
+                            val onDelete = remember(message.id) { { onDeleteMessage(message.id) } }
+                            val onEdit = remember(message) { { editingMessage = message } }
+                            val onReply = remember(message) { { replyingTo = message } }
+                            val onPlayAudio = remember(message.id) { { url: String -> viewModel.playAudio(message.id, url) } }
+                            val onToggleReaction = remember(message.id) { { emoji: String -> viewModel.toggleReaction(message.id, emoji) } }
+
+                            MessageBubble(
+                                message = message,
+                                isCurrentUser = isCurrentUser,
+                                activeColor = activeColor,
+                                secondaryColor = secondaryColor,
+                                chatTheme = chatTheme,
+                                isGold = isGold,
+                                onDelete = onDelete,
+                                onEdit = onEdit,
+                                onReply = onReply,
+                                onPlayAudio = onPlayAudio,
+                                isPlaying = playingMessageId == message.id,
+                                quotedMessage = quoted,
+                                currentUserId = currentUserId, // 🆕 Pass currentUserId
+                                onToggleReaction = onToggleReaction
+                            )
+                            if (chatTheme.separatorStyle == "solid") {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            } else if (chatTheme.separatorStyle == "dotted") {
+                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
+                                    repeat(10) { Text(".", color = Color.Gray, modifier = Modifier.padding(horizontal = 2.dp)) }
+                                }
+                            }
                         }
-                    )
+                    }
                 }
             }
             
@@ -503,20 +583,41 @@ fun ChatScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            OutlinedTextField(
-                                value = messageText,
-                                onValueChange = { 
-                                    messageText = it
-                                    onTyping(it.isNotBlank())
-                                },
-                                placeholder = { Text(stringResource(com.eventos.banana.R.string.messages_placeholder)) },
-                                modifier = Modifier.weight(1f),
-                                maxLines = 3,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = activeColor ?: MaterialTheme.colorScheme.primary,
-                                    cursorColor = activeColor ?: MaterialTheme.colorScheme.primary
+                            if (chatTheme.inputBarStyle == "filled") {
+                                TextField(
+                                    value = messageText,
+                                    onValueChange = { 
+                                        messageText = it
+                                        onTyping(it.isNotBlank())
+                                    },
+                                    placeholder = { Text(stringResource(com.eventos.banana.R.string.messages_placeholder)) },
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 3,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = (activeColor ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.1f),
+                                        unfocusedContainerColor = (activeColor ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.1f),
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent,
+                                        cursorColor = activeColor ?: MaterialTheme.colorScheme.primary
+                                    )
                                 )
-                            )
+                            } else {
+                                OutlinedTextField(
+                                    value = messageText,
+                                    onValueChange = { 
+                                        messageText = it
+                                        onTyping(it.isNotBlank())
+                                    },
+                                    placeholder = { Text(stringResource(com.eventos.banana.R.string.messages_placeholder)) },
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 3,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = if (chatTheme.inputBarStyle == "invisible") Color.Transparent else (activeColor ?: MaterialTheme.colorScheme.primary),
+                                        unfocusedBorderColor = if (chatTheme.inputBarStyle == "invisible") Color.Transparent else MaterialTheme.colorScheme.outline,
+                                        cursorColor = activeColor ?: MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                            }
                             
                             Spacer(Modifier.width(8.dp))
                             
@@ -631,6 +732,8 @@ private fun MessageBubble(
     message: Message,
     isCurrentUser: Boolean,
     activeColor: androidx.compose.ui.graphics.Color? = null,
+    secondaryColor: androidx.compose.ui.graphics.Color? = null, // 🆕 Added
+    chatTheme: ConversationTheme, // 🆕 Added to get shadow etc
     isGold: Boolean,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
@@ -654,7 +757,7 @@ private fun MessageBubble(
     val bubbleColor = if (message.isDeleted) {
         if (isGold) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant
     } else {
-        if (isCurrentUser) activeColor ?: MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+        if (isCurrentUser) activeColor ?: MaterialTheme.colorScheme.primary else secondaryColor ?: MaterialTheme.colorScheme.surfaceVariant
     }
     
     val textColor = if (message.isDeleted) {
@@ -671,6 +774,7 @@ private fun MessageBubble(
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = bubbleColor,
+                shadowElevation = if (chatTheme.bubbleShadow == "strong") 4.dp else 0.dp,
                 modifier = Modifier
                     .widthIn(max = 280.dp)
                     .combinedClickable(

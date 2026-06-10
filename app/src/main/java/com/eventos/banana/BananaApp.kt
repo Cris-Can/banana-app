@@ -71,6 +71,7 @@ class BananaApp : Application(), Configuration.Provider, ImageLoaderFactory {
             // 📺 AdMob (Inicializa SDK + Pre-carga primer anuncio recompensado)
             try {
                 com.eventos.banana.util.AdMobHelper.initialize(this@BananaApp)
+                android.util.Log.d("BananaApp", "AdMobHelper.initialize() completed")
             } catch (e: Exception) {
                 Timber.e(e, "AdMob init failed")
             }

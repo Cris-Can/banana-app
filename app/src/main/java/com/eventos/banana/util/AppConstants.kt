@@ -21,7 +21,7 @@ object AppConstants {
     const val ADS_CYCLE_DURATION_MS = 24 * 60 * 60 * 1000L
     
     /** Número máximo de eventos que se pueden desbloquear con anuncios por ciclo */
-    const val ADS_MAX_EVENTS_PER_CYCLE = 3
+    const val ADS_MAX_EVENTS_PER_CYCLE = 2
     
     /** ID de anuncios de prueba (para desarrollo) */
     const val AD_UNIT_ID_INTERSTITIAL_TEST = "ca-app-pub-3940256099942544/1033173712"
@@ -66,6 +66,9 @@ object AppConstants {
     
     /** Ventana de tiempo para rate limiting de creación de eventos (60 minutos) */
     const val RATE_LIMIT_WINDOW_EVENT_CREATE_MS = 60 * 60 * 1000L
+
+    /** Ventana de tiempo para rate limiting de calificaciones (5 minutos) */
+    const val RATE_LIMIT_WINDOW_RATING_MS = 5 * 60 * 1000L
     
     /** Ciclo de suscripción (30 días) */
     const val SUBSCRIPTION_CYCLE_DAYS = 30
@@ -75,6 +78,9 @@ object AppConstants {
     
     /** Deadline para calificar evento después de finalizado (5 días) */
     const val RATING_DEADLINE_MS = 5 * 24 * 60 * 60 * 1000L
+
+    /** Ventana de tiempo para el filtro de eventos de fin de semana (5 días) */
+    const val WEEKEND_FILTER_WINDOW_MS = 5 * 24 * 60 * 60 * 1000L
 
     // ============================================
     // 📊 LIMITS (Límites)

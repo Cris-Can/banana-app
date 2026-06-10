@@ -8,7 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import com.eventos.banana.navigation.AppNavigation
 import com.eventos.banana.navigation.Screen
-import com.eventos.banana.ui.theme.BananaTheme
+import com.eventos.banana.ui.theme.PanoramasTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -173,21 +173,26 @@ class MainActivity : FragmentActivity() {
             val sessionViewModel: com.eventos.banana.ui.auth.SessionViewModel = androidx.hilt.navigation.compose.hiltViewModel()
             val profileUiState by sessionViewModel.profileUiState.collectAsState()
             
+            var localTheme by remember { mutableStateOf<String?>(null) }
+            
             // Default to BANANA if not set or loading
-            val currentTheme = profileUiState.profile?.appTheme ?: "BANANA"
+            val currentTheme = localTheme ?: profileUiState.profile?.appTheme ?: "BANANA"
 
-            BananaTheme(themeMode = currentTheme) {
+            PanoramasTheme(themeMode = currentTheme) {
                 // 🔒 Fix: Surface Raíz para garantizar fondo consistente en toda la app
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(startDestination = initialRoute ?: Screen.Splash.route)
+                    AppNavigation(
+                        startDestination = initialRoute ?: Screen.Splash.route,
+                        onThemeChanged = { newTheme -> localTheme = newTheme }
+                    )
 
                     if (showNotificationRationale) {
                         PermissionRationaleDialog(
                             title = "Notificaciones",
-                            description = "Banana necesita notificarte sobre nuevos mensajes y cambios en tus eventos.",
+                            description = "+panoramas necesita notificarte sobre nuevos mensajes y cambios en tus eventos.",
                             icon = Icons.Default.Notifications,
                             onDismiss = {
                                 showNotificationRationale = false
@@ -201,7 +206,7 @@ class MainActivity : FragmentActivity() {
                     if (showLocationRationale) {
                         PermissionRationaleDialog(
                             title = "Ubicación",
-                            description = "Banana usa tu ubicación para encontrarte eventos cerca de ti y permitirte hacer check-in.",
+                            description = "+panoramas usa tu ubicación para encontrarte eventos cerca de ti y permitirte hacer check-in.",
                             icon = Icons.Default.LocationOn,
                             onDismiss = {
                                 showLocationRationale = false

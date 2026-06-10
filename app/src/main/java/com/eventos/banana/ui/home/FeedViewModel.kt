@@ -137,6 +137,7 @@ class FeedViewModel @AssistedInject constructor(
                 userNickname = nickname,
                 content = content,
                 isUserVerified = userProfile?.isVerified ?: false,
+                isUserIdentityVerified = userProfile?.identityVerified ?: false,
                 replyToId = replyingTo?.id,
                 replyToNickname = replyingTo?.userNickname,
                 replyToContent = replyingTo?.content?.let { if (it.length > 50) it.take(47) + "..." else it },

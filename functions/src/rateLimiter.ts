@@ -14,6 +14,7 @@ const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
   profileView: { maxAttempts: 100, windowMs: 60 * 60 * 1000 }, // 100 views per hour
   sendMessage: { maxAttempts: 30, windowMs: 60 * 1000 }, // 30 messages per minute
   eventCreation: { maxAttempts: 5, windowMs: 60 * 60 * 1000 }, // 5 events per hour (safety net)
+  rating: { maxAttempts: 10, windowMs: 5 * 60 * 1000 }, // 10 ratings per 5 minutes
   redeemCode: { maxAttempts: 5, windowMs: 15 * 60 * 1000 }, // 5 attempts per 15 mins (Account)
   redeemCodeIP: { maxAttempts: 10, windowMs: 15 * 60 * 1000 }, // 10 attempts per 15 mins (IP)
   socialAction: { maxAttempts: 10, windowMs: 60 * 1000 }, // 10 acciones sociales por minuto

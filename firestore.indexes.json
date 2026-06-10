@@ -89,6 +89,24 @@
             ]
         },
         {
+            "collectionGroup": "events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "latitude",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
             "collectionGroup": "conversations",
             "queryScope": "COLLECTION",
             "fields": [
@@ -169,18 +187,6 @@
             ]
         },
         
-        // friendships: consultas por ownerId (modelo de doble documento)
-        {
-            "collectionGroup": "friendships",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "ownerId",
-                    "order": "ASCENDING"
-                }
-            ]
-        },
-        
         // friendships: paginación por ownerId + createdAt
         {
             "collectionGroup": "friendships",
@@ -196,18 +202,34 @@
                 }
             ]
         },
+        // ratings: consultas por toUserId + timestamp (para pantalla de calificaciones)
         {
-            "collectionGroup": "users",
+            "collectionGroup": "ratings",
             "queryScope": "COLLECTION",
             "fields": [
-                { "fieldPath": "score", "order": "DESCENDING" }
+                {
+                    "fieldPath": "toUserId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "timestamp",
+                    "order": "DESCENDING"
+                }
             ]
         },
+        // pending_external_events: consultas para panel de administración por status y fecha
         {
-            "collectionGroup": "users",
+            "collectionGroup": "pending_external_events",
             "queryScope": "COLLECTION",
             "fields": [
-                { "fieldPath": "ratingSum", "order": "DESCENDING" }
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "scrapedAt",
+                    "order": "DESCENDING"
+                }
             ]
         }
     ],

@@ -346,56 +346,6 @@ fun HomeScreen(
                 // ---------- FILTRO CATEGORÍAS (Horizontales) ----------
                 val selectedCategory = uiState.selectedCategory
                 
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = selectedCategory == null,
-                            onClick = { eventListViewModel.selectCategory(null) },
-                            label = { Text(stringResource(com.eventos.banana.R.string.home_filter_all)) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                labelColor = MaterialTheme.colorScheme.onSurface,
-                                selectedContainerColor = MaterialTheme.colorScheme.onSurface,
-                                selectedLabelColor = MaterialTheme.colorScheme.surface
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = selectedCategory == null,
-                                borderColor = MaterialTheme.colorScheme.outlineVariant,
-                                selectedBorderColor = MaterialTheme.colorScheme.onSurface
-                            )
-                        )
-                    }
-                    
-                    items(com.eventos.banana.domain.model.EventType.values().toList(), key = { it.name }) { type ->
-                        val isSelected = selectedCategory == type
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { eventListViewModel.selectCategory(type) },
-                            label = { Text("${type.emoji} ${type.localizedName()}") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface, // Clean unselected
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                             border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = isSelected,
-                                borderColor = MaterialTheme.colorScheme.outlineVariant, // Subtle border
-                                selectedBorderColor = MaterialTheme.colorScheme.primary // No border or matching color
-                            )
-                        )
-                    }
-                }
-                
-                HorizontalDivider()
-
-                // ---------- FILTRO FECHA ----------
-                val selectedDateFilter = uiState.selectedDateFilter
-                val searchRadiusKm by eventListViewModel.searchRadiusKm.collectAsStateWithLifecycle()
                 var showRadiusDialog by remember { mutableStateOf(false) }
 
                 if (showRadiusDialog) {
@@ -407,85 +357,24 @@ fun HomeScreen(
                         }
                     )
                 }
-                
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // 📍 Radius Filter
-                    item {
-                        FilterChip(
-                            selected = true, // Always active if using GPS
-                            onClick = { showRadiusDialog = true },
-                            label = { Text("📍 ${searchRadiusKm} km") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                labelColor = MaterialTheme.colorScheme.primary,
-                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = true,
-                                borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                            )
-                        )
-                    }
 
-                    items(com.eventos.banana.domain.model.DateFilter.values().toList(), key = { it.name }) { filter ->
-                        FilterChip(
-                            selected = selectedDateFilter == filter,
-                            onClick = { eventListViewModel.selectDateFilter(filter) },
-                            label = { Text(filter.localizedName()) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        )
-                    }
-                }
-                HorizontalDivider()
+                com.eventos.banana.ui.components.FilterBar(
+                    selectedCategory = selectedCategory,
+                    selectedDateFilter = selectedDateFilter,
+                    searchRadiusKm = searchRadiusKm,
+                    onCategoryClick = { eventListViewModel.selectCategory(it) },
+                    onDateFilterClick = { eventListViewModel.selectDateFilter(it) },
+                    onRadiusClick = { showRadiusDialog = true }
+                )
 
                 // ---------- INDICADOR DE UBICACIÓN (solo en vista Lista) ----------
                 if (!isMapView) {
                     val userLoc = (uiState as? EventListUiState.Success)?.currentUserLocation
-                    Surface(
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .fillMaxWidth()
-                            .clickable { showRadiusDialog = true },
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Filled.LocationOn,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = if (userLoc != null)
-                                    "🌍 Mostrando eventos en radio de ${searchRadiusKm}km"
-                                else
-                                    "Eventos globales — Activa GPS para filtrar por cercanía",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                Icons.Filled.KeyboardArrowDown,
-                                contentDescription = "Ajustar radio",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
+                    com.eventos.banana.ui.components.LocationIndicator(
+                        userLocation = userLoc,
+                        searchRadiusKm = searchRadiusKm,
+                        onClick = { showRadiusDialog = true }
+                    )
                 }
 
             // ---------- CONTENIDO PRINCIPAL (LISTA O MAPA) ----------
@@ -701,56 +590,15 @@ fun HomeScreen(
                             // 🛰️ Rule 2c: NO LOCATION AVAILABLE STATE (UX Overlay)
                             val isLocationMissing = !hasLocationPermission && profileUiState.profile?.latitude == null
                             if (isLocationMissing) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.4f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Card(
-                                        modifier = Modifier.padding(32.dp),
-                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(24.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Filled.LocationOn,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(48.dp),
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                            Text(
-                                                "Explora tu zona",
-                                                style = MaterialTheme.typography.titleLarge,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                "Activa el GPS o selecciona una ciudad en tu perfil para ver eventos cerca de ti.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Button(
-                                                onClick = { 
-                                                    permissionLauncher.launch(arrayOf(
-                                                        android.Manifest.permission.ACCESS_FINE_LOCATION,
-                                                        android.Manifest.permission.ACCESS_COARSE_LOCATION
-                                                    ))
-                                                },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text("Habilitar GPS")
-                                            }
-                                            TextButton(onClick = onProfileClick) {
-                                                Text("Ir al Perfil")
-                                            }
-                                        }
-                                    }
-                                }
+                                com.eventos.banana.ui.components.LocationPromptCard(
+                                    onEnableGps = {
+                                        permissionLauncher.launch(arrayOf(
+                                            android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                            android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                        ))
+                                    },
+                                    onGoToProfile = onProfileClick
+                                )
                             }
 
                             // 📍 CHIP DE RADIO (esquina superior derecha del mapa)
@@ -795,119 +643,11 @@ fun HomeScreen(
                             // 🎨 LEYENDA DEL MAPA (esquina superior izquierda)
                             var isLegendExpanded by remember { mutableStateOf(false) }
 
-                            Card(
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(16.dp),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                                ),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                                onClick = { isLegendExpanded = !isLegendExpanded }
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.padding(horizontal = 4.dp)
-                                    ) {
-                                        Text(
-                                            "Categorías",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Icon(
-                                            imageVector = if (isLegendExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = if (isLegendExpanded) "Colapsar" else "Expandir",
-                                            modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-
-                                    androidx.compose.animation.AnimatedVisibility(visible = isLegendExpanded) {
-                                        Column(
-                                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.padding(top = 4.dp)
-                                        ) {
-                                            val isAllSelected = selectedCategory == null
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-                                                    .background(if (isAllSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
-                                                    .clickable { eventListViewModel.selectCategory(null) }
-                                                    .padding(4.dp)
-                                                    .then(if (isAllSelected) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp)) else Modifier)
-                                            ) {
-                                                Text(
-                                                    "🌟 ${stringResource(com.eventos.banana.R.string.home_filter_all)}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal
-                                                )
-                                            }
-
-                                            com.eventos.banana.domain.model.EventType.values().filter { it != com.eventos.banana.domain.model.EventType.OTRO }.forEach { type ->
-                                                val isSelected = selectedCategory == type
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-                                                        .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
-                                                        .clickable { 
-                                                            if (isSelected) eventListViewModel.selectCategory(null)
-                                                            else eventListViewModel.selectCategory(type)
-                                                        }
-                                                        .padding(4.dp)
-                                                        .then(if (isSelected) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp)) else Modifier)
-                                                ) {
-                                                    val hue = when (type) {
-                                                        com.eventos.banana.domain.model.EventType.DEPORTES -> 120f
-                                                        com.eventos.banana.domain.model.EventType.SOCIAL -> 270f
-                                                        com.eventos.banana.domain.model.EventType.CULTURAL -> 330f
-                                                        com.eventos.banana.domain.model.EventType.EDUCATIVO -> 240f
-                                                        com.eventos.banana.domain.model.EventType.JUEGOS -> 180f
-                                                        com.eventos.banana.domain.model.EventType.GASTRONOMIA -> 30f
-                                                        com.eventos.banana.domain.model.EventType.AIRE_LIBRE -> 150f
-                                                        else -> 0f
-                                                    }
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(8.dp)
-                                                            .background(
-                                                                color = androidx.compose.ui.graphics.Color.hsv(hue, 0.7f, 0.9f),
-                                                                shape = androidx.compose.foundation.shape.CircleShape
-                                                            )
-                                                    )
-                                                    Text(
-                                                        "${type.emoji} ${type.localizedName()}",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontSize = 10.sp,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                    )
-                                                    if (isSelected) {
-                                                        Spacer(Modifier.weight(1f))
-                                                        Icon(
-                                                            imageVector = Icons.Default.Done,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(10.dp),
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                }
-                            }
+                            com.eventos.banana.ui.components.MapLegend(
+                                selectedCategory = selectedCategory,
+                                onCategorySelected = { eventListViewModel.selectCategory(it) },
+                                modifier = Modifier.align(Alignment.TopStart)
+                            )
                         }
 
                         // 🃏 CARD OVERLAY al seleccionar un pin

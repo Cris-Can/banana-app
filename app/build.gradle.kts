@@ -23,6 +23,7 @@ android {
     }
     val mapsKey = localProperties.getProperty("PLACES_API_KEY") ?: ""
     val admobId = localProperties.getProperty("ADMOB_APP_ID") ?: ""
+    val admobProdRewardedId = localProperties.getProperty("ADMOB_PROD_REWARDED_ID") ?: ""
 
     defaultConfig {
         applicationId = "com.eventos.banana"
@@ -67,7 +68,7 @@ android {
             dimension = "env"
             manifestPlaceholders["appName"] = "+panoramas"
             // Real production Rewarded Ad ID
-            buildConfigField("String", "ADMOB_REWARDED_ID", "\"ca-app-pub-1126172271665952/7012929273\"")
+            buildConfigField("String", "ADMOB_REWARDED_ID", "\"$admobProdRewardedId\"")
         }
     }
 

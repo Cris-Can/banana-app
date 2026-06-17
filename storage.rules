@@ -12,7 +12,7 @@ service firebase.storage {
     }
 
     // ── FOTOS DE PERFIL (ruta legacy) ──
-    // TODO: Migrar a /profileImages/ y eliminar esta regla legacy
+    // Ruta legacy - mantener para retrocompatibilidad
     // Solo el dueño puede escribir (max 5MB, solo imágenes)
     match /users/{userId}/photos/{photoId} {
       allow read: if true;

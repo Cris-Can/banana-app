@@ -9,6 +9,12 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+/core/data/build/
+/core/ui/build/
+release/
+.firebase/
+com/
+__pycache__/
 /captures
 .externalNativeBuild
 .cxx

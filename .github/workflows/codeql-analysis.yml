@@ -39,6 +39,13 @@ jobs:
           distribution: 'temurin'
         if: matrix.language == 'java-kotlin'
 
+      - name: Create local.properties
+        run: |
+          echo "PLACES_API_KEY=test" > local.properties
+          echo "ADMOB_APP_ID=test" >> local.properties
+          echo "ADMOB_PROD_REWARDED_ID=test" >> local.properties
+        if: matrix.language == 'java-kotlin'
+
       - name: Build Kotlin
         run: ./gradlew assembleDevDebug --build-cache
         if: matrix.language == 'java-kotlin'

@@ -33,9 +33,11 @@ jobs:
         env:
           PLACES_API_KEY: ${{ secrets.PLACES_API_KEY }}
           ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_PROD_REWARDED_ID: ${{ secrets.ADMOB_PROD_REWARDED_ID }}
         run: |
           echo "PLACES_API_KEY=$PLACES_API_KEY" > local.properties
           echo "ADMOB_APP_ID=$ADMOB_APP_ID" >> local.properties
+          echo "ADMOB_PROD_REWARDED_ID=$ADMOB_PROD_REWARDED_ID" >> local.properties
 
       - name: Create keystore.properties
         env:

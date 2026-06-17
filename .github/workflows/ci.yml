@@ -24,7 +24,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run lint
-        run: ./gradlew lint
+        run: ./gradlew lintDevDebug
 
   test:
     name: Unit Tests
@@ -47,6 +47,7 @@ jobs:
         run: |
           echo "PLACES_API_KEY=test" > local.properties
           echo "ADMOB_APP_ID=test" >> local.properties
+          echo "ADMOB_PROD_REWARDED_ID=test" >> local.properties
 
       - name: Run unit tests
         run: ./gradlew testDevDebugUnitTest
@@ -72,6 +73,7 @@ jobs:
         run: |
           echo "PLACES_API_KEY=test" > local.properties
           echo "ADMOB_APP_ID=test" >> local.properties
+          echo "ADMOB_PROD_REWARDED_ID=test" >> local.properties
 
       - name: Build dev debug APK
         run: ./gradlew assembleDevDebug

@@ -648,7 +648,6 @@ fun HomeScreen(
                                 onCategorySelected = { eventListViewModel.selectCategory(it) },
                                 modifier = Modifier.align(Alignment.TopStart)
                             )
-                        }
 
                         // 🃏 CARD OVERLAY al seleccionar un pin
                             androidx.compose.animation.AnimatedVisibility(
@@ -854,7 +853,6 @@ fun HomeScreen(
                             } // lazy column
                         } // pull to refresh box
                     } // else events.isEmpty
-                    } // if isMapView
                 } // when(uiState).Success
             } // when(uiState)
         } // Column modifiers
@@ -871,6 +869,7 @@ fun HomeScreen(
     }
 } // Scaffold
 } // Fin HomeScreen
+}
 
 data class MapMarkerInfo(
     val event: com.eventos.banana.domain.model.Event,

@@ -23,6 +23,12 @@ jobs:
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Create local.properties
+        run: |
+          echo "PLACES_API_KEY=test" > local.properties
+          echo "ADMOB_APP_ID=test" >> local.properties
+          echo "ADMOB_PROD_REWARDED_ID=test" >> local.properties
+
       - name: Run lint
         run: ./gradlew lintDevDebug
 

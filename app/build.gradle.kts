@@ -147,7 +147,7 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.android.gms:play-services-ads:23.0.0")
     implementation("com.google.android.libraries.places:places:3.5.0") // 🌍 Global Expansion v2.0
-    implementation("com.vanniktech:android-image-cropper:4.6.0") // ✂️ Image Crop
+    implementation("com.vanniktech:android-image-cropper:4.7.0") // ✂️ Image Crop
     // 🏗️ Dagger Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

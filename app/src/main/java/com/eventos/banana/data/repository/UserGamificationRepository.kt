@@ -189,35 +189,4 @@ class UserGamificationRepository @Inject constructor(
         awaitClose { listener.remove() }
     }
 
-    // Para no traer dependencia, le pasamos isFounder como abstracción desde la Fachada.
-    suspend fun setGoldStatus(uid: String, isGold: Boolean, isFounder: Boolean, currentSubscriptionType: String) {
-        try {
-            if (isFounder) {
-                // Founder: ensure subscriptionType stays as FOUNDER, never FREE
-                if (currentSubscriptionType != "FOUNDER") {
-                    // Auto-repair: restore FOUNDER type if it was corrupted
-                    users.document(uid).update(mapOf(
-                        "subscriptionType" to "FOUNDER",
-                        "isGold" to true
-                    )).await()
-                    android.util.Log.w("UserGamificationRepo", "Auto-repaired Founder $uid subscriptionType → FOUNDER")
-                }
-                return // Never modify founders further
-            }
-            
-            // 2. Proceed with update if allowed (non-founder only)
-            val updates = mutableMapOf<String, Any>()
-            if (isGold) {
-                updates["subscriptionType"] = "GOLD"
-                updates["isGold"] = true
-            } else {
-                updates["subscriptionType"] = "FREE"
-                updates["isGold"] = false
-            }
-            users.document(uid).update(updates).await()
-            
-        } catch (e: Exception) {
-            android.util.Log.e("UserGamificationRepo", "Error setting Gold Status", e)
-        }
-    }
 }

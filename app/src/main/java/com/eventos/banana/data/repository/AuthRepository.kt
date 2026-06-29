@@ -1,7 +1,10 @@
 package com.eventos.banana.data.repository
 
+import com.google.firebase.auth.ActionCodeSettings
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.EmailAuthProvider
 import com.eventos.banana.core.security.RateLimitManager
+import com.eventos.banana.core.error.ErrorMapper
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 
@@ -116,10 +119,42 @@ class AuthRepository @Inject constructor(
 
     suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
         return try {
-            firebaseAuth.sendPasswordResetEmail(email).await()
+            val actionCodeSettings = ActionCodeSettings.newBuilder()
+                .setUrl("https://bananaapp-aa46e.web.app/reset-password")
+                .setHandleCodeInApp(true)
+                .setAndroidPackageName(
+                    "com.eventos.banana",
+                    /* installIfNotAvailable = */ true,
+                    /* minimumVersion = */ null
+                )
+                .build()
+            firebaseAuth.sendPasswordResetEmail(email, actionCodeSettings).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun confirmPasswordReset(oobCode: String, newPassword: String): Result<Unit> {
+        return try {
+            firebaseAuth.confirmPasswordReset(oobCode, newPassword).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
+        return try {
+            val user = firebaseAuth.currentUser ?: return Result.failure(Exception("Usuario no autenticado"))
+            val email = user.email ?: return Result.failure(Exception("Email no disponible"))
+            val credential = EmailAuthProvider.getCredential(email, currentPassword)
+            user.reauthenticate(credential).await()
+            user.updatePassword(newPassword).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val error = ErrorMapper.mapToRepositoryError(e, "changePassword")
+            Result.failure(Exception(error.message))
         }
     }
 

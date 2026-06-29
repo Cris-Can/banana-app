@@ -127,6 +127,9 @@ fun NavGraphBuilder.profileGraph(
             },
             onThemeChanged = onThemeChanged,
             onSendPasswordReset = { email -> profileViewModel.sendPasswordReset(email) },
+            onChangePassword = { currentPassword, newPassword, callback ->
+                profileViewModel.changePassword(currentPassword, newPassword, callback)
+            },
             onVerifyEmail = { sessionViewModel.sendEmailVerification() },
             isEmailVerified = sessionViewModel.isEmailVerified,
             onUpdateLocation = { uid, region, commune, country, lat, lng ->

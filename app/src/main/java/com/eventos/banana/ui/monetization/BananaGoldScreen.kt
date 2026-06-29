@@ -67,7 +67,7 @@ fun BananaGoldScreen(
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            colors = listOf(PanoramasGold, Color(0xFFC5A000))
+                            colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
                         )
                     ),
                 contentAlignment = Alignment.Center
@@ -82,7 +82,7 @@ fun BananaGoldScreen(
                 stringResource(com.eventos.banana.R.string.banana_gold_title),
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    color = PanoramasGold
+                    color = MaterialTheme.colorScheme.primary
                 )
             )
             
@@ -142,7 +142,7 @@ fun BananaGoldScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PanoramasGold,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.Black
                 ),
                 enabled = goldProduct != null 

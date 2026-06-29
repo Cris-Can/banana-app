@@ -345,7 +345,9 @@ fun HomeScreen(
             
                 // ---------- FILTRO CATEGORÍAS (Horizontales) ----------
                 val selectedCategory = uiState.selectedCategory
-                
+                val selectedDateFilter = uiState.selectedDateFilter
+                val searchRadiusKm = profileUiState.profile?.searchRadiusKm ?: 20
+
                 var showRadiusDialog by remember { mutableStateOf(false) }
 
                 if (showRadiusDialog) {
@@ -871,30 +873,5 @@ fun HomeScreen(
 } // Fin HomeScreen
 }
 
-data class MapMarkerInfo(
-    val event: com.eventos.banana.domain.model.Event,
-    val markerPosition: com.google.android.gms.maps.model.LatLng,
-    val hue: Float,
-    val useExact: Boolean
-) : ClusterItem {
-    override fun getPosition(): com.google.android.gms.maps.model.LatLng = markerPosition
-    override fun getTitle(): String = event.title
-    override fun getSnippet(): String = event.description
-    override fun getZIndex(): Float? = if (useExact) 1.0f else 0.0f
-}
-
-/** Helper para obtener el tono de color según categoría */
-private fun getEventHue(type: com.eventos.banana.domain.model.EventType): Float {
-    return when (type) {
-        com.eventos.banana.domain.model.EventType.DEPORTES -> 120f
-        com.eventos.banana.domain.model.EventType.SOCIAL -> 270f
-        com.eventos.banana.domain.model.EventType.CULTURAL -> 330f
-        com.eventos.banana.domain.model.EventType.EDUCATIVO -> 240f
-        com.eventos.banana.domain.model.EventType.JUEGOS -> 180f
-        com.eventos.banana.domain.model.EventType.GASTRONOMIA -> 30f
-        com.eventos.banana.domain.model.EventType.AIRE_LIBRE -> 150f
-        else -> 0f
-    }
-}
 // Fin de archivo
 

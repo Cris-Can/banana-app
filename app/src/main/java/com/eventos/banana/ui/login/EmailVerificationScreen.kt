@@ -9,8 +9,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.eventos.banana.ui.auth.SessionViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -23,10 +23,37 @@ fun EmailVerificationScreen(
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var isPolling by remember { mutableStateOf(false) }
+    
+    // Watch for verification result feedback
+    val sendVerificationMessage by sessionViewModel.sendVerificationMessage.collectAsState()
+    LaunchedEffect(sendVerificationMessage) {
+        sendVerificationMessage?.let {
+            message = it
+            sessionViewModel.clearSendVerificationMessage()
+        }
+    }
     
     // Check status on entry
     LaunchedEffect(Unit) {
         sessionViewModel.refreshVerificationStatus()
+    }
+    
+    // Auto-polling every 5s for up to 2 minutes
+    LaunchedEffect(Unit) {
+        isPolling = true
+        var attempts = 0
+        while (attempts < 24) {
+            delay(5000)
+            if (!sessionViewModel.isEmailVerified) {
+                sessionViewModel.refreshVerificationStatus()
+                attempts++
+            }
+        }
+        isPolling = false
+        if (!sessionViewModel.isEmailVerified) {
+            message = "📧 ¿No recibes el correo? Revisa tu bandeja de spam o reenvíalo."
+        }
     }
     
     // Watch for verification changes
@@ -68,6 +95,14 @@ fun EmailVerificationScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 
+                if (isPolling) {
+                    Text(
+                        text = "⏳ Esperando verificación...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
                 Spacer(Modifier.height(16.dp))
                 
                 if (isLoading) {
@@ -95,7 +130,6 @@ fun EmailVerificationScreen(
                         onClick = {
                             scope.launch {
                                 sessionViewModel.sendEmailVerification()
-                                message = context.getString(com.eventos.banana.R.string.email_verify_resent)
                             }
                         },
                         modifier = Modifier.fillMaxWidth()

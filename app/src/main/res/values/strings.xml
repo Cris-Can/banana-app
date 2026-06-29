@@ -284,6 +284,7 @@
     <string name="app_icon_gold">Gold</string>
     <string name="app_icon_neon">Neon</string>
     <string name="app_icon_dark">Oscuro</string>
+    <string name="app_icon_sunset">Sunset Neón</string>
 
     <!-- MAP SCREENS -->
     <string name="map_events_title">Mapa de Eventos</string>
@@ -353,7 +354,6 @@
     <string name="feed_full_image">Imagen completa</string>
 
     <!-- FRIEND LIST -->
-    <!-- <string name="friends_title">Amigos y Comunidad</string> DUPLICATE -->
     <string name="friends_search_placeholder">Buscar personas...</string>
     <string name="friends_search_results">Resultados de búsqueda</string>
     <string name="friends_your_friends">Tus amigos</string>
@@ -361,8 +361,6 @@
     <string name="friends_add">Agregar</string>
     <string name="friends_no_results">No se encontraron usuarios.</string>
     <string name="friends_tab_friends">Amigos</string>
-    <!-- <string name="friends_tab_requests">Solicitudes</string> DUPLICATE -->
-    <!-- <string name="friends_tab_suggestions">Sugerencias</string> DUPLICATE -->
     <string name="friends_empty_friends">No tienes amigos confirmados aún.</string>
     <string name="friends_accept">Aceptar</string>
     <string name="friends_empty_requests">No tienes solicitudes pendientes.</string>
@@ -370,11 +368,8 @@
     <string name="friends_invite">¡Invita más gente a usar +panoramas!</string>
 
     <!-- NOTIFICATIONS -->
-    <!-- <string name="notifications_title">Notificaciones</string> DUPLICATE -->
-    <!-- <string name="notifications_empty">No tienes notificaciones</string> DUPLICATE -->
 
     <!-- HOME SCREEN (filters) -->
-    <!-- <string name="home_filter_all">Todo</string> DUPLICATE -->
     <string name="home_filter_region">Región</string>
     <string name="home_filter_all_regions">Todas las regiones</string>
     <string name="home_filter_commune">Comuna</string>

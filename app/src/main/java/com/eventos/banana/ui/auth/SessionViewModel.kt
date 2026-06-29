@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.catch
 import com.google.firebase.firestore.ListenerRegistration
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.eventos.banana.core.error.ErrorMapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -71,6 +72,14 @@ class SessionViewModel @Inject constructor(
     
     fun clearLocationMessage() {
         _locationUpdateMessage.value = null
+    }
+
+    // Email verification result feedback
+    private val _sendVerificationMessage = MutableStateFlow<String?>(null)
+    val sendVerificationMessage: StateFlow<String?> = _sendVerificationMessage.asStateFlow()
+
+    fun clearSendVerificationMessage() {
+        _sendVerificationMessage.value = null
     }
 
 
@@ -123,8 +132,12 @@ class SessionViewModel @Inject constructor(
     
     fun sendEmailVerification() {
         viewModelScope.launch {
-            authRepository.sendEmailVerification()
-            // Optionally show a message? For now Fire & Forget
+            val result = authRepository.sendEmailVerification()
+            _sendVerificationMessage.value = if (result.isSuccess) {
+                "📧 Correo de verificación reenviado"
+            } else {
+                "❌ Error al reenviar: ${result.exceptionOrNull()?.localizedMessage ?: "Intenta de nuevo"}"
+            }
         }
     }
 
@@ -278,7 +291,7 @@ class SessionViewModel @Inject constructor(
     }
 
     // =====================================================
-    // RESET PASSWORD
+    // RESET PASSWORD (send email)
     // =====================================================
     fun resetPassword(email: String, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
@@ -290,6 +303,31 @@ class SessionViewModel @Inject constructor(
                 onResult(false, error)
             }
         }
+    }
+
+    // =====================================================
+    // CONFIRM PASSWORD RESET (deep link oobCode)
+    // =====================================================
+    // null = idle, "LOADING", "SUCCESS", or error message string
+    private val _confirmResetState = MutableStateFlow<String?>(null)
+    val confirmResetState: StateFlow<String?> = _confirmResetState.asStateFlow()
+
+    fun confirmPasswordReset(oobCode: String, newPassword: String) {
+        viewModelScope.launch {
+            _confirmResetState.value = "LOADING"
+            val result = authRepository.confirmPasswordReset(oobCode, newPassword)
+            _confirmResetState.value = if (result.isSuccess) {
+                "SUCCESS"
+            } else {
+                val exception = result.exceptionOrNull() ?: Exception("Error desconocido")
+                val error = ErrorMapper.mapPasswordResetError(exception)
+                error.message
+            }
+        }
+    }
+
+    fun clearConfirmResetState() {
+        _confirmResetState.value = null
     }
 
     // =====================================================

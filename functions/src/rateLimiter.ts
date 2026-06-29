@@ -22,6 +22,19 @@ const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
 };
 
 /**
+ * Actions that must fail closed (deny) if the rate limit check itself fails.
+ * For these sensitive actions, a check error is treated as a denial.
+ */
+const FAIL_CLOSED_ACTIONS = new Set([
+  "login",
+  "register",
+  "redeemCode",
+  "redeemCodeIP",
+  "sendMessage",
+  "purchaseValidation",
+]);
+
+/**
  * Check and update rate limit for a user action
  * @returns { success: boolean; remaining?: number; resetAt?: number; error?: string }
  */
@@ -107,7 +120,11 @@ export async function checkRateLimit(
     });
   } catch (error) {
     console.error(`Rate limit check failed for ${userId}/${action}:`, error);
-    // Fail open - allow the request but log the error
+    if (FAIL_CLOSED_ACTIONS.has(action)) {
+      // Fail closed - deny sensitive actions when the check itself fails
+      return { success: false, error: "Servicio no disponible. Intenta de nuevo." };
+    }
+    // Fail open for non-sensitive actions
     return { success: true };
   }
 }

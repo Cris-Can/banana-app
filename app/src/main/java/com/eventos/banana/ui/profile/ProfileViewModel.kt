@@ -269,6 +269,18 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    // 🔐 IN-APP PASSWORD CHANGE (with reauthentication)
+    fun changePassword(currentPassword: String, newPassword: String, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val result = authRepository.changePassword(currentPassword, newPassword)
+            if (result.isSuccess) {
+                onResult(true, "✅ Contraseña actualizada exitosamente")
+            } else {
+                onResult(false, result.exceptionOrNull()?.message ?: "❌ Error al cambiar la contraseña")
+            }
+        }
+    }
+
     // 💾 HISTORY & SAVED EVENTS
     private val _historyEvents = MutableStateFlow<List<com.eventos.banana.domain.model.Event>>(emptyList())
     val historyEvents: StateFlow<List<com.eventos.banana.domain.model.Event>> = _historyEvents

@@ -6,9 +6,9 @@
         "target": {
             "namespace": "android_app",
             "package_name": "com.eventos.banana",
-            "sha256_cert_fingerprints": [
-                "49:E6:23:7E:39:2C:59:60:EC:FC:DF:F5:A2:9A:6F:53:D6:8A:EA:39:9E:A2:3A:10:A0:59:16:4B:50:A3:80:37"
-            ]
+          "sha256_cert_fingerprints": [
+            "74:CA:E8:59:B9:FE:0E:55:63:00:79:92:F7:62:0E:CE:A5:D3:B1:3E:8F:71:D0:9E:FD:C7:34:CF:55:9B:6E:15"
+          ]
         }
     }
 ]

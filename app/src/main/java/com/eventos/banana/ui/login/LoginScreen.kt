@@ -14,6 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource // ➕
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import com.eventos.banana.ui.components.Visibility
+import com.eventos.banana.ui.components.VisibilityOff
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +51,7 @@ fun LoginScreen(
     var invitationCode by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     var isRegistering by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
     var ageError by remember { mutableStateOf<String?>(null) }
@@ -197,8 +201,16 @@ fun LoginScreen(
                         }
                     },
                     label = { Text(stringResource(com.eventos.banana.R.string.auth_password_hint)) },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     isError = passwordError != null,
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+                            )
+                        }
+                    },
                     supportingText = {
                         if (isRegistering) {
                             Text(
@@ -209,7 +221,7 @@ fun LoginScreen(
                     },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
+                        keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password,
                         imeAction = ImeAction.Done
                     ),
                     modifier = Modifier.fillMaxWidth()
@@ -453,8 +465,8 @@ fun LoginScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = com.eventos.banana.ui.theme.PanoramasGold,
-                            focusedLabelColor = com.eventos.banana.ui.theme.PanoramasGold
+                            focusedBorderColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
                         )
                     )
                 }

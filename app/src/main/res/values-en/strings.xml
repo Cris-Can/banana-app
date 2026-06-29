@@ -249,6 +249,7 @@
     <string name="app_icon_gold">Gold</string>
     <string name="app_icon_neon">Neon</string>
     <string name="app_icon_dark">Dark</string>
+    <string name="app_icon_sunset">Neon Sunset</string>
 
     <!-- MAP SCREENS -->
     <string name="map_events_title">Events Map</string>

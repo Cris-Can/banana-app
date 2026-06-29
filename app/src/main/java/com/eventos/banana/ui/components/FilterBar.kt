@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.eventos.banana.R
 import com.eventos.banana.domain.model.EventType
 import com.eventos.banana.domain.model.DateFilter
+import com.eventos.banana.ui.util.localizedName
 
 @Composable
 fun FilterBar(

@@ -12,7 +12,13 @@ export {
   onParticipantApproved,
   onEventCreatedValidation
 } from "./event-triggers";
-export { onUserCreated, redeemFounderCode, validateAndGrantPurchase } from "./user-lifecycle";
+export { 
+  onUserCreated, 
+  redeemFounderCode, 
+  validateAndGrantPurchase,
+  syncEmailVerificationOnSignIn,
+  scheduledEmailVerificationSync 
+} from "./user-lifecycle";
 export { cleanupUsersDatabase, createPromoCode, createCampaign, toggleCampaignActive } from "./admin-functions";
 export { checkRateLimitGuard, scheduledRateLimitCleanup, recordProfileView } from "./security-functions";
 export { geocodeExternalLocation } from "./external-event-geocoder";

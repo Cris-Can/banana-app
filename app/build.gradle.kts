@@ -29,8 +29,8 @@ android {
         applicationId = "com.eventos.banana"
         minSdk = 26
         targetSdk = 36
-        versionCode = 26
-        versionName = "1.6.0"
+        versionCode = 27
+        versionName = "1.6.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -47,7 +47,7 @@ android {
             if (keystorePropertiesFile.exists()) {
                 keystoreProperties.load(FileInputStream(keystorePropertiesFile))
             }
-            storeFile = if (keystoreProperties.getProperty("storeFile") != null) file(keystoreProperties.getProperty("storeFile")) else null
+            storeFile = if (keystoreProperties.getProperty("storeFile") != null) rootProject.file(keystoreProperties.getProperty("storeFile")) else null
             storePassword = keystoreProperties.getProperty("storePassword")
             keyAlias = keystoreProperties.getProperty("keyAlias")
             keyPassword = keystoreProperties.getProperty("keyPassword")

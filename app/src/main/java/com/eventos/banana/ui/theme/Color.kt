@@ -55,3 +55,15 @@ val DarkTertiary = Color(0xFFFFD600)
 // LIGHT
 val LightOnBackground = Color(0xFF1A1A1A)
 val LightTertiary = Color(0xFFC5A000)
+
+// SUNSET_NEON (Spectrum Theme)
+val SpectrumPrimary = Color(0xFFF7CA18) // Sun Yellow
+val SpectrumPrimaryDim = Color(0xFFF39C12) // Sun Orange
+val SpectrumSecondary = Color(0xFF52E8D6) // Neon Cyan Star Glow
+val SpectrumSecondaryDim = Color(0xFF1ABC9C) // Darker Cyan
+val SpectrumTertiary = Color(0xFFE67E22) // Sunset Orange/Coral
+val SpectrumBackground = Color(0xFF221235) // Dark mountains silhouette
+val SpectrumSurface = Color(0xFF3A1E4A) // Lighter purple mountains
+val SpectrumSurfaceVariant = Color(0xFF59275E) // Sunset purple sky
+val SpectrumOnBackground = Color(0xFFF5F5F5)
+val SpectrumOnSurfaceVariant = Color(0xFFD0BEE5)

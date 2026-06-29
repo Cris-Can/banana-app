@@ -57,6 +57,7 @@ fun SettingsScreen(
     onUpdateTheme: (String) -> Unit,
     onThemeChanged: (String) -> Unit,
     onSendPasswordReset: (String) -> Unit,
+    onChangePassword: (String, String, (Boolean, String?) -> Unit) -> Unit,
     onVerifyEmail: () -> Unit,
     isEmailVerified: Boolean,
     onUpdateLocation: (String, String, String, String, Double?, Double?) -> Unit,
@@ -139,7 +140,7 @@ fun SettingsScreen(
                 // 💎 BANANA GOLD SECTION
                 Card(
                     onClick = onNavigateToGold,
-                    colors = CardDefaults.cardColors(containerColor = com.eventos.banana.ui.theme.PanoramasGold),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
@@ -173,7 +174,13 @@ fun SettingsScreen(
                         icon = Icons.Outlined.Create, // App Icon
                         title = stringResource(com.eventos.banana.R.string.settings_app_icon),
                         subtitle = stringResource(com.eventos.banana.R.string.settings_app_icon_desc),
-                        onClick = onNavigateToIcons
+                        onClick = {
+                            if (userProfile?.isGold == true) {
+                                onNavigateToIcons()
+                            } else {
+                                onNavigateToGold()
+                            }
+                        }
                     )
                     
                     // Theme Selector embedded
@@ -402,14 +409,22 @@ fun SettingsScreen(
 
                 // 🛡️ SEGURIDAD
                 SettingsSection(title = stringResource(com.eventos.banana.R.string.settings_security)) {
-                     SettingsItem(
+                    var showChangePasswordDialog by remember { mutableStateOf(false) }
+                    
+                    SettingsItem(
                         icon = Icons.Outlined.Lock,
                         title = stringResource(com.eventos.banana.R.string.settings_change_password),
-                        onClick = { 
-                            val mail = userProfile?.email.takeIf { !it.isNullOrBlank() } ?: "user@example.com"
-                            onSendPasswordReset(mail)
-                        }
+                        onClick = { showChangePasswordDialog = true }
                     )
+                    
+                    if (showChangePasswordDialog) {
+                        ChangePasswordDialog(
+                            onDismiss = { showChangePasswordDialog = false },
+                            onChangePassword = { currentPassword, newPassword, callback ->
+                                onChangePassword(currentPassword, newPassword, callback)
+                            }
+                        )
+                    }
                     
                     if (!isEmailVerified) {
                          SettingsItem(
@@ -694,4 +709,145 @@ fun SettingsSwitchItem(
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+}
+
+@Composable
+fun ChangePasswordDialog(
+    onDismiss: () -> Unit,
+    onChangePassword: (String, String, (Boolean, String?) -> Unit) -> Unit
+) {
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+    var resultMessage by remember { mutableStateOf<String?>(null) }
+    var isSuccess by remember { mutableStateOf(false) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+
+    fun validatePassword(pass: String): String? {
+        if (pass.length < 8) return "Mínimo 8 caracteres"
+        if (!pass.any { it.isUpperCase() }) return "Debe tener 1 mayúscula"
+        if (!pass.any { it.isDigit() }) return "Debe tener 1 número"
+        return null
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = { Text("Cambiar Contraseña") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (isSuccess) {
+                    Text(
+                        resultMessage ?: "✅ Contraseña actualizada",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = currentPassword,
+                        onValueChange = { currentPassword = it; resultMessage = null },
+                        label = { Text("Contraseña actual") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        enabled = !isSaving,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = {
+                            newPassword = it
+                            passwordError = validatePassword(it)
+                            resultMessage = null
+                        },
+                        label = { Text("Nueva contraseña") },
+                        singleLine = true,
+                        isError = passwordError != null,
+                        supportingText = {
+                            if (passwordError != null) Text(passwordError!!)
+                            else Text("Mín. 8 carácteres, 1 mayúscula, 1 número")
+                        },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        enabled = !isSaving,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it; resultMessage = null },
+                        label = { Text("Confirmar nueva contraseña") },
+                        singleLine = true,
+                        isError = confirmPassword.isNotEmpty() && confirmPassword != newPassword,
+                        supportingText = {
+                            if (confirmPassword.isNotEmpty() && confirmPassword != newPassword) {
+                                Text("Las contraseñas no coinciden")
+                            }
+                        },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        enabled = !isSaving,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    resultMessage?.let {
+                        Text(
+                            text = it,
+                            color = if (it.startsWith("✅")) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (isSuccess) {
+                TextButton(onClick = onDismiss) {
+                    Text("Cerrar")
+                }
+            } else {
+                Button(
+                    onClick = {
+                        if (currentPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
+                            resultMessage = "❌ Completa todos los campos"
+                            return@Button
+                        }
+                        val validationError = validatePassword(newPassword)
+                        if (validationError != null) {
+                            passwordError = validationError
+                            return@Button
+                        }
+                        if (newPassword != confirmPassword) {
+                            resultMessage = "❌ Las contraseñas nuevas no coinciden"
+                            return@Button
+                        }
+                        isSaving = true
+                        resultMessage = null
+                        onChangePassword(currentPassword, newPassword) { success, msg ->
+                            isSaving = false
+                            if (success) {
+                                isSuccess = true
+                                resultMessage = msg
+                            } else {
+                                resultMessage = msg ?: "❌ Error desconocido"
+                            }
+                        }
+                    },
+                    enabled = !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(if (isSaving) "Guardando..." else "Guardar")
+                }
+            }
+        },
+        dismissButton = {
+            if (!isSuccess && !isSaving) {
+                TextButton(onClick = onDismiss) {
+                    Text(androidx.compose.ui.res.stringResource(com.eventos.banana.R.string.common_cancel))
+                }
+            }
+        }
+    )
 }

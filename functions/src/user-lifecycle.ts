@@ -286,43 +286,42 @@ export const validateAndGrantPurchase = onCall(
       let validationError: any = null;
 
       try {
-        const subResponse = await playApi.purchases.subscriptions.get({
+        const subResponse = await playApi.purchases.subscriptionsv2.get({
           packageName,
-          subscriptionId: productId,
           token: purchaseToken,
         });
 
         const subData = subResponse.data;
-        
-        // Validate payment state
-        const paymentState = subData.paymentState;
-        // paymentState: 0=pending, 1=received, 2=free trial, 3=deferred
-        const validPaymentStates = [1, 2, 3]; // Received, Free Trial, Deferred
-        if (paymentState === undefined || paymentState === null || !validPaymentStates.includes(paymentState)) {
-          console.warn(`[BILLING] Subscription payment not confirmed for ${uid}. State: ${paymentState}`);
-          throw new HttpsError("failed-precondition", `Subscription payment not confirmed. State: ${paymentState}`);
+        const lineItem = subData.lineItems?.[0];
+
+        // Validate subscription state
+        const subState = subData.subscriptionState;
+        const validSubStates = ["SUBSCRIPTION_STATE_ACTIVE", "SUBSCRIPTION_STATE_IN_GRACE_PERIOD", "SUBSCRIPTION_STATE_CANCELED"];
+        if (!subState || !validSubStates.includes(subState)) {
+          console.warn(`[BILLING] Subscription not active for ${uid}. State: ${subState}`);
+          throw new HttpsError("failed-precondition", `Subscription not active. State: ${subState}`);
         }
 
-        // Check expiry time
-        const expiryTimeMillis = subData.expiryTimeMillis;
-        if (expiryTimeMillis === undefined || expiryTimeMillis === null) {
+        // Check expiry time (ISO 8601 string → epoch ms)
+        const expiryTimeStr = lineItem?.expiryTime;
+        if (!expiryTimeStr) {
           console.warn(`[BILLING] No expiry time for subscription ${productId} for user ${uid}`);
           throw new HttpsError("failed-precondition", "Invalid subscription data: no expiry time");
         }
 
-        expiryMs = Number(expiryTimeMillis);
+        expiryMs = new Date(expiryTimeStr).getTime();
         const now = Date.now();
         const isExpired = now > expiryMs;
         
         // Check auto-renewing status
-        autoRenewing = subData.autoRenewing === true;
+        autoRenewing = lineItem?.autoRenewingPlan?.autoRenewEnabled === true;
         
         // Determine subscription state
         subscriptionState = "ACTIVE";
         if (isExpired) {
           subscriptionState = "EXPIRED";
         } else if (!autoRenewing) {
-          subscriptionState = "CANCELED"; // User canceled, but still valid until expiry
+          subscriptionState = "CANCELED";
         }
 
         console.log(`[BILLING] Subscription ${productId} for ${uid}: state=${subscriptionState}, expiry=${new Date(expiryMs)}, autoRenewing=${autoRenewing}`);

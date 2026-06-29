@@ -83,9 +83,27 @@ private val LightScheme = lightColorScheme(
     error = ErrorSoft
 )
 
+// 5. SPECTRUM (Sunset Neon)
+private val SpectrumScheme = darkColorScheme(
+    primary = SpectrumPrimary,
+    onPrimary = Color.Black,
+    primaryContainer = SpectrumPrimaryDim,
+    onPrimaryContainer = Color.White,
+    secondary = SpectrumSecondary,
+    onSecondary = Color.Black,
+    tertiary = SpectrumTertiary,
+    background = SpectrumBackground,
+    surface = SpectrumSurface,
+    onBackground = SpectrumOnBackground,
+    onSurface = SpectrumOnBackground,
+    surfaceVariant = SpectrumSurfaceVariant,
+    onSurfaceVariant = SpectrumOnSurfaceVariant,
+    error = ErrorSoft
+)
+
 @Composable
 fun PanoramasTheme(
-    themeMode: String = "BANANA",
+    themeMode: String = "SPECTRUM",
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -97,6 +115,7 @@ fun PanoramasTheme(
         useDynamic -> {
             if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+        themeMode == "SPECTRUM" -> SpectrumScheme
         themeMode == "PANORAMAS" -> PanoramasDarkScheme
         themeMode == "LIGHT" -> LightScheme
         themeMode == "DARK" -> DarkScheme

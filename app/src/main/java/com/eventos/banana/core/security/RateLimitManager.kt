@@ -32,6 +32,16 @@ class RateLimitManager @Inject constructor(
         const val ACTION_SEND_MESSAGE = "sendMessage"
         const val ACTION_EVENT_CREATION = "eventCreation"
         const val ACTION_RATING = "rating"
+
+        // Actions that must fail closed if the rate limit check itself fails
+        private val FAIL_CLOSED_ACTIONS = setOf(
+            ACTION_LOGIN,
+            ACTION_REGISTER,
+            "redeemCode",
+            "redeemCodeIP",
+            "sendMessage",
+            "purchaseValidation"
+        )
         
         // Cache duration for rate limit status (5 minutes)
         internal const val CACHE_DURATION_MS = 5 * 60 * 1000L
@@ -53,7 +63,7 @@ class RateLimitManager @Inject constructor(
             if (!cachedStatus.canProceed) {
                 return RateLimitResult(
                     success = false,
-                    errorMessage = "Too many attempts. Please wait before trying again.",
+                    errorMessage = "Demasiados intentos. Por favor espera antes de volver a intentarlo.",
                     remaining = 0,
                     resetAt = cachedStatus.resetAt
                 )
@@ -88,9 +98,19 @@ class RateLimitManager @Inject constructor(
             
             result
         } catch (e: Exception) {
-            Timber.e(e, "$TAG: Failed to check rate limit for action: $action")
-            // Fail open - allow the action if we can't check
-            RateLimitResult(success = true, remaining = null, resetAt = null)
+            Timber.e(e, "$TAG: Error al verificar rate limit para la acción: $action")
+            if (action in FAIL_CLOSED_ACTIONS) {
+                // Fail closed - denegar acciones sensibles si la verificación falla
+                RateLimitResult(
+                    success = false,
+                    errorMessage = "Servicio no disponible. Intenta de nuevo.",
+                    remaining = null,
+                    resetAt = null
+                )
+            } else {
+                // Fail open para acciones no sensibles
+                RateLimitResult(success = true, remaining = null, resetAt = null)
+            }
         }
     }
     
@@ -116,7 +136,7 @@ class RateLimitManager @Inject constructor(
         } else {
             RateLimitResult(
                 success = false,
-                errorMessage = "Rate limit exceeded",
+                errorMessage = "Límite de intentos superado",
                 remaining = 0,
                 resetAt = (responseData?.get("resetAt") as? Number)?.toLong()
             )
@@ -225,7 +245,7 @@ class RateLimitManager @Inject constructor(
             ProfileViewResult(
                 success = false,
                 remaining = null,
-                message = "Failed to record profile view"
+                message = "Error al registrar la vista de perfil"
             )
         }
     }

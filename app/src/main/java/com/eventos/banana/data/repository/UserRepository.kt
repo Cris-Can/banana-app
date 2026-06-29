@@ -118,11 +118,6 @@ class UserRepository @Inject constructor(
 
     fun observeTopUsersByRating(limit: Int = 20): kotlinx.coroutines.flow.Flow<List<UserProfile>> =
         userGamificationRepository.observeTopUsersByRating(limit)
-    suspend fun setGoldStatus(uid: String, isGold: Boolean) {
-        val profile = getUserProfile(uid, forceRefresh = true) ?: return
-        userGamificationRepository.setGoldStatus(uid, isGold, profile.isFounder, profile.subscriptionType)
-    }
-
     // =====================================================
     // 📸 MEDIA (Delegated to UserMediaRepository)
     // =====================================================

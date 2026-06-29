@@ -6,6 +6,10 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Onboarding : Screen("onboarding")
     object Verification : Screen("verification")
+    object ResetPassword : Screen("reset_password") {
+        const val routePattern = "reset_password?oobCode={oobCode}"
+        fun createRoute(oobCode: String) = "reset_password?oobCode=$oobCode"
+    }
 
     // Home
     object Home : Screen("home")

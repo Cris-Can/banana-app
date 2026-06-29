@@ -63,13 +63,25 @@
     </style>
 
     <script>
-        // Deep link redirect: si abren /event/xxx, intentar abrir la app
+        // Deep link redirect: si abren /event/xxx o /reset-password, intentar abrir la app
         (function() {
             var path = window.location.pathname;
+            var search = window.location.search;
+
             if (path.startsWith('/event/')) {
                 var eventId = path.replace('/event/', '');
                 // Intent URI para abrir la app directamente
-                var intentUri = 'intent://banana.app/event/' + eventId + 
+                var intentUri = 'intent://bananaapp-aa46e.web.app/event/' + eventId +
+                    '#Intent;scheme=https;package=com.eventos.banana;end';
+                window.location.href = intentUri;
+                // Fallback: si no se abre en 2s, redirigir a Play Store
+                setTimeout(function() {
+                    window.location.href = 'https://play.google.com/store/apps/details?id=com.eventos.banana';
+                }, 2000);
+
+            } else if (path.startsWith('/reset-password')) {
+                // Construir Intent URI preservando el oobCode en la query string
+                var intentUri = 'intent://bananaapp-aa46e.web.app/reset-password' + search +
                     '#Intent;scheme=https;package=com.eventos.banana;end';
                 window.location.href = intentUri;
                 // Fallback: si no se abre en 2s, redirigir a Play Store

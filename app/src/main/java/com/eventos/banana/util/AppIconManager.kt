@@ -7,10 +7,11 @@ import android.content.pm.PackageManager
 object AppIconManager {
     // Defines IDs for our icons
     enum class AppIcon(val aliasName: String, val nameResId: Int, val iconResName: String) {
-        DEFAULT("com.eventos.banana.MainActivityDefault", com.eventos.banana.R.string.app_icon_classic, "ic_launcher_background"),
+        DEFAULT("com.eventos.banana.MainActivityDefault", com.eventos.banana.R.string.app_icon_classic, "ic_launcher"),
         GOLD("com.eventos.banana.MainActivityGold", com.eventos.banana.R.string.app_icon_gold, "ic_launcher_gold"),
         NEON("com.eventos.banana.MainActivityNeon", com.eventos.banana.R.string.app_icon_neon, "ic_launcher_neon"),
-        DARK("com.eventos.banana.MainActivityDark", com.eventos.banana.R.string.app_icon_dark, "ic_launcher_dark")
+        DARK("com.eventos.banana.MainActivityDark", com.eventos.banana.R.string.app_icon_dark, "ic_launcher_dark"),
+        SUNSET("com.eventos.banana.MainActivitySunset", com.eventos.banana.R.string.app_icon_sunset, "ic_launcher_sunset")
     }
 
     fun setIcon(context: Context, icon: AppIcon) {

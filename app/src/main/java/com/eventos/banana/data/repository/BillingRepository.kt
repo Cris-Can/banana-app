@@ -12,6 +12,7 @@ import timber.log.Timber
 
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import com.eventos.banana.core.utils.safeCall
 
 /**
  * Subscription state management
@@ -144,22 +145,6 @@ class BillingRepository @Inject constructor(
                     _subscriptionExpiryMillis.value = goldPurchase.purchaseTime
                     
                     Timber.d("BillingRepository", "Subscription verification: state=$state")
-                    
-                    // Update user profile based on state
-                    appScope.launch {
-                        val uid = authRepository.currentUid() ?: return@launch
-                        when (state) {
-                            SubscriptionState.ACTIVE, SubscriptionState.CANCELED -> {
-                                // Subscription is valid (either active or canceled but not expired)
-                                userRepository.setGoldStatus(uid, true)
-                            }
-                            SubscriptionState.EXPIRED, SubscriptionState.ON_HOLD, SubscriptionState.PAUSED -> {
-                                // Subscription is no longer valid
-                                userRepository.setGoldStatus(uid, false)
-                            }
-                            else -> { /* Keep current status */ }
-                        }
-                    }
                 } else {
                     // No subscription found
                     _subscriptionState.value = SubscriptionState.UNKNOWN
@@ -314,7 +299,7 @@ class BillingRepository @Inject constructor(
         val uid = authRepository.currentUid() ?: return
         
         purchase.products.forEach { productId ->
-            try {
+            val result = safeCall("BillingRepository", "grantEntitlement[$productId]") {
                 val data = hashMapOf(
                     "purchaseToken" to purchase.purchaseToken,
                     "productId" to productId,
@@ -335,8 +320,11 @@ class BillingRepository @Inject constructor(
                 } else if (productId == INAPP_CREDITS_3PACK) {
                     consumePurchase(purchase.purchaseToken)
                 }
-            } catch (e: Exception) {
-                Timber.e(e, "Server validation failed for $productId.")
+            }
+
+            if (productId == SUB_BANANA_GOLD && result.isSuccess) {
+                _subscriptionState.value = SubscriptionState.ACTIVE
+                verifySubscriptionStatus()
             }
         }
     }
@@ -361,34 +349,7 @@ class BillingRepository @Inject constructor(
                      val state = determineSubscriptionState(goldPurchase)
                      _subscriptionState.value = state
                      
-                     appScope.launch {
-                         val uid = authRepository.currentUid()
-                         if (uid != null) {
-                             // 🛡️ PROTECTION: Don't downgrade Founders (force server read)
-                             val profile = userRepository.getUserProfile(uid, forceRefresh = true)
-                             val isFounder = profile?.isFounder == true
-                             
-                             if (isFounder) {
-                                 Timber.d("BillingRepository", "User is Founder. Skipping Google Play sync. Ensuring FOUNDER type.")
-                                 userRepository.setGoldStatus(uid, true) // Will auto-repair to FOUNDER
-                             } else {
-                                 // Handle subscription state
-                                 when (state) {
-                                     SubscriptionState.ACTIVE, SubscriptionState.CANCELED -> {
-                                         // Subscription is valid
-                                         userRepository.setGoldStatus(uid, true)
-                                     }
-                                     SubscriptionState.EXPIRED, SubscriptionState.ON_HOLD, SubscriptionState.PAUSED -> {
-                                         // Subscription is no longer valid
-                                         userRepository.setGoldStatus(uid, false)
-                                     }
-                                     else -> {
-                                         // Keep current status
-                                     }
-                                 }
-                             }
-                         }
-                     }
+                     Timber.d("BillingRepository", "Subscription state refreshed: $state")
                  } else {
                      // No active subscription
                      _subscriptionState.value = SubscriptionState.UNKNOWN

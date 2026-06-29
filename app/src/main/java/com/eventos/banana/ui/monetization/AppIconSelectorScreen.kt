@@ -1,6 +1,6 @@
 package com.eventos.banana.ui.monetization
 
-import androidx.compose.foundation.Image
+import coil.compose.AsyncImage
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -121,8 +120,8 @@ fun AppIconItem(
             verticalArrangement = Arrangement.Center
         ) {
                 if (resId != 0) {
-                Image(
-                    painter = painterResource(id = resId),
+                AsyncImage(
+                    model = resId,
                     contentDescription = stringResource(icon.nameResId),
                     modifier = Modifier.size(64.dp)
                 )

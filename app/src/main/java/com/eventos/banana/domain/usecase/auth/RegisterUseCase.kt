@@ -6,6 +6,7 @@ import com.eventos.banana.domain.model.UserProfile
 import com.eventos.banana.util.AgeCalculator
 import com.eventos.banana.util.AppConstants
 import com.eventos.banana.util.GeohashUtils
+import com.eventos.banana.core.error.ErrorMapper
 
 import com.eventos.banana.domain.usecase.profile.CreateUserProfileUseCase
 import javax.inject.Inject
@@ -58,7 +59,10 @@ class RegisterUseCase @Inject constructor(
 
             try {
                 createUserProfileUseCase(profile)
-                authRepository.sendEmailVerification()
+                val verificationResult = authRepository.sendEmailVerification()
+                if (verificationResult.isFailure) {
+                    android.util.Log.w("RegisterUseCase", "Account created but verification email failed: ${verificationResult.exceptionOrNull()?.message}")
+                }
                 Result.success(Unit)
             } catch (e: Exception) {
                 android.util.Log.e("RegisterUseCase", "CRITICAL: Failed to create profile for $uid: ${e.message}", e)
@@ -66,21 +70,9 @@ class RegisterUseCase @Inject constructor(
             }
 
         } else {
-            val exception = result.exceptionOrNull()
-            val errorMessage = when {
-                exception?.message?.contains("email address is already in use", ignoreCase = true) == true ->
-                    "⚠️ Este correo ya está registrado. Prueba iniciar sesión."
-                exception?.message?.contains("WEAK_PASSWORD", ignoreCase = true) == true || 
-                exception?.message?.contains("Password should be", ignoreCase = true) == true ->
-                    "⚠️ La contraseña es muy débil (usa al menos 6 caracteres)."
-                exception?.message?.contains("badly formatted", ignoreCase = true) == true ->
-                    "⚠️ El formato del correo es inválido."
-                exception?.message?.contains("network", ignoreCase = true) == true || 
-                exception?.message?.contains("host", ignoreCase = true) == true ->
-                    "📡 Error de conexión. Verifica tu internet."
-                else -> "❌ No se pudo crear la cuenta: ${exception?.localizedMessage ?: "Error desconocido"}"
-            }
-            Result.failure(Exception(errorMessage))
+            val exception = result.exceptionOrNull() ?: Exception("Unknown error during registration")
+            val error = ErrorMapper.mapToRepositoryError(exception, "register")
+            Result.failure(Exception(error.message))
         }
     }
 }

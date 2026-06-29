@@ -6,6 +6,7 @@ import androidx.navigation.*
 import androidx.navigation.compose.*
 import androidx.compose.animation.*
 import com.eventos.banana.ui.auth.SessionViewModel
+import com.eventos.banana.ui.auth.ResetPasswordScreen
 import com.eventos.banana.ui.splash.SplashScreen
 import com.eventos.banana.ui.login.LoginScreen
 import com.eventos.banana.ui.login.EmailVerificationScreen
@@ -99,6 +100,34 @@ fun NavGraphBuilder.authGraph(
             onLogout = {
                 sessionViewModel.logout()
                 navController.navigate("login") {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        )
+    }
+
+    // ---- Password Reset (deep link) ----
+    composable(
+        route = Screen.ResetPassword.routePattern,
+        arguments = listOf(
+            navArgument("oobCode") {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            }
+        ),
+        deepLinks = listOf(
+            navDeepLink {
+                uriPattern = "https://bananaapp-aa46e.web.app/reset-password?oobCode={oobCode}"
+            }
+        )
+    ) { backStackEntry ->
+        val oobCode = backStackEntry.arguments?.getString("oobCode") ?: ""
+        ResetPasswordScreen(
+            oobCode = oobCode,
+            sessionViewModel = sessionViewModel,
+            onNavigateToLogin = {
+                navController.navigate(Screen.Login.route) {
                     popUpTo(0) { inclusive = true }
                 }
             }

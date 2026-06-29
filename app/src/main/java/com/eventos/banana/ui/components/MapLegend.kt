@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eventos.banana.R
 import com.eventos.banana.domain.model.EventType
-import com.eventos.banana.ui.util.getEventHue
+import com.eventos.banana.ui.util.localizedName
 
 @Composable
 fun MapLegend(
@@ -135,5 +135,18 @@ fun MapLegend(
                 }
             }
         }
+    }
+}
+
+private fun getEventHue(type: EventType): Float {
+    return when (type) {
+        EventType.DEPORTES -> 120f
+        EventType.SOCIAL -> 270f
+        EventType.CULTURAL -> 330f
+        EventType.EDUCATIVO -> 240f
+        EventType.JUEGOS -> 180f
+        EventType.GASTRONOMIA -> 30f
+        EventType.AIRE_LIBRE -> 150f
+        else -> 0f
     }
 }

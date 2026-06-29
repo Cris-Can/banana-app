@@ -315,12 +315,13 @@ export const validateAndGrantPurchase = onCall(
         
         // Check auto-renewing status
         autoRenewing = lineItem?.autoRenewingPlan?.autoRenewEnabled === true;
+        const isPrepaid = !!lineItem?.prepaidPlan;
         
         // Determine subscription state
         subscriptionState = "ACTIVE";
         if (isExpired) {
           subscriptionState = "EXPIRED";
-        } else if (!autoRenewing) {
+        } else if (!autoRenewing && !isPrepaid) {
           subscriptionState = "CANCELED";
         }
 
